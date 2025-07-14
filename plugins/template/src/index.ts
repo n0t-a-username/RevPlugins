@@ -46,13 +46,6 @@ commands.push(registerCommand({
       description: "Delay between messages (ms)",
       required: true,
       type: 4
-    },
-    {
-      name: "channelId",
-      displayName: "channelId",
-      description: "Targeted channel to raid",
-      required: true,
-      type: 7
     }
   ],
   applicationId: "-1",
@@ -61,14 +54,13 @@ commands.push(registerCommand({
   execute: async (args, ctx) => {
     const amount = Number(args[0].value);
     const delay = Number(args[1].value);
-    const channelId = args[2].value?.id ?? args[2].value;
 
     for (let i = 0; i < amount; i++) {
       const msgTemplate = randomWord(words);
       const rnd = getRandomNumber();
       const content = `${msgTemplate} \`${rnd}\``;
       await sleep(delay);
-      MessageActions.sendMessage(channelId, { content });
+      MessageActions.sendMessage(ctx.channel.id, { content });
     }
   }
 }));
