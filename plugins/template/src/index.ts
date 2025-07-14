@@ -29,9 +29,9 @@ function sleep(ms) {
 }
 
 commands.push(registerCommand({
-  name: "spam",
-  displayName: "spam",
-  description: "Spam a random meme message",
+  name: "raid",
+  displayName: "raid",
+  description: "Start a Raid!",
   options: [
     {
       name: "amount",
@@ -52,7 +52,7 @@ commands.push(registerCommand({
       displayName: "channelId",
       description: "Targeted channel to raid",
       required: true,
-      type: 3
+      type: 7
     }
   ],
   applicationId: "-1",
