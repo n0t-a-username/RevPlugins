@@ -13,6 +13,6 @@
     ],
     "main": "src/index.ts",
     "vendetta": {
-        "icon": "ic_robot_24px"
+        "icon": "img_nitro_emojis"
     }
 }
