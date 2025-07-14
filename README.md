@@ -1,7 +1,7 @@
-# Vendetta Plugins Template
-This repo contains a template for creating [Vendetta](https://github.com/vendetta-mod/Vendetta) plugins.
+## Bemmo!
+- This plugin is made as an example that anything good can be used for terrible or annoying purposes
+- You can download the plugin here: [Click Me!](https://n0t-a-username.github.io/RevPlugins/template/)
 
-# How to install?
-Paste a plugin URL into the Plugins page of Vendetta, following a basic format of:
-
-https://`YOUR_GITHUB_USERNAME`.github.io/`REPO_NAME`/`PLUGIN_NAME`
+Status: Beta
+Commands Avaliable: /raid
+Verison: 2.3
