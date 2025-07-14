@@ -41,6 +41,6 @@ async function pcommand(args, ctx) {
   const data = await getApiData(image);
 
   return {
-    content: image,
+    content: data,
   };
 }
