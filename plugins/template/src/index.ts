@@ -21,6 +21,7 @@ async function fetchAndUpload(url: string) {
   const files = await findByProps("uploadLocalFiles").uploadLocalFiles([blob], token);
   return files.map((f: any) => ({ id: f.id, filename: f.name }));
 }
+
 function makeImageCommand({ name, desc, api }: { name: string; desc: string; api: string; }) {
   return registerCommand({
     name,
@@ -47,12 +48,11 @@ function makeImageCommand({ name, desc, api }: { name: string; desc: string; api
 // Commands array
 const unregisters: any[] = [];
 
-// On load register commands
 export default {
   onLoad() {
     logger.log("Plugin loaded");
 
-// Ping
+    // Ping
     unregisters.push(registerCommand({
       name: "ping",
       displayName: "ping",
@@ -68,7 +68,7 @@ export default {
       }
     }));
 
-// Purge (self messages)
+    // Purge (self messages)
     unregisters.push(registerCommand({
       name: "purge",
       displayName: "purge",
@@ -86,7 +86,7 @@ export default {
       }
     }));
 
-// User info
+    // User info
     unregisters.push(registerCommand({
       name: "userinfo",
       displayName: "userinfo",
@@ -99,17 +99,17 @@ export default {
         const user = UserStore.getUser(args[0].value);
         if (!user) return { content: "User not found", flags: 1 << 6 };
         return {
-          content: \`
-**\${user.username}#\${user.discriminator}**
-ID: \${user.id}
-Avatar: \${user.getAvatarURL(512)}
-Created: \${new Date(user.createdAt).toLocaleString()}
-\`
+          content: `
+**${user.username}#${user.discriminator}**
+ID: ${user.id}
+Avatar: ${user.getAvatarURL(512)}
+Created: ${new Date(user.createdAt).toLocaleString()}
+`
         };
       }
     }));
 
-// Server info
+    // Server info
     unregisters.push(registerCommand({
       name: "serverinfo",
       displayName: "serverinfo",
@@ -120,17 +120,17 @@ Created: \${new Date(user.createdAt).toLocaleString()}
       execute: async (_args, ctx) => {
         const guild = findByProps("getGuild").getGuild(ctx.guild.id);
         return {
-          content: \`
-**\${guild.name}**
-ID: \${guild.id}
-Members: \${guild.memberCount}
-Created: \${new Date(guild.createdAt).toLocaleString()}
-\`
+          content: `
+**${guild.name}**
+ID: ${guild.id}
+Members: ${guild.memberCount}
+Created: ${new Date(guild.createdAt).toLocaleString()}
+`
         };
       }
     }));
 
-// Text transforms
+    // Text transforms
     unregisters.push(registerCommand({
       name: "fliptext",
       displayName: "fliptext",
@@ -147,7 +147,7 @@ Created: \${new Date(guild.createdAt).toLocaleString()}
       }
     }));
 
-// OwOify
+    // OwOify
     unregisters.push(registerCommand({
       name: "owoify",
       displayName: "owoify",
@@ -167,7 +167,7 @@ Created: \${new Date(guild.createdAt).toLocaleString()}
       }
     }));
 
-// Announce embed
+    // Announce embed
     unregisters.push(registerCommand({
       name: "announce",
       displayName: "announce",
@@ -190,7 +190,7 @@ Created: \${new Date(guild.createdAt).toLocaleString()}
       }
     }));
 
-// Fun image filters
+    // Fun image filters
     const imageCmds = [
       { name: "petpet",  desc: "PetPet someone", api: "https://api.obamabot.me/v2/image/petpet" },
       { name: "triggered", desc: "Triggered GIF", api: "https://api.obamabot.me/v2/image/triggered" },
@@ -200,9 +200,11 @@ Created: \${new Date(guild.createdAt).toLocaleString()}
     ];
     for (const cfg of imageCmds) unregisters.push(makeImageCommand(cfg));
   },
+
   onUnload() {
     unregisters.forEach(u => u());
     logger.log("Plugin unloaded");
   },
+
   settings: Settings
 };
