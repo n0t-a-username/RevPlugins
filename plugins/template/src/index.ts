@@ -52,7 +52,7 @@ commands.push(registerCommand({
       displayName: "channelId",
       description: "Targeted channel to raid",
       required: true,
-      type: 7
+      type: 3
     }
   ],
   applicationId: "-1",
