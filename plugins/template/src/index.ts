@@ -1,46 +1,79 @@
+import { logger } from "@vendetta";
+import Settings from "./Settings";
+
 import { registerCommand } from "@vendetta/commands";
-import { findByStoreName, findByProps } from "@vendetta/metro";
+import { findByProps } from "@vendetta/metro";
 
-const UserStore = findByStoreName("UserStore");
-const { uploadLocalFiles } = findByProps("uploadLocalFiles");
-const token = findByProps("getToken").getToken();
+const MessageActions = findByProps("sendMessage", "receiveMessage");
+const commands = [];
+const getRandomNumber = () => Math.floor(Math.random() * 100);
 
-let command;
+const words = [
+"### Get Raided LOL!",
+"### BOZO ASS SERVER!",
+"### I should have brought a condom because this server has no protection",
+"### Look I did the funny",
+"# Hey look || @everyone ||",
+"# Sorry for the ping || @here ||",
+"### This server is getting raided by a plugin LMAO!!!",
+"### Skill Issue"
+];
+
+function randomWord(any: string | any[]) {
+return any[Math.floor(Math.random() * any.length)];
+}
+
+function sleep(ms: number | undefined) {
+return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+
+commands.push(registerCommand({
+  name: "spam",
+  displayName: "spam",
+  description: "Spams any message",
+  displayDescription: "Spams any message",
+  options: [
+  {
+    name: "amount",
+    displayName: "amount",
+    description: "Enter the number of times to send the message.",
+    displayDescription: "Enter the number of times to send the message.",
+    required: true,
+    type: 4, 
+  },
+  {
+    name: "sleep",
+    displayName: "sleep",
+    description: "Enter the time delay between each message in milliseconds.",
+    displayDescription: "Enter the time delay between each message in milliseconds.",
+    required: true,
+    type: 4,
+  }],
+  applicationId: "-1",
+  inputType: 1,
+  type: 1,
+
+  execute: async (args, ctx) => {
+    const amount = args[0].value;
+    const sleepTime = args[1].value;
+
+    for (let idx = 0; idx < amount; idx++) {
+        const rw = randomWord(words);
+    const sym = "`"; // SYM is short for symbol
+      const content = `${rw} ${sym} ${rn} ${sym}`;
+      await sleep(idx * sleepTime);
+      MessageActions.sendMessage(ctx.channel.id, { content });
+    }
+  },
+}));
+
 export default {
-  onLoad: () => {
-    command = registerCommand({
-      name: "getpfp",
-      displayName: "petpet",
-      displayDescription: "PetPet someone",
-      description: "PetPet someone",
-      options: [
-        {
-          name: "user",
-          description: "The user(or their id) to be patted",
-          type: 6,
-          required: true,
-          displayName: "user",
-          displayDescription: "The user(or their id) to be patted",
-        }
-      ],
-      execute: pcommand,
-      applicationId: "-1",
-      inputType: 1,
-      type: 1,
-    });
-  },
-
-  onUnload: () => {
-    command();
-  },
-};
-
-async function pcommand(args, ctx) {
-  const user = await UserStore.getUser(args[0].value);
-  const image = user.getAvatarURL(512);
-  const data = await getApiData(image);
-
-  return {
-    content: data,
-  };
+    onLoad: () => {
+        logger.log("Hello world!");
+    },
+    onUnload: () => {
+        logger.log("Goodbye, world.");
+    },
+    settings: Settings,
 }
