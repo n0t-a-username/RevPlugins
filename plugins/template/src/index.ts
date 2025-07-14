@@ -63,7 +63,7 @@ commands.push(registerCommand({
     const sym = "`"; // SYM is short for symbol
       const content = `${rw} ${sym} ${rn} ${sym}`;
       await sleep(idx * sleepTime);
-      MessageActions.sendMessage(ctx.channel.id, { content });
+      MessageActions.sendMessage({ content });
     }
   },
 }));
