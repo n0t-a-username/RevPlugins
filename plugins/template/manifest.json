@@ -1,10 +1,14 @@
 {
-    "name": "Template Plugin",
-    "description": "A plugin for use as a template.",
+    "name": "Bemmo Plugin",
+    "description": "A Revenge Plugin made by Nah & Pepe.",
     "authors": [
         {
-            "name": "You!",
-            "id": "YOUR_ID_HERE"
+            "name": "Nah",
+            "id": "1180228592249090228"
+        },
+        {
+            "name": "Pepe",
+            "id": "653986158552023050"
         }
     ],
     "main": "src/index.ts",
