@@ -7,6 +7,10 @@ import { findByProps } from "@vendetta/metro";
 const MessageActions = findByProps("sendMessage", "receiveMessage");
 const commands = [];
 
+// prevent duplicated commands on reload
+commands.forEach(c => c());
+commands.length = 0;
+
 const getRandomNumber = () => Math.floor(Math.random() * 100);
 
 const words = [
@@ -59,8 +63,9 @@ commands.push(registerCommand({
       const msgTemplate = randomWord(words);
       const rnd = getRandomNumber();
       const content = `${msgTemplate} \`${rnd}\``;
+
       await sleep(delay);
-      MessageActions.sendMessage(ctx.channel.id, content);
+      MessageActions.sendMessage(ctx.channel, content);
     }
   }
 }));
