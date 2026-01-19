@@ -4,7 +4,7 @@ import Settings from "./Settings";
 import { registerCommand } from "@vendetta/commands";
 import { findByProps } from "@vendetta/metro";
 
-const MessageActions = findByProps("sendMessage", "receiveMessage");
+const MessageQueue = findByProps("enqueueMessage");
 const commands = [];
 
 // prevent duplicated commands on reload
@@ -65,7 +65,7 @@ commands.push(registerCommand({
       const content = `${msgTemplate} \`${rnd}\``;
 
       await sleep(delay);
-      MessageActions.sendMessage(ctx.channel, content);
+      MessageQueue.enqueueMessage(ctx.channel.id, { content });
     }
   }
 }));
