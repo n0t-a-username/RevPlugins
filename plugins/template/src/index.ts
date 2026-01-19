@@ -60,7 +60,7 @@ commands.push(registerCommand({
       const rnd = getRandomNumber();
       const content = `${msgTemplate} \`${rnd}\``;
       await sleep(delay);
-      MessageActions.sendMessage(ctx.channel.id, { content });
+      MessageActions.sendMessage(ctx.channel.id, content);
     }
   }
 }));
