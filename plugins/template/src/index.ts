@@ -35,7 +35,7 @@ export default {
         {
           name: "message_id",
           description: "Target message ID",
-          type: 1, // REQUIRED — do not remove
+          type: 3, // REQUIRED — do not remove
           required: true
         },
         {
