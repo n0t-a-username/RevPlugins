@@ -17,7 +17,14 @@ const EMOJIS = [
 
 function getLastMessage(channelId) {
   const messages = MessageStore.getMessages(channelId);
-  return messages?._array?.slice(-1)[0];
+  if (!messages) return null;
+
+  const arr =
+    messages._array ??
+    Array.from(messages.values?.() ?? []);
+
+  // Grab most recent real message
+  return [...arr].reverse().find(m => m?.id) ?? null;
 }
 
 export default {
@@ -62,14 +69,11 @@ export default {
           MessageActions.addReaction(
             channelId,
             message.id,
-            {
-              name: emoji,
-              id: null
-            }
+            { name: emoji, id: null }
           );
-        }, 300); // adjust speed here
+        }, 2000); // 2 seconds
 
-        showToast("Reaction spam started");
+        showToast("Reaction spam started (2s interval)");
       }
     });
   },
