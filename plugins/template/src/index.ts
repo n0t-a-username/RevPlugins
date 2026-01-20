@@ -4,7 +4,6 @@ import { showToast } from "@vendetta/ui/toasts";
 
 const MessageActions = findByProps("addReaction");
 const ChannelStore = findByProps("getChannelId");
-const MessageStore = findByProps("getMessages");
 
 let spamInterval = null;
 
@@ -15,17 +14,41 @@ const EMOJIS = [
   "💣", "⚡", "🧠", "👹", "🚨"
 ];
 
-function getLastMessage(channelId) {
-  const messages = MessageStore.getMessages(channelId);
-  return messages?._array?.slice(-1)[0];
+function parseMessageTarget(input) {
+  if (!input) return null;
+
+  // Message link
+  const match = input.match(/channels\/\d+\/(\d+)\/(\d+)/);
+  if (match) {
+    return {
+      channelId: match[1],
+      messageId: match[2]
+    };
+  }
+
+  // Raw message ID (use current channel)
+  if (/^\d{17,20}$/.test(input)) {
+    return {
+      channelId: ChannelStore.getChannelId(),
+      messageId: input
+    };
+  }
+
+  return null;
 }
 
 export default {
   onLoad() {
     registerCommand({
       name: "reactspam",
-      description: "Spam reactions on the last message",
+      description: "Spam reactions on a message (via link or ID)",
       options: [
+        {
+          name: "target",
+          description: "Message link or message ID",
+          type: 3,
+          required: false
+        },
         {
           name: "stop",
           description: "Stop reaction spam",
@@ -34,8 +57,6 @@ export default {
         }
       ],
       execute(args) {
-        const channelId = ChannelStore.getChannelId();
-
         if (args.stop) {
           if (spamInterval) {
             clearInterval(spamInterval);
@@ -50,9 +71,9 @@ export default {
           return;
         }
 
-        const message = getLastMessage(channelId);
-        if (!message) {
-          showToast("No message found");
+        const target = parseMessageTarget(args.target);
+        if (!target) {
+          showToast("Invalid or missing message link / ID");
           return;
         }
 
@@ -60,16 +81,13 @@ export default {
           const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
 
           MessageActions.addReaction(
-            channelId,
-            message.id,
-            {
-              name: emoji,
-              id: null
-            }
+            target.channelId,
+            target.messageId,
+            { name: emoji, id: null }
           );
-        }, 300); // adjust speed here
+        }, 2000); // 2 seconds
 
-        showToast("Reaction spam started");
+        showToast("Reaction spam started (link-based)");
       }
     });
   },
