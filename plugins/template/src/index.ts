@@ -14,40 +14,21 @@ const EMOJIS = [
   "💣", "⚡", "🧠", "👹", "🚨"
 ];
 
-function parseMessageTarget(input) {
-  if (!input) return null;
-
-  // Message link
-  const match = input.match(/channels\/\d+\/(\d+)\/(\d+)/);
-  if (match) {
-    return {
-      channelId: match[1],
-      messageId: match[2]
-    };
-  }
-
-  // Raw message ID (use current channel)
-  if (/^\d{17,20}$/.test(input)) {
-    return {
-      channelId: ChannelStore.getChannelId(),
-      messageId: input
-    };
-  }
-
-  return null;
+function isValidMessageId(id) {
+  return typeof id === "string" && /^\d{17,20}$/.test(id);
 }
 
 export default {
   onLoad() {
     registerCommand({
       name: "reactspam",
-      description: "Spam reactions on a message (via link or ID)",
+      description: "Spam reactions on a message by ID (current channel)",
       options: [
         {
-          name: "target",
-          description: "Message link or message ID",
+          name: "message_id",
+          description: "Target message ID",
           type: 3,
-          required: false
+          required: true
         },
         {
           name: "stop",
@@ -71,9 +52,15 @@ export default {
           return;
         }
 
-        const target = parseMessageTarget(args.target);
-        if (!target) {
-          showToast("Invalid or missing message link / ID");
+        const messageId = args.message_id;
+        if (!isValidMessageId(messageId)) {
+          showToast("Invalid message ID");
+          return;
+        }
+
+        const channelId = ChannelStore.getChannelId();
+        if (!channelId) {
+          showToast("No active channel");
           return;
         }
 
@@ -81,13 +68,13 @@ export default {
           const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
 
           MessageActions.addReaction(
-            target.channelId,
-            target.messageId,
+            channelId,
+            messageId,
             { name: emoji, id: null }
           );
         }, 2000); // 2 seconds
 
-        showToast("Reaction spam started (link-based)");
+        showToast("Reaction spam started (message ID)");
       }
     });
   },
