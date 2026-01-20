@@ -3,40 +3,49 @@ import { registerCommand } from "@vendetta/commands";
 import { showToast } from "@vendetta/ui/toasts";
 
 const MessageActions = findByProps("addReaction");
-const SelectedChannelStore = findByProps("getChannelId", "getLastSelectedChannelId");
-const SelectedGuildStore = findByProps("getGuildId");
+const MessageStore = findByProps("getMessages");
 
 let spamInterval = null;
 
-const EMOJIS = ["🔥","💀","😂","😭","👀","😈","🤡","💥","🗿","😎","🫡","🤯","🥶","🥵","👽","💣","⚡","🧠","👹","🚨"];
+const EMOJIS = [
+  "🔥","💀","😂","😭","👀","😈","🤡","💥","🗿","😎",
+  "🫡","🤯","🥶","🥵","👽","💣","⚡","🧠","👹","🚨"
+];
 
-function normalizeMessageId(input) {
+// Normalize channel input
+function normalizeChannel(input) {
   if (!input) return null;
   const str = String(input).trim();
-  const urlMatch = str.match(/\/(\d{17,21})$/);
-  if (urlMatch) return urlMatch[1];
+
+  // Accept channel mentions <#123456789012345678>
+  const mentionMatch = str.match(/^<#(\d{17,21})>$/);
+  if (mentionMatch) return mentionMatch[1];
+
+  // Accept raw channel ID
   if (/^\d{17,21}$/.test(str)) return str;
+
   return null;
 }
 
-// RELIABLE channel getter
-function getActiveChannelId() {
-  return (
-    SelectedChannelStore?.getChannelId?.() ||
-    SelectedChannelStore?.getLastSelectedChannelId?.(
-      SelectedGuildStore?.getGuildId?.()
-    ) ||
-    null
-  );
+// Get last message in channel
+function getLastMessage(channelId) {
+  const messages = MessageStore?.getMessages?.(channelId);
+  if (!messages) return null;
+
+  const arr = Array.from(messages.values());
+  if (arr.length === 0) return null;
+
+  arr.sort((a, b) => b.timestamp - a.timestamp);
+  return arr[0];
 }
 
 export default {
   onLoad() {
     registerCommand({
       name: "reactspam",
-      description: "Spam reactions on a message by ID or link",
+      description: "Spam reactions on the last message of a specified channel",
       options: [
-        { name: "message", description: "Message ID or link", type: 3, required: true },
+        { name: "channel", description: "Channel mention or ID", type: 3, required: true },
         { name: "seconds", description: "Delay between reactions", type: 4, required: false },
         { name: "stop", description: "Stop reaction spam", type: 5, required: false }
       ],
@@ -55,15 +64,15 @@ export default {
           return;
         }
 
-        const messageId = normalizeMessageId(args.message);
-        if (!messageId) {
-          showToast("Invalid message ID or link");
+        const channelId = normalizeChannel(args.channel);
+        if (!channelId) {
+          showToast("Invalid channel ID or mention");
           return;
         }
 
-        const channelId = getActiveChannelId();
-        if (!channelId) {
-          showToast("No active channel selected");
+        const lastMessage = getLastMessage(channelId);
+        if (!lastMessage) {
+          showToast("No messages found in this channel");
           return;
         }
 
@@ -71,10 +80,10 @@ export default {
 
         spamInterval = setInterval(() => {
           const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
-          MessageActions.addReaction(channelId, messageId, { name: emoji });
+          MessageActions.addReaction(channelId, lastMessage.id, { name: emoji });
         }, seconds * 1000);
 
-        showToast(`Reaction spam started (${seconds}s interval)`);
+        showToast(`Reaction spam started on last message in <#${channelId}> (${seconds}s interval)`);
       }
     });
   },
