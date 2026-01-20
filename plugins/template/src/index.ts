@@ -1,26 +1,25 @@
 import { findByProps } from "@vendetta/metro";
-import { instead, after } from "@vendetta/patcher";
+import { after } from "@vendetta/patcher";
 import { showToast } from "@vendetta/ui/toasts";
 
-const ReactionPicker = findByProps("ReactionPicker", "defaultProps")?.ReactionPicker
-    || findByProps("default", "ReactionPicker")?.default;
-
+const ReactionModule = findByProps("openReactionPicker");
 const patches: Function[] = [];
 
-if (!ReactionPicker || !ReactionPicker.prototype) {
-    showToast("Failed to find ReactionPicker");
+if (!ReactionModule || !ReactionModule.openReactionPicker) {
+    showToast("Failed to find Reaction Picker module");
 } else {
-    // Patch onEmojiPress to prevent closing
     patches.push(
-        instead("onEmojiPress", ReactionPicker.prototype, function(original, args) {
-            const result = original.apply(this, args);
+        after("openReactionPicker", ReactionModule, (_args, pickerInstance) => {
+            if (!pickerInstance) return;
 
-            // Override dismiss only for emoji taps
-            if (this.dismiss) {
-                this.dismiss = () => {}; // noop
+            try {
+                // Override dismiss for this instance only
+                if (pickerInstance.dismiss) {
+                    pickerInstance.dismiss = () => {}; // noop
+                }
+            } catch (e) {
+                console.error("Failed to patch ReactionPicker instance", e);
             }
-
-            return result;
         })
     );
 
