@@ -1,32 +1,65 @@
-import { findByProps } from "@vendetta/metro";
-import { after } from "@vendetta/patcher";
-import { showToast } from "@vendetta/ui/toasts";
+import { React } from "@vendetta/metro";
+import { registerCommand, unregisterCommand } from "@vendetta/commands";
+import { showConfirmationModal } from "@vendetta/ui/alerts";
+import { View, Text, ScrollView, Pressable } from "react-native";
 
-const ReactionModule = findByProps("openReactionPicker");
-const patches: Function[] = [];
+let commandId: string | null = null;
 
-if (!ReactionModule || !ReactionModule.openReactionPicker) {
-    showToast("Failed to find Reaction Picker module");
-} else {
-    patches.push(
-        after("openReactionPicker", ReactionModule, (_args, pickerInstance) => {
-            if (!pickerInstance) return;
+function CustomUIModal() {
+  return (
+    <ScrollView style={{ padding: 16 }}>
+      <Text
+        style={{
+          fontSize: 22,
+          fontWeight: "700",
+          marginBottom: 12,
+          color: "white"
+        }}
+      >
+        Custom Vendetta UI
+      </Text>
 
-            try {
-                // Override dismiss for this instance only
-                if (pickerInstance.dismiss) {
-                    pickerInstance.dismiss = () => {}; // noop
-                }
-            } catch (e) {
-                console.error("Failed to patch ReactionPicker instance", e);
-            }
-        })
-    );
+      <Text style={{ fontSize: 16, marginBottom: 16, color: "#ccc" }}>
+        This UI was opened from a slash command.
+      </Text>
 
-    showToast("Reaction UI patched: stays open on emoji taps");
+      <Pressable
+        style={{
+          backgroundColor: "#5865F2",
+          padding: 12,
+          borderRadius: 8,
+          alignItems: "center"
+        }}
+        onPress={() => {
+          console.log("Button pressed");
+        }}
+      >
+        <Text style={{ color: "white", fontWeight: "600" }}>
+          Press Me
+        </Text>
+      </Pressable>
+    </ScrollView>
+  );
 }
 
-export const onUnload = () => {
-    for (const unpatch of patches) unpatch();
-    showToast("Reaction UI patch removed");
+export default {
+  onLoad() {
+    commandId = registerCommand({
+      name: "customui",
+      description: "Open a custom UI modal",
+      options: [],
+      execute() {
+        showConfirmationModal({
+          title: "Custom UI",
+          content: <CustomUIModal />,
+          confirmText: "Close",
+          cancelText: null
+        });
+      }
+    });
+  },
+
+  onUnload() {
+    if (commandId) unregisterCommand(commandId);
+  }
 };
