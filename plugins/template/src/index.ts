@@ -1,35 +1,28 @@
 import { findByProps, patch } from "@vendetta/metro";
 import { showToast } from "@vendetta/ui/toasts";
 
-// Patch the ReactionPicker to prevent it from closing
-const ReactionPickerModule = findByProps("openReactionPicker");
+const ReactionPickerComponent = findByProps("ReactionPicker", "defaultProps")?.ReactionPicker 
+                                || findByProps("default", "ReactionPicker")?.default;
 
-if (ReactionPickerModule && ReactionPickerModule.openReactionPicker) {
+if (ReactionPickerComponent) {
   patch(
-    "stayOpenReactionPicker",
-    ReactionPickerModule,
-    "openReactionPicker",
+    "stayOpenReactionUI",
+    ReactionPickerComponent.prototype,
+    "onEmojiPress",
     (_original: any, args: any, patchOriginal: Function) => {
-      const picker = patchOriginal(...args);
+      const result = patchOriginal(...args);
 
-      // Override the dismiss function so it doesn't close on tap
-      if (picker?.dismiss) {
-        picker.dismiss = () => {}; // noop
-      }
-
-      return picker;
+      // Prevent picker from closing after tapping an emoji
+      if (this.dismiss) this.dismiss = () => {};
+      return result;
     }
   );
-  showToast("Reaction UI patched: stays open on each tap");
+  showToast("Reaction UI patched: stays open on emoji taps");
 } else {
-  showToast("Failed to patch Reaction UI");
+  showToast("Failed to find ReactionPicker component");
 }
 
 export default {
-  onLoad() {
-    // already patched above
-  },
-
   onUnload() {
     patch.unpatchAll();
     showToast("Reaction UI patch removed");
