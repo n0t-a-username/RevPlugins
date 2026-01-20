@@ -11,7 +11,7 @@
             "id": "653986158552023050"
         }
     ],
-    "main": "index.tsx",
+    "main": "src/index.tsx",
     "vendetta": {
         "icon": "img_nitro_emojis"
     }
