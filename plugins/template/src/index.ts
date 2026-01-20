@@ -10,7 +10,7 @@ function CustomUIModal() {
     <ScrollView style={{ padding: 16 }}>
       <Text
         style={{
-          fontSize: 22,
+          fontSize: 23,
           fontWeight: "700",
           marginBottom: 12,
           color: "white"
