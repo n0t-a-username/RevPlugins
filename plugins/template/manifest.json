@@ -1,5 +1,5 @@
 {
-    "name": "React UI - Spam Update2",
+    "name": "Commmand UI",
     "description": "A very cool plugin",
     "authors": [
         {
@@ -11,7 +11,7 @@
             "id": "653986158552023050"
         }
     ],
-    "main": "src/index.ts",
+    "main": "src/index.tsx",
     "vendetta": {
         "icon": "img_nitro_emojis"
     }
