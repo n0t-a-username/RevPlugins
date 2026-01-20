@@ -14,23 +14,29 @@ const EMOJIS = [
   "💣", "⚡", "🧠", "👹", "🚨"
 ];
 
-function normalizeMessageId(id) {
-  if (id == null) return null;
-  const str = String(id).trim();
-  return /^\d{17,20}$/.test(str) ? str : null;
+function normalizeMessageId(input) {
+  if (input == null) return null;
+
+  // Vendetta always gives strings for type:3 — just sanitize
+  const str = String(input).trim();
+
+  // Accept any snowflake-length numeric ID
+  if (!/^\d{16,21}$/.test(str)) return null;
+
+  return str;
 }
 
 export default {
   onLoad() {
     registerCommand({
       name: "reactspam",
-      description: "Spam reactions on a message by ID (custom rate)",
+      description: "Spam reactions on a message by ID",
       options: [
         {
           name: "message_id",
           description: "Target message ID",
+          type: 1, // REQUIRED — do not remove
           required: true
-          // intentionally no type
         },
         {
           name: "seconds",
