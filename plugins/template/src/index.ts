@@ -15,7 +15,8 @@ const EMOJIS = [
 ];
 
 function normalizeMessageId(id) {
-  const str = String(id);
+  if (id == null) return null;
+  const str = String(id).trim();
   return /^\d{17,20}$/.test(str) ? str : null;
 }
 
@@ -28,8 +29,8 @@ export default {
         {
           name: "message_id",
           description: "Target message ID",
-          type: 3,
           required: true
+          // intentionally no type
         },
         {
           name: "seconds",
@@ -76,8 +77,6 @@ export default {
             ? args.seconds
             : 2;
 
-        const intervalMs = seconds * 1000;
-
         spamInterval = setInterval(() => {
           const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
 
@@ -86,7 +85,7 @@ export default {
             messageId,
             { name: emoji, id: null }
           );
-        }, intervalMs);
+        }, seconds * 1000);
 
         showToast(`Reaction spam started (${seconds}s interval)`);
       }
