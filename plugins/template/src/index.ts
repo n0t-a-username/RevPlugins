@@ -14,21 +14,28 @@ const EMOJIS = [
   "💣", "⚡", "🧠", "👹", "🚨"
 ];
 
-function isValidMessageId(id) {
-  return typeof id === "string" && /^\d{17,20}$/.test(id);
+function normalizeMessageId(id) {
+  const str = String(id);
+  return /^\d{17,20}$/.test(str) ? str : null;
 }
 
 export default {
   onLoad() {
     registerCommand({
       name: "reactspam",
-      description: "Spam reactions on a message by ID (current channel)",
+      description: "Spam reactions on a message by ID (custom rate)",
       options: [
         {
           name: "message_id",
           description: "Target message ID",
           type: 3,
           required: true
+        },
+        {
+          name: "seconds",
+          description: "Delay between reactions (seconds)",
+          type: 4,
+          required: false
         },
         {
           name: "stop",
@@ -52,8 +59,8 @@ export default {
           return;
         }
 
-        const messageId = args.message_id;
-        if (!isValidMessageId(messageId)) {
+        const messageId = normalizeMessageId(args.message_id);
+        if (!messageId) {
           showToast("Invalid message ID");
           return;
         }
@@ -64,6 +71,13 @@ export default {
           return;
         }
 
+        const seconds =
+          typeof args.seconds === "number" && args.seconds > 0
+            ? args.seconds
+            : 2;
+
+        const intervalMs = seconds * 1000;
+
         spamInterval = setInterval(() => {
           const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
 
@@ -72,9 +86,9 @@ export default {
             messageId,
             { name: emoji, id: null }
           );
-        }, 2000); // 2 seconds
+        }, intervalMs);
 
-        showToast("Reaction spam started (message ID)");
+        showToast(`Reaction spam started (${seconds}s interval)`);
       }
     });
   },
