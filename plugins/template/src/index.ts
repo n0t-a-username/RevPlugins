@@ -1,82 +1,83 @@
-import { logger } from "@vendetta";
-import Settings from "./Settings";
-
-import { registerCommand } from "@vendetta/commands";
 import { findByProps } from "@vendetta/metro";
+import { registerCommand } from "@vendetta/commands";
+import { showToast } from "@vendetta/ui/toasts";
 
-const MessageQueue = findByProps("enqueueMessage");
-const commands = [];
+const MessageActions = findByProps("addReaction");
+const ChannelStore = findByProps("getChannelId");
+const MessageStore = findByProps("getMessages");
 
-// prevent duplicated commands on reload
-commands.forEach(c => c());
-commands.length = 0;
+let spamInterval = null;
 
-const getRandomNumber = () => Math.floor(Math.random() * 100);
-
-const words = [
-  "### Get Raided LOL!",
-  "### BOZO ASS SERVER!",
-  "### I should have brought a condom because this server has no protection",
-  "### Look I did the funny",
-  "# Hey look || @everyone ||",
-  "# Sorry for the ping || @here ||",
-  "### This server is getting raided by a plugin LMAO!!!",
-  "### Skill Issue"
+const EMOJIS = [
+  "🔥", "💀", "😂", "😭", "👀",
+  "😈", "🤡", "💥", "🗿", "😎",
+  "🫡", "🤯", "🥶", "🥵", "👽",
+  "💣", "⚡", "🧠", "👹", "🚨"
 ];
 
-function randomWord(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
+function getLastMessage(channelId) {
+  const messages = MessageStore.getMessages(channelId);
+  return messages?._array?.slice(-1)[0];
 }
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-commands.push(registerCommand({
-  name: "raid",
-  displayName: "raid",
-  description: "Start a Raid!",
-  options: [
-    {
-      name: "amount",
-      displayName: "amount",
-      description: "Number of times to send",
-      required: true,
-      type: 4
-    },
-    {
-      name: "delay",
-      displayName: "delay",
-      description: "Delay between messages (ms)",
-      required: true,
-      type: 4
-    }
-  ],
-  applicationId: "-1",
-  inputType: 1,
-  type: 1,
-  execute: async (args, ctx) => {
-    const amount = Number(args[0].value);
-    const delay = Number(args[1].value);
-
-    for (let i = 0; i < amount; i++) {
-      const msgTemplate = randomWord(words);
-      const rnd = getRandomNumber();
-      const content = `${msgTemplate} \`${rnd}\``;
-
-      await sleep(delay);
-      MessageQueue.enqueueMessage(ctx.channel.id, { content });
-    }
-  }
-}));
 
 export default {
-  onLoad: () => {
-    logger.log("Spam plugin loaded!");
+  onLoad() {
+    registerCommand({
+      name: "reactspam",
+      description: "Spam reactions on the last message",
+      options: [
+        {
+          name: "stop",
+          description: "Stop reaction spam",
+          type: 5,
+          required: false
+        }
+      ],
+      execute(args) {
+        const channelId = ChannelStore.getChannelId();
+
+        if (args.stop) {
+          if (spamInterval) {
+            clearInterval(spamInterval);
+            spamInterval = null;
+            showToast("Reaction spam stopped");
+          }
+          return;
+        }
+
+        if (spamInterval) {
+          showToast("Reaction spam already running");
+          return;
+        }
+
+        const message = getLastMessage(channelId);
+        if (!message) {
+          showToast("No message found");
+          return;
+        }
+
+        spamInterval = setInterval(() => {
+          const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+
+          MessageActions.addReaction(
+            channelId,
+            message.id,
+            {
+              name: emoji,
+              id: null
+            }
+          );
+        }, 300); // adjust speed here
+
+        showToast("Reaction spam started");
+      }
+    });
   },
-  onUnload: () => {
-    for (const unregister of commands) unregister();
-    logger.log("Spam plugin unloaded.");
-  },
-  settings: Settings
+
+  onUnload() {
+    if (spamInterval) {
+      clearInterval(spamInterval);
+      spamInterval = null;
+    }
+  }
 };
