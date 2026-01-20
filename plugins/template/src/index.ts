@@ -1,30 +1,54 @@
 import { findByProps, patch } from "@vendetta/metro";
 import { showToast } from "@vendetta/ui/toasts";
 
-const ReactionPickerComponent = findByProps("ReactionPicker", "defaultProps")?.ReactionPicker 
-                                || findByProps("default", "ReactionPicker")?.default;
+let patched = false;
 
-if (ReactionPickerComponent) {
-  patch(
-    "stayOpenReactionUI",
-    ReactionPickerComponent.prototype,
-    "onEmojiPress",
-    (_original: any, args: any, patchOriginal: Function) => {
-      const result = patchOriginal(...args);
+// 1. Find the ReactionPicker component
+const ReactionPickerModule =
+    findByProps("ReactionPicker", "defaultProps")?.ReactionPicker ||
+    findByProps("default", "ReactionPicker")?.default;
 
-      // Prevent picker from closing after tapping an emoji
-      if (this.dismiss) this.dismiss = () => {};
-      return result;
-    }
-  );
-  showToast("Reaction UI patched: stays open on emoji taps");
+if (!ReactionPickerModule || !ReactionPickerModule.prototype) {
+    showToast("Failed to find ReactionPicker component");
 } else {
-  showToast("Failed to find ReactionPicker component");
+    // 2. Patch the component's render to override dismiss on mount
+    patch(
+        "stayOpenReactionUI",
+        ReactionPickerModule.prototype,
+        "componentDidMount",
+        (_original: any, args: any, patchOriginal: Function) => {
+            patchOriginal(...args);
+
+            try {
+                // Override dismiss function in this instance
+                if (this.dismiss) {
+                    const originalDismiss = this.dismiss;
+                    this.dismiss = () => {
+                        // Only dismiss when tapping outside
+                        if (this._tappedOutside) originalDismiss.call(this);
+                        // Otherwise do nothing
+                    };
+                }
+            } catch (e) {
+                console.error("Failed to patch ReactionPicker dismiss", e);
+            }
+
+            return null;
+        }
+    );
+
+    patched = true;
+    showToast("Reaction UI patched: stays open on emoji taps");
 }
 
 export default {
-  onUnload() {
-    patch.unpatchAll();
-    showToast("Reaction UI patch removed");
-  }
+    onLoad() {
+        if (!patched) showToast("Reaction UI patch not applied");
+    },
+    onUnload() {
+        if (patched) {
+            patch.unpatchAll();
+            showToast("Reaction UI patch removed");
+        }
+    }
 };
