@@ -1,5 +1,5 @@
 {
-    "name": "Commmand UI",
+    "name": "Commmand UI #2",
     "description": "A very cool plugin",
     "authors": [
         {
@@ -11,7 +11,7 @@
             "id": "653986158552023050"
         }
     ],
-    "main": "src/index.ts",
+    "main": "src/test.tsx",
     "vendetta": {
         "icon": "img_nitro_emojis"
     }
