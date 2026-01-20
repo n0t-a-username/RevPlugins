@@ -8,22 +8,26 @@ const ChannelStore = findByProps("getChannelId");
 let spamInterval = null;
 
 const EMOJIS = [
-  "🔥", "💀", "😂", "😭", "👀",
-  "😈", "🤡", "💥", "🗿", "😎",
-  "🫡", "🤯", "🥶", "🥵", "👽",
-  "💣", "⚡", "🧠", "👹", "🚨"
+  "🔥","💀","😂","😭","👀",
+  "😈","🤡","💥","🗿","😎",
+  "🫡","🤯","🥶","🥵","👽",
+  "💣","⚡","🧠","👹","🚨"
 ];
 
+// FIXED — robust snowflake normalization
 function normalizeMessageId(input) {
-  if (input == null) return null;
+  if (!input) return null;
 
-  // Vendetta always gives strings for type:3 — just sanitize
   const str = String(input).trim();
 
-  // Accept any snowflake-length numeric ID
-  if (!/^\d{16,21}$/.test(str)) return null;
+  // Accept Discord message links
+  const urlMatch = str.match(/\/(\d{17,21})$/);
+  if (urlMatch) return urlMatch[1];
 
-  return str;
+  // Accept raw snowflake IDs
+  if (/^\d{17,21}$/.test(str)) return str;
+
+  return null;
 }
 
 export default {
@@ -34,8 +38,8 @@ export default {
       options: [
         {
           name: "message_id",
-          description: "Target message ID",
-          type: 3, // REQUIRED — do not remove
+          description: "Target message ID or message link",
+          type: 3,
           required: true
         },
         {
@@ -68,7 +72,7 @@ export default {
 
         const messageId = normalizeMessageId(args.message_id);
         if (!messageId) {
-          showToast("Invalid message ID");
+          showToast("Invalid message ID or link");
           return;
         }
 
@@ -85,12 +89,10 @@ export default {
 
         spamInterval = setInterval(() => {
           const emoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
-
-          MessageActions.addReaction(
-            channelId,
-            messageId,
-            { name: emoji, id: null }
-          );
+          MessageActions.addReaction(channelId, messageId, {
+            name: emoji,
+            id: null
+          });
         }, seconds * 1000);
 
         showToast(`Reaction spam started (${seconds}s interval)`);
