@@ -1,14 +1,13 @@
 import { findByProps } from "@vendetta/metro";
 import { registerCommand } from "@vendetta/commands";
-import { sendBotMessage } from "@vendetta/api/messages";
 
 const UserStore = findByProps("getUser", "getCurrentUser");
+const MessageActions = findByProps("sendMessage");
 
 function getAvatarUrl(user: any, size = 1024) {
     if (user.avatar) {
-        const isAnimated = user.avatar.startsWith("a_");
-        const ext = isAnimated ? "gif" : "png";
-        return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${ext}?size=${size}`;
+        const animated = user.avatar.startsWith("a_");
+        return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${animated ? "gif" : "png"}?size=${size}`;
     }
 
     const index = Number(BigInt(user.id) >> 22n) % 6;
@@ -29,36 +28,31 @@ export default {
                 }
             ],
             execute: async (args, ctx) => {
-                const userId = args.user?.value;
-                if (!userId) return;
+                try {
+                    const userId = args.user?.value;
+                    if (!userId) return;
 
-                const user = UserStore.getUser(userId);
-                if (!user) {
-                    sendBotMessage(ctx.channel.id, {
-                        content: "User not found."
-                    });
-                    return;
-                }
+                    const user = UserStore.getUser(userId);
+                    if (!user) return;
 
-                const avatarUrl = getAvatarUrl(user);
+                    const avatar = getAvatarUrl(user);
 
-                sendBotMessage(ctx.channel.id, {
-                    embeds: [
-                        {
-                            author: {
-                                name: `${user.username}`,
-                                icon_url: avatarUrl
-                            },
-                            title: "Snatched Profile",
-                            image: {
-                                url: avatarUrl
-                            },
-                            footer: {
-                                text: `ID: ${user.id}`
+                    MessageActions.sendMessage(ctx.channel.id, {
+                        embeds: [
+                            {
+                                title: "Snatched Profile",
+                                author: {
+                                    name: user.username,
+                                    icon_url: avatar
+                                },
+                                image: { url: avatar },
+                                footer: { text: `ID: ${user.id}` }
                             }
-                        }
-                    ]
-                });
+                        ]
+                    });
+                } catch (e) {
+                    console.error("[Snatch]", e);
+                }
             }
         });
     },
