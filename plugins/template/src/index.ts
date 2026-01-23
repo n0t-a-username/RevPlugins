@@ -2,7 +2,10 @@ import { findByProps, findByStoreName } from "@vendetta/metro";
 import { registerCommand } from "@vendetta/commands";
 
 const UserStore = findByStoreName("UserStore");
-const MessageActions = findByProps("sendMessage");
+const SelectedChannelStore = findByStoreName("SelectedChannelStore");
+
+const { createBotMessage } = findByProps("createBotMessage");
+const { receiveMessage } = findByProps("receiveMessage");
 
 function getAvatarUrl(user: any, size = 1024) {
     if (user.avatar) {
@@ -18,7 +21,7 @@ export default {
     onLoad() {
         registerCommand({
             name: "snatch",
-            description: "Get a user's avatar via CDN",
+            description: "Snatch a user's avatar (Clyde message)",
             options: [
                 {
                     name: "user",
@@ -27,7 +30,10 @@ export default {
                     required: true
                 }
             ],
-            execute: async (args, ctx) => {
+            execute: async (args) => {
+                const channelId = SelectedChannelStore.getChannelId();
+                if (!channelId) return;
+
                 const userId = args.user?.value;
                 if (!userId) return;
 
@@ -36,9 +42,12 @@ export default {
 
                 const avatarUrl = getAvatarUrl(user);
 
-                MessageActions.sendMessage(ctx.channelId, {
-                    content: `${user.username}'s avatar:\n${avatarUrl}`
+                const botMessage = createBotMessage({
+                    channelId,
+                    content: `🖼 **${user.username}**\n${avatarUrl}`
                 });
+
+                receiveMessage(channelId, botMessage);
             }
         });
     },
