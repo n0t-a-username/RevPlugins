@@ -1,59 +1,67 @@
 import { findByProps } from "@vendetta/metro";
-import { before } from "@vendetta/patcher";
-import { storage } from "@vendetta/plugin";
+import { registerCommand } from "@vendetta/commands";
+import { sendBotMessage } from "@vendetta/api/messages";
 
-const MessageActions = findByProps("addReaction");
+const UserStore = findByProps("getUser", "getCurrentUser");
 
-let unpatch: (() => void) | null = null;
-let isInjecting = false;
+function getAvatarUrl(user: any, size = 1024) {
+    if (user.avatar) {
+        const isAnimated = user.avatar.startsWith("a_");
+        const ext = isAnimated ? "gif" : "png";
+        return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${ext}?size=${size}`;
+    }
 
-// Default emoji set (can be changed)
-const DEFAULT_EMOJIS = ["🔥", "💀", "😂", "👀"];
+    const index = Number(BigInt(user.id) >> 22n) % 6;
+    return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+}
 
 export default {
     onLoad() {
-        // Persisted emoji list
-        storage.emojis ??= DEFAULT_EMOJIS;
-        storage.delayMs ??= 120;
-
-        unpatch = before(
-            "addReaction",
-            MessageActions,
-            async ([channelId, messageId, emoji, location]) => {
-                // Prevent infinite loops
-                if (isInjecting) return;
-
-                // Only intercept double-tap reactions
-                if (location !== "DOUBLE_TAP") return;
-
-                isInjecting = true;
-
-                try {
-                    // Cancel default single emoji by returning null
-                    setTimeout(async () => {
-                        for (const e of storage.emojis) {
-                            try {
-                                await MessageActions.addReaction(
-                                    channelId,
-                                    messageId,
-                                    e,
-                                    "DOUBLE_TAP"
-                                );
-                            } catch {}
-                            await new Promise(r => setTimeout(r, storage.delayMs));
-                        }
-                        isInjecting = false;
-                    }, 0);
-
-                    return false; // block original
-                } catch {
-                    isInjecting = false;
+        registerCommand({
+            name: "snatch",
+            description: "Snatch a user's profile picture",
+            options: [
+                {
+                    name: "user",
+                    description: "User to snatch",
+                    type: 6, // USER
+                    required: true
                 }
+            ],
+            execute: async (args, ctx) => {
+                const userId = args.user?.value;
+                if (!userId) return;
+
+                const user = UserStore.getUser(userId);
+                if (!user) {
+                    sendBotMessage(ctx.channel.id, {
+                        content: "User not found."
+                    });
+                    return;
+                }
+
+                const avatarUrl = getAvatarUrl(user);
+
+                sendBotMessage(ctx.channel.id, {
+                    embeds: [
+                        {
+                            author: {
+                                name: `${user.username}`,
+                                icon_url: avatarUrl
+                            },
+                            title: "Snatched Profile",
+                            image: {
+                                url: avatarUrl
+                            },
+                            footer: {
+                                text: `ID: ${user.id}`
+                            }
+                        }
+                    ]
+                });
             }
-        );
+        });
     },
 
-    onUnload() {
-        unpatch?.();
-    },
+    onUnload() {}
 };
