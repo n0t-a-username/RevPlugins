@@ -1,8 +1,10 @@
-import { findByProps } from "@vendetta/metro";
+import { findByProps, findByStoreName } from "@vendetta/metro";
 import { registerCommand } from "@vendetta/commands";
 
-const UserStore = findByProps("getUser", "getCurrentUser");
-const MessageActions = findByProps("sendMessage");
+const UserStore = findByStoreName("UserStore");
+
+const { receiveMessage } = findByProps("receiveMessage");
+const { createBotMessage } = findByProps("createBotMessage");
 
 function getAvatarUrl(user: any, size = 1024) {
     if (user.avatar) {
@@ -17,7 +19,7 @@ function getAvatarUrl(user: any, size = 1024) {
 export default {
     onLoad() {
         registerCommand({
-            name: "snatch",
+            name: "snatcher",
             description: "Snatch a user's profile picture",
             options: [
                 {
@@ -28,31 +30,33 @@ export default {
                 }
             ],
             execute: async (args, ctx) => {
-                try {
-                    const userId = args.user?.value;
-                    if (!userId) return;
+                const userId = args.user?.value;
+                if (!userId) return;
 
-                    const user = UserStore.getUser(userId);
-                    if (!user) return;
+                const user = UserStore.getUser(userId);
+                if (!user) return;
 
-                    const avatar = getAvatarUrl(user);
+                const avatarUrl = getAvatarUrl(user);
 
-                    MessageActions.sendMessage(ctx.channel.id, {
-                        embeds: [
-                            {
-                                title: "Snatched Profile",
-                                author: {
-                                    name: user.username,
-                                    icon_url: avatar
-                                },
-                                image: { url: avatar },
-                                footer: { text: `ID: ${user.id}` }
-                            }
-                        ]
-                    });
-                } catch (e) {
-                    console.error("[Snatch]", e);
-                }
+                const message = createBotMessage({
+                    channelId: ctx.channelId,
+                    content: `Snatched **${user.username}**`
+                });
+
+                message.attachments = [
+                    {
+                        id: "avatar",
+                        filename: "avatar.png",
+                        size: 0,
+                        url: avatarUrl,
+                        proxy_url: avatarUrl,
+                        content_type: "image/png",
+                        width: 1024,
+                        height: 1024
+                    }
+                ];
+
+                receiveMessage(ctx.channelId, message);
             }
         });
     },
