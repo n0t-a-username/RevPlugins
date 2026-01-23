@@ -1,6 +1,7 @@
 import { findByProps, findByStoreName } from "@vendetta/metro";
 import { registerCommand } from "@vendetta/commands";
 
+const SelectedChannelStore = findByStoreName("SelectedChannelStore");
 const UserStore = findByStoreName("UserStore");
 
 const { receiveMessage } = findByProps("receiveMessage");
@@ -9,27 +10,30 @@ const { createBotMessage } = findByProps("createBotMessage");
 function getAvatarUrl(user: any, size = 1024) {
     if (user.avatar) {
         const animated = user.avatar.startsWith("a_");
-        return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${animated ? "gif" : "png"}?size=${size}`;
+        return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${animated ? "gif" : "png"}?size=${size}#`;
     }
 
     const index = Number(BigInt(user.id) >> 22n) % 6;
-    return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+    return `https://cdn.discordapp.com/embed/avatars/${index}.png#`;
 }
 
 export default {
     onLoad() {
         registerCommand({
-            name: "snatcher",
+            name: "snatch",
             description: "Snatch a user's profile picture",
             options: [
                 {
                     name: "user",
                     description: "User to snatch",
-                    type: 6, // USER
+                    type: 6,
                     required: true
                 }
             ],
-            execute: async (args, ctx) => {
+            execute: async (args) => {
+                const channelId = SelectedChannelStore.getChannelId();
+                if (!channelId) return;
+
                 const userId = args.user?.value;
                 if (!userId) return;
 
@@ -39,7 +43,7 @@ export default {
                 const avatarUrl = getAvatarUrl(user);
 
                 const message = createBotMessage({
-                    channelId: ctx.channelId,
+                    channelId,
                     content: `Snatched **${user.username}**`
                 });
 
@@ -47,7 +51,7 @@ export default {
                     {
                         id: "avatar",
                         filename: "avatar.png",
-                        size: 0,
+                        size: 1,
                         url: avatarUrl,
                         proxy_url: avatarUrl,
                         content_type: "image/png",
@@ -56,7 +60,7 @@ export default {
                     }
                 ];
 
-                receiveMessage(ctx.channelId, message);
+                receiveMessage(channelId, message);
             }
         });
     },
