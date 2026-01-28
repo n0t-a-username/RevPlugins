@@ -73,7 +73,7 @@ commands.push(
   registerCommand({
     name: "fetchprofile",
     displayName: "fetchprofile",
-    description: "Get a user's avatar (Bemmo message)",
+    description: "Get a user's avatar",
     options: [
       {
         name: "user",
@@ -103,7 +103,7 @@ commands.push(
               content: `❌ User not found`,
             }),
             {
-              author: { username: "Profile Fetcher", avatar: "clyde", id: "1" },
+              author: { username: "Profile Fetcher", avatar: "https://cdn.discordapp.com/attachments/1462824278524297332/1465958873939841150/3cacc98160499f04ed8927e201e690d2.webp?ex=697b0017&is=6979ae97&hm=4f4dd30883b7ca332e68d17b3471e53a31d3825828bcddd9931cb0473858d229&", id: "1" },
             }
           )
         );
@@ -131,7 +131,7 @@ commands.push(
             content: avatarToSend,
           }),
           {
-            author: { username: "Bemmo", avatar: "clyde", id: "1" },
+            author: { username: "Profile Fetcher", avatar: "https://cdn.discordapp.com/attachments/1462824278524297332/1465958873939841150/3cacc98160499f04ed8927e201e690d2.webp?ex=697b0017&is=6979ae97&hm=4f4dd30883b7ca332e68d17b3471e53a31d3825828bcddd9931cb0473858d229&", id: "1" },
           }
         )
       );
