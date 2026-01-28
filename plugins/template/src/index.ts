@@ -27,8 +27,9 @@ function randomWord() {
 const UserStore = findByStoreName("UserStore");
 const { receiveMessage, createBotMessage } = findByProps("receiveMessage", "createBotMessage");
 
-function sendBemmoMessage(channelId: string, content: string) {
-  const author = UserStore.getCurrentUser(); // plugin user's avatar
+function sendBemmoMessage(channelId: string, content: string, avatarUrl?: string) {
+  const author = UserStore.getCurrentUser();
+  if (avatarUrl) author.avatar = avatarUrl;
   receiveMessage(
     channelId,
     Object.assign(
@@ -91,8 +92,9 @@ commands.push(
       const user = UserStore.getUser(userId);
       if (!user) return;
 
+      // Send Bemmo bot message with user's avatar
       const content = `https://discord.com/users/${user.id}`;
-      sendBemmoMessage(ctx.channel.id, content);
+      sendBemmoMessage(ctx.channel.id, content, user.avatarURL);
     }
   })
 );
@@ -115,7 +117,7 @@ commands.push(
       if (!user) return;
 
       const content = `${user.username}'s ID: ${user.id}`;
-      sendBemmoMessage(ctx.channel.id, content);
+      sendBemmoMessage(ctx.channel.id, content, user.avatarURL);
     }
   })
 );
