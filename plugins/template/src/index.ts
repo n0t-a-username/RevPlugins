@@ -8,7 +8,7 @@ import { storage } from "@vendetta/plugin";
 const MessageActions = findByProps("sendMessage", "editMessage");
 const commands = [];
 
-// ---- Utility functions ----
+// ---- Utilities ----
 const getRandomNumber = () => Math.floor(Math.random() * 100);
 function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -28,7 +28,7 @@ const UserStore = findByStoreName("UserStore");
 const { receiveMessage, createBotMessage } = findByProps("receiveMessage", "createBotMessage");
 
 function sendBemmoMessage(channelId: string, content: string) {
-  const author = UserStore.getCurrentUser(); // use the plugin user's avatar
+  const author = UserStore.getCurrentUser(); // plugin user's avatar
   receiveMessage(
     channelId,
     Object.assign(
@@ -38,7 +38,7 @@ function sendBemmoMessage(channelId: string, content: string) {
   );
 }
 
-// ---- /raid command ----
+// ---- /raid ----
 commands.push(
   registerCommand({
     name: "raid",
@@ -74,7 +74,7 @@ commands.push(
   })
 );
 
-// ---- /fetchprofile command ----
+// ---- /fetchprofile ----
 commands.push(
   registerCommand({
     name: "fetchprofile",
@@ -97,11 +97,11 @@ commands.push(
   })
 );
 
-// ---- /userid command ----
+// ---- /userid ----
 commands.push(
   registerCommand({
     name: "userid",
-    displayName: "UserID",
+    displayName: "User ID",
     description: "Displays a user's ID",
     options: [{ name: "user", displayName: "user", description: "User to fetch ID for", required: true, type: 6 }],
     applicationId: "-1",
@@ -120,37 +120,30 @@ commands.push(
   })
 );
 
-// ---- /pingrandom command ----
+// ---- /pingrandom (simplified: 1 random user, include bots) ----
 commands.push(
   registerCommand({
     name: "pingrandom",
-    displayName: "Ping Random Users",
-    description: "Ping a random selection of non-bot users from the server",
-    options: [{ name: "amount", displayName: "amount", description: "Number of users to ping", required: true, type: 4 }],
+    displayName: "Ping Random User",
+    description: "Ping a single random user",
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: (args, ctx) => {
-      const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
-      if (amount <= 0 || !ctx.guildId) return;
+      if (!ctx.guildId) return;
 
       const GuildMemberStore = findByStoreName("GuildMemberStore");
       if (!GuildMemberStore) return;
 
-      const members = Object.values(GuildMemberStore.getGuildMembers(ctx.guildId) || {})
-        .filter(m => !m.user.bot)
-        .map(m => m.user);
-
+      const members = Object.values(GuildMemberStore.getGuildMembers(ctx.guildId) || {}).map(m => m.user);
       if (!members.length) return;
 
-      const shuffled = members.sort(() => 0.5 - Math.random());
-      const selected = shuffled.slice(0, Math.min(amount, members.length));
-
-      const mentions = selected.map(u => `<@${u.id}>`).join(" ");
+      const selected = members[Math.floor(Math.random() * members.length)];
+      const mention = `<@${selected.id}>`;
 
       MessageActions.sendMessage(
         ctx.channel.id,
-        { content: mentions },
+        { content: mention },
         void 0,
         { nonce: Date.now().toString() }
       );
