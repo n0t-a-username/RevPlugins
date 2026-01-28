@@ -29,7 +29,7 @@ function randomWord() {
   return words[Math.floor(Math.random() * words.length)];
 }
 
-// /raid command
+// ---- /raid ----
 commands.push(
   registerCommand({
     name: "raid",
@@ -79,7 +79,7 @@ commands.push(
   })
 );
 
-// /fetchprofile command
+// ---- /fetchprofile ----
 commands.push(
   registerCommand({
     name: "fetchprofile",
@@ -126,22 +126,74 @@ commands.push(
         Object.assign(
           createBotMessage({
             channelId: ctx.channel.id,
-            content: avatarUrl, // just send the URL
+            content: avatarUrl, // send the link
           }),
-          { author: currentUser } // Bemmo uses your avatar
+          { author: currentUser }
         )
       );
     },
   })
 );
 
+// ---- /userid ----
+commands.push(
+  registerCommand({
+    name: "userid",
+    displayName: "User ID",
+    description: "Displays a user's ID as Bemmo",
+    options: [
+      {
+        name: "user",
+        displayName: "user",
+        description: "Mention or ID of the user",
+        required: true,
+        type: 3,
+      },
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+
+    execute: (args, ctx) => {
+      const input = args.find(a => a.name === "user")?.value?.trim();
+      if (!input) return;
+
+      const userId = input.replace(/[<@!>]/g, "");
+      const user = UserStore.getUser(userId);
+      if (!user) {
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: "❌ User not found" },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
+        return;
+      }
+
+      const content = `${user.username}'s ID: ${user.id}`;
+      const currentUser = UserStore.getCurrentUser();
+      receiveMessage(
+        ctx.channel.id,
+        Object.assign(
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content,
+          }),
+          { author: currentUser }
+        )
+      );
+    },
+  })
+);
+
+// ---- Plugin lifecycle ----
 export default {
   onLoad: () => {
-    logger.log("Raid + FetchProfile plugin loaded!");
+    logger.log("Raid + FetchProfile + UserID plugin loaded!");
   },
   onUnload: () => {
     for (const unregister of commands) unregister();
-    logger.log("Raid + FetchProfile plugin unloaded.");
+    logger.log("Raid + FetchProfile + UserID plugin unloaded.");
   },
   settings: Settings,
 };
