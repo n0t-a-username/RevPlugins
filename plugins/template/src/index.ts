@@ -2,11 +2,13 @@ import { logger } from "@vendetta";
 import Settings from "./Settings";
 
 import { registerCommand } from "@vendetta/commands";
-import { findByProps } from "@vendetta/metro";
+import { findByProps, findByStoreName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 
+const UserStore = findByStoreName("UserStore");
 const MessageActions = findByProps("sendMessage", "editMessage");
-const UserStore = findByProps("getUser");
+const { receiveMessage } = findByProps("receiveMessage");
+const { createBotMessage } = findByProps("createBotMessage");
 
 const commands = [];
 
@@ -27,7 +29,7 @@ function randomWord() {
   return words[Math.floor(Math.random() * words.length)];
 }
 
-// ======== /raid command ========
+// ======== /raid command (normal user messages) ========
 commands.push(
   registerCommand({
     name: "raid",
@@ -52,6 +54,7 @@ commands.push(
         const content = `${msgTemplate} \`${rnd}\``;
         await sleep(delay);
 
+        // Normal message sent as you
         MessageActions.sendMessage(
           ctx.channel.id,
           { content },
@@ -63,19 +66,21 @@ commands.push(
   })
 );
 
-// ======== /fetchprofile command ========
+// ======== /fetchprofile command (Clyde-style) ========
+const avatarIndexMap: Record<string, number> = {};
+
 commands.push(
   registerCommand({
     name: "fetchprofile",
     displayName: "Fetch Profile",
-    description: "Fetch info about a Discord user by mention or ID",
+    description: "Get a user's username and avatar (Clyde message)",
     options: [
       {
         name: "user",
         displayName: "user",
         description: "User mention or ID",
         required: true,
-        type: 3 // String
+        type: 3
       }
     ],
     applicationId: "-1",
@@ -86,36 +91,54 @@ commands.push(
       const input = args.find(a => a.name === "user")?.value?.trim();
       if (!input) return;
 
-      // Extract ID if input is a mention <@!ID>
       const userId = input.replace(/[<@!>]/g, "");
       const user = UserStore.getUser(userId);
 
       if (!user) {
-        MessageActions.sendMessage(
+        receiveMessage(
           ctx.channel.id,
-          { content: `❌ Could not find user with ID or mention: ${input}` },
-          void 0,
-          { nonce: Date.now().toString() }
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: `❌ User not found: ${input}`,
+            }),
+            {
+              author: { username: "Clyde", avatar: "clyde", id: "1" },
+            }
+          )
         );
         return;
       }
 
       const username = `${user.username}#${user.discriminator}`;
-      const avatarUrl = user.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
-      const botText = user.bot ? "Yes 🤖" : "No";
-      const createdAt = new Date(user.id / 4194304 + 1420070400000).toUTCString(); // Discord snowflake to timestamp
 
-      const content = `**Profile Info for ${username}**
-ID: \`${user.id}\`
-Bot: ${botText}
-Created: ${createdAt}
-Avatar: ${avatarUrl}`;
+      // Prepare avatar URLs (cycle if multiple)
+      const avatarPng = user.getAvatarURL?.({ format: "png", size: 512 });
+      const avatarGif = user.getAvatarURL?.({ format: "gif", size: 512 });
 
-      MessageActions.sendMessage(
+      const avatars = [];
+      if (avatarGif && avatarGif !== avatarPng) avatars.push(avatarGif);
+      if (avatarPng) avatars.push(avatarPng);
+      if (!avatars.length) avatars.push(`https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`);
+
+      const idx = avatarIndexMap[user.id] ?? 0;
+      const avatarToSend = avatars[idx % avatars.length];
+      avatarIndexMap[user.id] = (idx + 1) % avatars.length;
+
+      const content = `${username}\n${avatarToSend}`;
+
+      // Send Clyde-style bot message
+      receiveMessage(
         ctx.channel.id,
-        { content },
-        void 0,
-        { nonce: Date.now().toString() }
+        Object.assign(
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content,
+          }),
+          {
+            author: { username: "Clyde", avatar: "clyde", id: "1" },
+          }
+        )
       );
     }
   })
@@ -124,12 +147,12 @@ Avatar: ${avatarUrl}`;
 // ======== Export ========
 export default {
   onLoad: () => {
-    logger.log("Raid + ProfileFetch plugin loaded!");
+    logger.log("Raid + Clyde FetchProfile plugin loaded!");
   },
 
   onUnload: () => {
     for (const unregister of commands) unregister();
-    logger.log("Raid + ProfileFetch plugin unloaded.");
+    logger.log("Raid + Clyde FetchProfile plugin unloaded.");
   },
 
   settings: Settings
