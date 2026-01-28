@@ -65,15 +65,14 @@ commands.push(
   })
 );
 
-// ======== /fetchprofile command (Bemmo with custom avatar) ========
+// ======== /fetchprofile command (Bemmo with inline image) ========
 const avatarIndexMap: Record<string, number> = {};
-const BEMMO_AVATAR = "https://raw.githubusercontent.com/n0t-a-username/revenge-themes/refs/heads/main/Images/DiscordLink.jpg";
 
 commands.push(
   registerCommand({
     name: "fetchprofile",
     displayName: "Fetch Profile",
-    description: "Get a user's avatar (Bemmo bot message)",
+    description: "Get a user's avatar (Bemmo bot message with image)",
     options: [
       {
         name: "user",
@@ -93,13 +92,17 @@ commands.push(
 
       const userId = input.replace(/[<@!>]/g, "");
       const user = UserStore.getUser(userId);
+      const myAvatar = UserStore.getCurrentUser().getAvatarURL?.({ format: "png", size: 512 });
 
       if (!user) {
         receiveMessage(
           ctx.channel.id,
           Object.assign(
-            createBotMessage({ channelId: ctx.channel.id, content: `❌ User not found` }),
-            { author: { username: "Bemmo", avatar: BEMMO_AVATAR, id: "1" } }
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: "❌ User not found",
+            }),
+            { author: { username: "Bemmo", avatar: myAvatar, id: "1" } }
           )
         );
         return;
@@ -117,12 +120,27 @@ commands.push(
       const avatarToSend = avatars[idx % avatars.length];
       avatarIndexMap[user.id] = (idx + 1) % avatars.length;
 
-      // Send as Bemmo bot message with avatar picture
+      // Send Bemmo message with avatar as inline image
       receiveMessage(
         ctx.channel.id,
         Object.assign(
-          createBotMessage({ channelId: ctx.channel.id, content: avatarToSend }),
-          { author: { username: "Bemmo", avatar: BEMMO_AVATAR, id: "1" } }
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content: " ", // Empty content so only image shows
+            attachments: [
+              {
+                id: `avatar-${Date.now()}`,
+                filename: `${user.username}_avatar.png`,
+                content_type: "image/png",
+                size: 1,
+                url: avatarToSend,
+                proxy_url: avatarToSend,
+                width: 512,
+                height: 512,
+              },
+            ],
+          }),
+          { author: { username: "Bemmo", avatar: myAvatar, id: "1" } }
         )
       );
     }
