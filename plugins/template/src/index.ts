@@ -93,15 +93,7 @@ commands.push(
 
       const userId = input.replace(/[<@!>]/g, "");
       const user = UserStore.getUser(userId);
-      if (!user) {
-        MessageActions.sendMessage(
-          ctx.channel.id,
-          { content: "❌ User not found" },
-          void 0,
-          { nonce: Date.now().toString() }
-        );
-        return;
-      }
+      if (!user) return;
 
       const avatarUrl =
         user.getAvatarURL?.({ format: "png", size: 512 }) ||
@@ -135,7 +127,7 @@ commands.push(
   })
 );
 
-// ---- /pingrandom (1 random user, include bots) ----
+// ---- /pingrandom (1 random user, safe) ----
 commands.push(
   registerCommand({
     name: "pingrandom",
@@ -147,32 +139,38 @@ commands.push(
     execute: (args, ctx) => {
       if (!ctx.guildId) return;
 
-      const GuildMemberStore = findByStoreName("GuildMemberStore");
-      if (!GuildMemberStore) return;
+      try {
+        const GuildMemberStore = findByStoreName("GuildMemberStore");
+        if (!GuildMemberStore) return;
 
-      const memberIds = Object.keys(GuildMemberStore.getGuildMembers(ctx.guildId) || {});
-      const users = memberIds.map(id => UserStore.getUser(id)).filter(u => u);
-      if (!users.length) return;
+        const guildMembers = GuildMemberStore.getGuildMembers(ctx.guildId) || {};
+        const memberIds = Object.keys(guildMembers);
+        if (!memberIds.length) return;
 
-      const selected = users[Math.floor(Math.random() * users.length)];
-      const mention = `<@${selected.id}>`;
+        // Random member ID
+        const selectedId = memberIds[Math.floor(Math.random() * memberIds.length)];
+        const selectedUser = UserStore.getUser(selectedId);
+        if (!selectedUser) return;
 
-      MessageActions.sendMessage(
-        ctx.channel.id,
-        { content: mention },
-        void 0,
-        { nonce: Date.now().toString() }
-      );
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: `<@${selectedUser.id}>` },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
+      } catch (e) {
+        console.error("PingRandom failed", e);
+      }
     }
   })
 );
 
 // ---- Plugin lifecycle ----
 export default {
-  onLoad: () => logger.log("Raid + FetchProfile + UserID plugin loaded!"),
+  onLoad: () => logger.log("Raid + FetchProfile + UserID + PingRandom plugin loaded!"),
   onUnload: () => {
     for (const unregister of commands) unregister();
-    logger.log("Raid + FetchProfile + UserID plugin unloaded!");
+    logger.log("Plugin unloaded.");
   },
   settings: Settings,
 };
