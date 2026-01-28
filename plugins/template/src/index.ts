@@ -2,7 +2,7 @@ import { logger } from "@vendetta";
 import Settings from "./Settings";
 
 import { registerCommand } from "@vendetta/commands";
-import { findByProps, findByStoreName, findByName } from "@vendetta/metro";
+import { findByProps, findByStoreName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
@@ -59,24 +59,26 @@ commands.push(
   })
 );
 
-// ---- /fetchprofile command (Bemmo-style bot) ----
+// ---- /fetchprofile command ----
 commands.push(
   registerCommand({
     name: "fetchprofile",
     displayName: "Fetch Profile",
-    description: "Displays a user's profile link via Bemmo bot message",
+    description: "Displays a user's profile link",
     options: [
-      { name: "user", displayName: "user", description: "User to fetch", required: true, type: 6 } // 6 = USER type
+      { name: "user", displayName: "user", description: "User to fetch", required: true, type: 6 }
     ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
+      const userId = args.find(a => a.name === "user")?.value;
+      if (!userId) return;
+
       const UserStore = findByStoreName("UserStore");
-      const user = args.find(a => a.name === "user")?.value;
+      const user = UserStore.getUser(userId);
       if (!user) return;
 
-      const author = UserStore.getCurrentUser();
       const content = `https://discord.com/users/${user.id}`;
 
       MessageActions.sendMessage(
@@ -89,12 +91,12 @@ commands.push(
   })
 );
 
-// ---- /userid command (Bemmo-style bot) ----
+// ---- /userid command ----
 commands.push(
   registerCommand({
     name: "userid",
     displayName: "User ID",
-    description: "Displays a user's ID via Bemmo bot message",
+    description: "Displays a user's ID",
     options: [
       { name: "user", displayName: "user", description: "User to fetch ID for", required: true, type: 6 }
     ],
@@ -102,11 +104,13 @@ commands.push(
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
+      const userId = args.find(a => a.name === "user")?.value;
+      if (!userId) return;
+
       const UserStore = findByStoreName("UserStore");
-      const user = args.find(a => a.name === "user")?.value;
+      const user = UserStore.getUser(userId);
       if (!user) return;
 
-      const author = UserStore.getCurrentUser();
       const content = `${user.username}'s ID: ${user.id}`;
 
       MessageActions.sendMessage(
@@ -135,11 +139,10 @@ commands.push(
       const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
       if (amount <= 0 || !ctx.guildId) return;
 
-      const GuildStore = findByStoreName("GuildStore");
-      const guild = GuildStore.getGuild(ctx.guildId);
-      if (!guild || !guild.members) return;
+      const GuildMemberStore = findByStoreName("GuildMemberStore");
+      if (!GuildMemberStore) return;
 
-      const members = Object.values(guild.members)
+      const members = Object.values(GuildMemberStore.getGuildMembers(ctx.guildId) || {})
         .filter(m => !m.user.bot)
         .map(m => m.user);
 
