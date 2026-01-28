@@ -1,74 +1,80 @@
-import { Forms } from "@vendetta/ui/components";
+import { ReactNative } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
+import { Forms } from "@vendetta/ui/components";
 
-const { FormText, FormInput } = Forms;
+const { ScrollView, View, Text, TextInput } = ReactNative;
+const { FormSection } = Forms;
 
-// Initialize defaults
-if (!storage.words) {
-  storage.words = Array(10).fill("");
+// Hard initialize exactly 10 slots
+if (!Array.isArray(storage.words) || storage.words.length !== 10) {
+  storage.words = [
+    "", "", "", "", "",
+    "", "", "", "", ""
+  ];
 }
+
+const inputStyle = {
+  backgroundColor: "#222",
+  color: "#fff",
+  borderRadius: 8,
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+  fontSize: 14,
+  borderWidth: 2,
+  borderColor: "#333",
+};
 
 export default function Settings() {
   useProxy(storage);
 
   return (
-    <>
-      <FormText>
-        ⚠️ Messages saved here will be used by /raid.
-        I am not responsible for whatever happens to your account.
-      </FormText>
+    <ScrollView style={{ backgroundColor: "#111" }}>
+      <FormSection title="⚠️ Warning">
+        <Text style={{ color: "#aaa", margin: 16 }}>
+          Messages entered here will be used by /raid.
+          You are fully responsible for how this plugin is used.
+        </Text>
+      </FormSection>
 
-      <FormInput
-        title="Spam Message 1"
-        value={storage.words[0]}
-        onChange={(v) => (storage.words[0] = v)}
-      />
-      <FormInput
-        title="Spam Message 2"
-        value={storage.words[1]}
-        onChange={(v) => (storage.words[1] = v)}
-      />
-      <FormInput
-        title="Spam Message 3"
-        value={storage.words[2]}
-        onChange={(v) => (storage.words[2] = v)}
-      />
-      <FormInput
-        title="Spam Message 4"
-        value={storage.words[3]}
-        onChange={(v) => (storage.words[3] = v)}
-      />
-      <FormInput
-        title="Spam Message 5"
-        value={storage.words[4]}
-        onChange={(v) => (storage.words[4] = v)}
-      />
-      <FormInput
-        title="Spam Message 6"
-        value={storage.words[5]}
-        onChange={(v) => (storage.words[5] = v)}
-      />
-      <FormInput
-        title="Spam Message 7"
-        value={storage.words[6]}
-        onChange={(v) => (storage.words[6] = v)}
-      />
-      <FormInput
-        title="Spam Message 8"
-        value={storage.words[7]}
-        onChange={(v) => (storage.words[7] = v)}
-      />
-      <FormInput
-        title="Spam Message 9"
-        value={storage.words[8]}
-        onChange={(v) => (storage.words[8] = v)}
-      />
-      <FormInput
-        title="Spam Message 10"
-        value={storage.words[9]}
-        onChange={(v) => (storage.words[9] = v)}
-      />
-    </>
+      <FormSection title="Raid Messages">
+        <View style={{ marginHorizontal: 16 }}>
+
+          <Text style={{ color: "#fff", marginBottom: 6 }}>Message 1</Text>
+          <TextInput style={inputStyle} value={storage.words[0]} onChangeText={v => storage.words[0] = v} />
+
+          <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 2</Text>
+          <TextInput style={inputStyle} value={storage.words[1]} onChangeText={v => storage.words[1] = v} />
+
+          <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 3</Text>
+          <TextInput style={inputStyle} value={storage.words[2]} onChangeText={v => storage.words[2] = v} />
+
+          <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 4</Text>
+          <TextInput style={inputStyle} value={storage.words[3]} onChangeText={v => storage.words[3] = v} />
+
+          <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 5</Text>
+          <TextInput style={inputStyle} value={storage.words[4]} onChangeText={v => storage.words[4] = v} />
+
+          <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 6</Text>
+          <TextInput style={inputStyle} value={storage.words[5]} onChangeText={v => storage.words[5] = v} />
+
+          <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 7</Text>
+          <TextInput style={inputStyle} value={storage.words[6]} onChangeText={v => storage.words[6] = v} />
+
+          <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 8</Text>
+          <TextInput style={inputStyle} value={storage.words[7]} onChangeText={v => storage.words[7] = v} />
+
+          <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 9</Text>
+          <TextInput style={inputStyle} value={storage.words[8]} onChangeText={v => storage.words[8] = v} />
+
+          <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 10</Text>
+          <TextInput style={inputStyle} value={storage.words[9]} onChangeText={v => storage.words[9] = v} />
+
+        </View>
+      </FormSection>
+
+      {/* bottom scroll padding */}
+      <View style={{ height: 80 }} />
+    </ScrollView>
   );
 }
