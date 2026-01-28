@@ -3,14 +3,10 @@ import Settings from "./Settings";
 
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findByStoreName } from "@vendetta/metro";
-import { storage } from "@vendetta/plugin";
 
-const UserStore = findByStoreName("UserStore");
 const MessageActions = findByProps("sendMessage", "editMessage");
-const { receiveMessage } = findByProps("receiveMessage");
-const { createBotMessage } = findByProps("createBotMessage");
-
-const commands: any[] = [];
+const UserStore = findByStoreName("UserStore");
+const commands: (() => void)[] = [];
 
 const getRandomNumber = () => Math.floor(Math.random() * 100);
 
@@ -20,7 +16,7 @@ function sleep(ms: number) {
 
 function getConfiguredWords() {
   if (!Array.isArray(storage.words)) return [];
-  return storage.words.filter((w: any) => typeof w === "string" && w.trim().length);
+  return storage.words.filter(w => typeof w === "string" && w.trim().length);
 }
 
 function randomWord() {
@@ -29,15 +25,27 @@ function randomWord() {
   return words[Math.floor(Math.random() * words.length)];
 }
 
-// ======== /raid command ========
+// /raid command
 commands.push(
   registerCommand({
     name: "raid",
     displayName: "raid",
     description: "Start a Raid!",
     options: [
-      { name: "amount", displayName: "amount", description: "Number of times to send", required: true, type: 4 },
-      { name: "delay", displayName: "delay", description: "Delay between messages (ms)", required: true, type: 4 }
+      {
+        name: "amount",
+        displayName: "amount",
+        description: "Number of times to send",
+        required: true,
+        type: 4,
+      },
+      {
+        name: "delay",
+        displayName: "delay",
+        description: "Delay between messages (ms)",
+        required: true,
+        type: 4,
+      },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -46,12 +54,14 @@ commands.push(
     execute: async (args, ctx) => {
       const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
       const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
+
       if (amount <= 0) return;
 
       for (let i = 0; i < amount; i++) {
         const msgTemplate = randomWord();
         const rnd = getRandomNumber();
         const content = `${msgTemplate} \`${rnd}\``;
+
         await sleep(delay);
 
         MessageActions.sendMessage(
@@ -61,33 +71,24 @@ commands.push(
           { nonce: Date.now().toString() }
         );
       }
-    }
+    },
   })
 );
 
-// ======== /fetchprofile command (Bemmo inline avatar image) ========
-async function getAttachmentsFromUrl(url: string) {
-  return [
-    {
-      id: `avatar-${Date.now()}`,
-      filename: "avatar.png",
-      content_type: "image/png",
-      size: 1,
-      url,
-      proxy_url: url,
-      width: 512,
-      height: 512,
-    },
-  ];
-}
-
+// /fetchprofile command
 commands.push(
   registerCommand({
     name: "fetchprofile",
     displayName: "Fetch Profile",
-    description: "Fetch a user's avatar as Bemmo bot",
+    description: "Fetch a user's avatar as Bemmo",
     options: [
-      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 },
+      {
+        name: "user",
+        displayName: "user",
+        description: "Mention or ID of the user",
+        required: true,
+        type: 3,
+      },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -99,50 +100,44 @@ commands.push(
 
       const userId = input.replace(/[<@!>]/g, "");
       const user = UserStore.getUser(userId);
-      const channelId = ctx.channel.id;
-      const myAvatar = UserStore.getCurrentUser().getAvatarURL?.({ format: "png", size: 512 });
-
       if (!user) {
-        receiveMessage(
-          channelId,
-          Object.assign(createBotMessage({ channelId, content: "❌ User not found" }), {
-            author: { username: "Bemmo", avatar: myAvatar, id: "1" },
-          })
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: "❌ User not found" },
+          void 0,
+          { nonce: Date.now().toString() }
         );
         return;
       }
 
-      const avatarPng = user.getAvatarURL?.({ format: "png", size: 512 });
-      const avatarGif = user.getAvatarURL?.({ format: "gif", size: 512 });
-      const avatarUrl = avatarGif || avatarPng || `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
+      // Get avatar URL
+      const avatarUrl =
+        user.getAvatarURL?.({ format: "png", size: 512 }) ||
+        `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
 
-      const attachments = await getAttachmentsFromUrl(avatarUrl);
-
+      // Send as Bemmo bot message using your avatar
+      const currentUser = UserStore.getCurrentUser();
       receiveMessage(
-        channelId,
+        ctx.channel.id,
         Object.assign(
           createBotMessage({
-            channelId,
-            content: " ", // empty content so only image shows
-            attachments,
+            channelId: ctx.channel.id,
+            content: avatarUrl, // just send the URL
           }),
-          { author: { username: "Bemmo", avatar: myAvatar, id: "1" } }
+          { author: currentUser } // Bemmo uses your avatar
         )
       );
-    }
+    },
   })
 );
 
-// ======== Export plugin ========
 export default {
   onLoad: () => {
-    logger.log("Raid + Bemmo FetchProfile plugin loaded!");
+    logger.log("Raid + FetchProfile plugin loaded!");
   },
-
   onUnload: () => {
     for (const unregister of commands) unregister();
-    logger.log("Raid + Bemmo FetchProfile plugin unloaded.");
+    logger.log("Raid + FetchProfile plugin unloaded.");
   },
-
   settings: Settings,
 };
