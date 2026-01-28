@@ -23,6 +23,21 @@ function randomWord() {
   return words[Math.floor(Math.random() * words.length)];
 }
 
+// ---- Bemmo bot message helper ----
+const UserStore = findByStoreName("UserStore");
+const { receiveMessage, createBotMessage } = findByProps("receiveMessage", "createBotMessage");
+
+function sendBemmoMessage(channelId: string, content: string) {
+  const author = UserStore.getCurrentUser(); // use the plugin user's avatar
+  receiveMessage(
+    channelId,
+    Object.assign(
+      createBotMessage({ channelId, content }),
+      { author }
+    )
+  );
+}
+
 // ---- /raid command ----
 commands.push(
   registerCommand({
@@ -65,28 +80,19 @@ commands.push(
     name: "fetchprofile",
     displayName: "Fetch Profile",
     description: "Displays a user's profile link",
-    options: [
-      { name: "user", displayName: "user", description: "User to fetch", required: true, type: 6 }
-    ],
+    options: [{ name: "user", displayName: "user", description: "User to fetch", required: true, type: 6 }],
     applicationId: "-1",
     inputType: 1,
     type: 1,
-    execute: async (args, ctx) => {
+    execute: (args, ctx) => {
       const userId = args.find(a => a.name === "user")?.value;
       if (!userId) return;
 
-      const UserStore = findByStoreName("UserStore");
       const user = UserStore.getUser(userId);
       if (!user) return;
 
       const content = `https://discord.com/users/${user.id}`;
-
-      MessageActions.sendMessage(
-        ctx.channel.id,
-        { content },
-        void 0,
-        { nonce: Date.now().toString() }
-      );
+      sendBemmoMessage(ctx.channel.id, content);
     }
   })
 );
@@ -95,30 +101,21 @@ commands.push(
 commands.push(
   registerCommand({
     name: "userid",
-    displayName: "User ID",
+    displayName: "UserID",
     description: "Displays a user's ID",
-    options: [
-      { name: "user", displayName: "user", description: "User to fetch ID for", required: true, type: 6 }
-    ],
+    options: [{ name: "user", displayName: "user", description: "User to fetch ID for", required: true, type: 6 }],
     applicationId: "-1",
     inputType: 1,
     type: 1,
-    execute: async (args, ctx) => {
+    execute: (args, ctx) => {
       const userId = args.find(a => a.name === "user")?.value;
       if (!userId) return;
 
-      const UserStore = findByStoreName("UserStore");
       const user = UserStore.getUser(userId);
       if (!user) return;
 
       const content = `${user.username}'s ID: ${user.id}`;
-
-      MessageActions.sendMessage(
-        ctx.channel.id,
-        { content },
-        void 0,
-        { nonce: Date.now().toString() }
-      );
+      sendBemmoMessage(ctx.channel.id, content);
     }
   })
 );
@@ -129,13 +126,11 @@ commands.push(
     name: "pingrandom",
     displayName: "Ping Random Users",
     description: "Ping a random selection of non-bot users from the server",
-    options: [
-      { name: "amount", displayName: "amount", description: "Number of users to ping", required: true, type: 4 }
-    ],
+    options: [{ name: "amount", displayName: "amount", description: "Number of users to ping", required: true, type: 4 }],
     applicationId: "-1",
     inputType: 1,
     type: 1,
-    execute: async (args, ctx) => {
+    execute: (args, ctx) => {
       const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
       if (amount <= 0 || !ctx.guildId) return;
 
