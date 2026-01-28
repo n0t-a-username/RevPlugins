@@ -6,7 +6,7 @@ import { findByProps } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
-const ChannelActions = findByProps("deleteChannel");
+const UserStore = findByProps("getUser");
 
 const commands = [];
 
@@ -63,52 +63,60 @@ commands.push(
   })
 );
 
-// ======== /deletechannels command (current channel, working) ========
+// ======== /fetchprofile command ========
 commands.push(
   registerCommand({
-    name: "deletechannel",
-    displayName: "deletechannel",
-    description: "Deletes the channel you run this command in (must have permission)",
-    options: [],
+    name: "fetchprofile",
+    displayName: "Fetch Profile",
+    description: "Fetch info about a Discord user by mention or ID",
+    options: [
+      {
+        name: "user",
+        displayName: "user",
+        description: "User mention or ID",
+        required: true,
+        type: 3 // String
+      }
+    ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
 
-    execute: async (_args, ctx) => {
-      const channel = ctx.channel;
+    execute: async (args, ctx) => {
+      const input = args.find(a => a.name === "user")?.value?.trim();
+      if (!input) return;
 
-      if (!channel || !channel.id) {
+      // Extract ID if input is a mention <@!ID>
+      const userId = input.replace(/[<@!>]/g, "");
+      const user = UserStore.getUser(userId);
+
+      if (!user) {
         MessageActions.sendMessage(
           ctx.channel.id,
-          { content: "❌ Could not find the current channel." },
+          { content: `❌ Could not find user with ID or mention: ${input}` },
           void 0,
           { nonce: Date.now().toString() }
         );
         return;
       }
 
-      // Warn user
+      const username = `${user.username}#${user.discriminator}`;
+      const avatarUrl = user.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
+      const botText = user.bot ? "Yes 🤖" : "No";
+      const createdAt = new Date(user.id / 4194304 + 1420070400000).toUTCString(); // Discord snowflake to timestamp
+
+      const content = `**Profile Info for ${username}**
+ID: \`${user.id}\`
+Bot: ${botText}
+Created: ${createdAt}
+Avatar: ${avatarUrl}`;
+
       MessageActions.sendMessage(
         ctx.channel.id,
-        { content: `⚠️ Deleting this channel: <#${channel.id}>` },
+        { content },
         void 0,
         { nonce: Date.now().toString() }
       );
-
-      try {
-        // Clone channel object to ensure guild_id exists
-        const fullChannel = { ...channel, guild_id: channel.guild_id ?? channel.guildId };
-        await ChannelActions.deleteChannel(fullChannel);
-
-      } catch (err: any) {
-        console.error("Failed to delete channel:", err);
-        MessageActions.sendMessage(
-          ctx.channel.id,
-          { content: `❌ Failed to delete channel: ${err.message}` },
-          void 0,
-          { nonce: Date.now().toString() }
-        );
-      }
     }
   })
 );
@@ -116,12 +124,12 @@ commands.push(
 // ======== Export ========
 export default {
   onLoad: () => {
-    logger.log("Raid + DeleteChannels plugin loaded!");
+    logger.log("Raid + ProfileFetch plugin loaded!");
   },
 
   onUnload: () => {
     for (const unregister of commands) unregister();
-    logger.log("Raid + DeleteChannels plugin unloaded.");
+    logger.log("Raid + ProfileFetch plugin unloaded.");
   },
 
   settings: Settings
