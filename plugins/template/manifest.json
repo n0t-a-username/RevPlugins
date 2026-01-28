@@ -3,8 +3,8 @@
     "description": "A self-bot plugin",
     "authors": [
         {
-            "name": "Merb",
-            "id": "1180228592249090228"
+            "name": "NAU",
+            "id": "1180328592247090278"
         }
     ],
     "main": "src/index.ts",
