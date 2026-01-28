@@ -29,7 +29,7 @@ function randomWord() {
   return words[Math.floor(Math.random() * words.length)];
 }
 
-// ======== /raid command (normal user messages) ========
+// ======== /raid command (normal messages) ========
 commands.push(
   registerCommand({
     name: "raid",
@@ -54,7 +54,7 @@ commands.push(
         const content = `${msgTemplate} \`${rnd}\``;
         await sleep(delay);
 
-        // Normal message sent as you
+        // Send normal message as your account
         MessageActions.sendMessage(
           ctx.channel.id,
           { content },
@@ -66,14 +66,14 @@ commands.push(
   })
 );
 
-// ======== /fetchprofile command (Clyde-style) ========
+// ======== /fetchprofile command (Bemmo, avatar only) ========
 const avatarIndexMap: Record<string, number> = {};
 
 commands.push(
   registerCommand({
     name: "fetchprofile",
     displayName: "Fetch Profile",
-    description: "Get a user's username and avatar (Clyde message)",
+    description: "Get a user's avatar (Bemmo message)",
     options: [
       {
         name: "user",
@@ -100,22 +100,23 @@ commands.push(
           Object.assign(
             createBotMessage({
               channelId: ctx.channel.id,
-              content: `❌ User not found: ${input}`,
+              content: `❌ User not found`,
             }),
             {
-              author: { username: "Clyde", avatar: "clyde", id: "1" },
+              author: { 
+                username: "Bemmo", 
+                avatar: "https://cdn.discordapp.com/avatars/1349946018132787333/3cacc98160499f04ed8927e201e690d2.webp?size=480", 
+                id: "1" 
+              },
             }
           )
         );
         return;
       }
 
-      const username = `${user.username}#${user.discriminator}`;
-
-      // Prepare avatar URLs (cycle if multiple)
+      // Cycle avatar URLs
       const avatarPng = user.getAvatarURL?.({ format: "png", size: 512 });
       const avatarGif = user.getAvatarURL?.({ format: "gif", size: 512 });
-
       const avatars = [];
       if (avatarGif && avatarGif !== avatarPng) avatars.push(avatarGif);
       if (avatarPng) avatars.push(avatarPng);
@@ -125,18 +126,30 @@ commands.push(
       const avatarToSend = avatars[idx % avatars.length];
       avatarIndexMap[user.id] = (idx + 1) % avatars.length;
 
-      const content = `${username}\n${avatarToSend}`;
-
-      // Send Clyde-style bot message
+      // Send avatar as "Bemmo" with image attachment
       receiveMessage(
         ctx.channel.id,
         Object.assign(
           createBotMessage({
             channelId: ctx.channel.id,
-            content,
+            content: "",
+            attachments: [
+              {
+                url: avatarToSend,
+                proxy_url: avatarToSend,
+                id: "avatar-" + Date.now(),
+                filename: "avatar.png",
+                content_type: "image/png",
+                size: 0,
+              },
+            ],
           }),
           {
-            author: { username: "Clyde", avatar: "clyde", id: "1" },
+            author: { 
+              username: "Bemmo", 
+              avatar: "https://cdn.discordapp.com/avatars/1349946018132787333/3cacc98160499f04ed8927e201e690d2.webp?size=480", 
+              id: "1" 
+            },
           }
         )
       );
@@ -147,12 +160,12 @@ commands.push(
 // ======== Export ========
 export default {
   onLoad: () => {
-    logger.log("Raid + Clyde FetchProfile plugin loaded!");
+    logger.log("Raid + Bemmo FetchProfile plugin loaded!");
   },
 
   onUnload: () => {
     for (const unregister of commands) unregister();
-    logger.log("Raid + Clyde FetchProfile plugin unloaded.");
+    logger.log("Raid + Bemmo FetchProfile plugin unloaded.");
   },
 
   settings: Settings
