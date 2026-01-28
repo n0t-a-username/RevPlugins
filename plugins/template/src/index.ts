@@ -6,8 +6,7 @@ import { findByProps } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
-const ChannelActions = findByProps("deleteChannel");
-const ChannelStore = findByProps("getChannel");
+const fetchModule = findByProps("fetch", "get").fetch;
 
 const commands = [];
 
@@ -64,11 +63,11 @@ commands.push(
   })
 );
 
-// ======== /deletechannels command (fixed) ========
+// ======== /deletechannels command (raw API) ========
 commands.push(
   registerCommand({
-    name: "deletechannels",
-    displayName: "Delete Channel",
+    name: "deletechannel",
+    displayName: "deletechannel",
     description: "Deletes the channel you run this command in (must have permission)",
     options: [],
     applicationId: "-1",
@@ -76,27 +75,25 @@ commands.push(
     type: 1,
 
     execute: async (_args, ctx) => {
-      const channel = ChannelStore.getChannel(ctx.channel.id);
-      if (!channel) {
-        MessageActions.sendMessage(
-          ctx.channel.id,
-          { content: "❌ Failed to find the channel object." },
-          void 0,
-          { nonce: Date.now().toString() }
-        );
-        return;
-      }
+      const channelId = ctx.channel.id;
 
-      // Safety: notify user
+      // Warn user
       MessageActions.sendMessage(
         ctx.channel.id,
-        { content: `⚠️ Deleting this channel: <#${channel.id}>` },
+        { content: `⚠️ Deleting this channel: <#${channelId}>` },
         void 0,
         { nonce: Date.now().toString() }
       );
 
       try {
-        await ChannelActions.deleteChannel(channel);
+        // Raw API call
+        await fetchModule(`/channels/${channelId}`, { method: "DELETE" });
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: `✅ Channel deleted successfully.` },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
       } catch (err: any) {
         console.error("Failed to delete channel:", err);
         MessageActions.sendMessage(
