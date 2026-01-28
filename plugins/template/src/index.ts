@@ -65,22 +65,29 @@ commands.push(
   })
 );
 
-// ======== /fetchprofile command (Bemmo with inline image) ========
-const avatarIndexMap: Record<string, number> = {};
+// ======== /fetchprofile command (Bemmo inline avatar image) ========
+async function getAttachmentsFromUrl(url: string) {
+  return [
+    {
+      id: `avatar-${Date.now()}`,
+      filename: "avatar.png",
+      content_type: "image/png",
+      size: 1,
+      url,
+      proxy_url: url,
+      width: 512,
+      height: 512,
+    },
+  ];
+}
 
 commands.push(
   registerCommand({
     name: "fetchprofile",
     displayName: "Fetch Profile",
-    description: "Get a user's avatar (Bemmo bot message with image)",
+    description: "Fetch a user's avatar as Bemmo bot",
     options: [
-      {
-        name: "user",
-        displayName: "user",
-        description: "User mention or ID",
-        required: true,
-        type: 3
-      }
+      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -92,53 +99,32 @@ commands.push(
 
       const userId = input.replace(/[<@!>]/g, "");
       const user = UserStore.getUser(userId);
+      const channelId = ctx.channel.id;
       const myAvatar = UserStore.getCurrentUser().getAvatarURL?.({ format: "png", size: 512 });
 
       if (!user) {
         receiveMessage(
-          ctx.channel.id,
-          Object.assign(
-            createBotMessage({
-              channelId: ctx.channel.id,
-              content: "❌ User not found",
-            }),
-            { author: { username: "Bemmo", avatar: myAvatar, id: "1" } }
-          )
+          channelId,
+          Object.assign(createBotMessage({ channelId, content: "❌ User not found" }), {
+            author: { username: "Bemmo", avatar: myAvatar, id: "1" },
+          })
         );
         return;
       }
 
-      // Cycle avatar URLs
       const avatarPng = user.getAvatarURL?.({ format: "png", size: 512 });
       const avatarGif = user.getAvatarURL?.({ format: "gif", size: 512 });
-      const avatars = [];
-      if (avatarGif && avatarGif !== avatarPng) avatars.push(avatarGif);
-      if (avatarPng) avatars.push(avatarPng);
-      if (!avatars.length) avatars.push(`https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`);
+      const avatarUrl = avatarGif || avatarPng || `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
 
-      const idx = avatarIndexMap[user.id] ?? 0;
-      const avatarToSend = avatars[idx % avatars.length];
-      avatarIndexMap[user.id] = (idx + 1) % avatars.length;
+      const attachments = await getAttachmentsFromUrl(avatarUrl);
 
-      // Send Bemmo message with avatar as inline image
       receiveMessage(
-        ctx.channel.id,
+        channelId,
         Object.assign(
           createBotMessage({
-            channelId: ctx.channel.id,
-            content: " ", // Empty content so only image shows
-            attachments: [
-              {
-                id: `avatar-${Date.now()}`,
-                filename: `${user.username}_avatar.png`,
-                content_type: "image/png",
-                size: 1,
-                url: avatarToSend,
-                proxy_url: avatarToSend,
-                width: 512,
-                height: 512,
-              },
-            ],
+            channelId,
+            content: " ", // empty content so only image shows
+            attachments,
           }),
           { author: { username: "Bemmo", avatar: myAvatar, id: "1" } }
         )
@@ -158,5 +144,5 @@ export default {
     logger.log("Raid + Bemmo FetchProfile plugin unloaded.");
   },
 
-  settings: Settings
+  settings: Settings,
 };
