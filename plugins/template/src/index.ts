@@ -1,56 +1,91 @@
-import { findByProps, findByStoreName } from "@vendetta/metro";
+import { logger } from "@vendetta";
+import Settings from "./Settings";
+
 import { registerCommand } from "@vendetta/commands";
+import { findByProps } from "@vendetta/metro";
 
-const UserStore = findByStoreName("UserStore");
-const SelectedChannelStore = findByStoreName("SelectedChannelStore");
+const MessageActions = findByProps("sendMessage", "editMessage");
+const commands = [];
 
-const { createBotMessage } = findByProps("createBotMessage");
-const { receiveMessage } = findByProps("receiveMessage");
+const getRandomNumber = () => Math.floor(Math.random() * 100);
 
-function getAvatarUrl(user: any, size = 1024) {
-    if (user.avatar) {
-        const animated = user.avatar.startsWith("a_");
-        return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.${animated ? "gif" : "png"}?size=${size}`;
-    }
+const words = [
+  "### Get Raided LOL!",
+  "### BOZO ASS SERVER!",
+  "### I should have brought a condom because this server has no protection",
+  "### Look I did the funny",
+  "# Hey look || @everyone ||",
+  "# Sorry for the ping || @here ||",
+  "### This server is getting raided by a plugin LMAO!!!",
+  "### Skill Issue"
+];
 
-    const index = Number(BigInt(user.id) >> 22n) % 6;
-    return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+function randomWord(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+commands.push(
+  registerCommand({
+    name: "raid",
+    displayName: "raid",
+    description: "Start a Raid!",
+    options: [
+      {
+        name: "amount",
+        displayName: "amount",
+        description: "Number of times to send",
+        required: true,
+        type: 4
+      },
+      {
+        name: "delay",
+        displayName: "delay",
+        description: "Delay between messages (ms)",
+        required: true,
+        type: 4
+      }
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+
+    execute: async (args, ctx) => {
+      const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
+
+      if (!amount || amount <= 0) return;
+
+      for (let i = 0; i < amount; i++) {
+        const msgTemplate = randomWord(words);
+        const rnd = getRandomNumber();
+        const content = `${msgTemplate} \`${rnd}\``;
+
+        await sleep(delay);
+
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
+      }
+    }
+  })
+);
+
 export default {
-    onLoad() {
-        registerCommand({
-            name: "snatch",
-            description: "Snatch a user's avatar (Clyde message)",
-            options: [
-                {
-                    name: "user",
-                    description: "User to snatch",
-                    type: 6, // USER
-                    required: true
-                }
-            ],
-            execute: async (args) => {
-                const channelId = SelectedChannelStore.getChannelId();
-                if (!channelId) return;
+  onLoad: () => {
+    logger.log("Raid plugin loaded!");
+  },
 
-                const userId = args.user?.value;
-                if (!userId) return;
+  onUnload: () => {
+    for (const unregister of commands) unregister();
+    logger.log("Raid plugin unloaded.");
+  },
 
-                const user = UserStore.getUser(userId);
-                if (!user) return;
-
-                const avatarUrl = getAvatarUrl(user);
-
-                const botMessage = createBotMessage({
-                    channelId,
-                    content: `🖼 **${user.username}**\n${avatarUrl}`
-                });
-
-                receiveMessage(channelId, botMessage);
-            }
-        });
-    },
-
-    onUnload() {}
+  settings: Settings
 };
