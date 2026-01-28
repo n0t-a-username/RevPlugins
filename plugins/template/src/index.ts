@@ -3,10 +3,14 @@ import Settings from "./Settings";
 
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findByStoreName } from "@vendetta/metro";
+import { storage } from "@vendetta/plugin";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
 const UserStore = findByStoreName("UserStore");
 const commands: (() => void)[] = [];
+
+const { receiveMessage } = findByProps("receiveMessage");
+const { createBotMessage } = findByProps("createBotMessage");
 
 const getRandomNumber = () => Math.floor(Math.random() * 100);
 
