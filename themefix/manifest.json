@@ -1,0 +1,14 @@
+{
+    "name": "Bemmo",
+    "description": "A self-bot plugin",
+    "authors": [
+        {
+            "name": "NAU",
+            "id": "1180328592247090278"
+        }
+    ],
+    "main": "src/index.ts",
+    "vendetta": {
+        "icon": "ic_sticker_24px"
+    }
+}
