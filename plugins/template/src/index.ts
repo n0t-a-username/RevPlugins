@@ -67,7 +67,7 @@ commands.push(
 
 // ======== /fetchprofile command (Bemmo with custom avatar) ========
 const avatarIndexMap: Record<string, number> = {};
-const BEMMO_AVATAR = "https://cdn.discordapp.com/avatars/1349946018132787333/3cacc98160499f04ed8927e201e690d2.webp?size=480";
+const BEMMO_AVATAR = "https://raw.githubusercontent.com/n0t-a-username/revenge-themes/refs/heads/main/Images/DiscordLink.jpg";
 
 commands.push(
   registerCommand({
