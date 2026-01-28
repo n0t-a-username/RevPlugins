@@ -9,9 +9,9 @@ const MessageActions = findByProps("sendMessage", "editMessage");
 const UserStore = findByStoreName("UserStore");
 const commands: (() => void)[] = [];
 
-const { receiveMessage } = findByProps("receiveMessage");
-const { createBotMessage } = findByProps("createBotMessage");
+const { receiveMessage, createBotMessage } = findByProps("receiveMessage", "createBotMessage");
 
+// ---- Utilities ----
 const getRandomNumber = () => Math.floor(Math.random() * 100);
 
 function sleep(ms: number) {
@@ -27,6 +27,18 @@ function randomWord() {
   const words = getConfiguredWords();
   if (!words.length) return "### (no spam messages configured)";
   return words[Math.floor(Math.random() * words.length)];
+}
+
+// ---- Bemmo bot message helper ----
+function sendBemmoMessage(channelId: string, content: string) {
+  const author = UserStore.getCurrentUser(); // Bemmo uses your avatar
+  receiveMessage(
+    channelId,
+    Object.assign(
+      createBotMessage({ channelId, content }),
+      { author }
+    )
+  );
 }
 
 // ---- /raid ----
@@ -81,20 +93,21 @@ commands.push(
 
       const userId = input.replace(/[<@!>]/g, "");
       const user = UserStore.getUser(userId);
-      if (!user) return;
+      if (!user) {
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: "❌ User not found" },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
+        return;
+      }
 
       const avatarUrl =
         user.getAvatarURL?.({ format: "png", size: 512 }) ||
         `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
 
-      const currentUser = UserStore.getCurrentUser();
-      receiveMessage(
-        ctx.channel.id,
-        Object.assign(
-          createBotMessage({ channelId: ctx.channel.id, content: avatarUrl }),
-          { author: currentUser } // Bemmo uses your avatar
-        )
-      );
+      sendBemmoMessage(ctx.channel.id, avatarUrl);
     }
   })
 );
@@ -105,7 +118,7 @@ commands.push(
     name: "userid",
     displayName: "User ID",
     description: "Displays a user's ID",
-    options: [{ name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }],
+    options: [{ name: "user", displayName: "user", description: "User to fetch ID for", required: true, type: 3 }],
     applicationId: "-1",
     inputType: 1,
     type: 1,
@@ -117,15 +130,7 @@ commands.push(
       const user = UserStore.getUser(userId);
       if (!user) return;
 
-      const content = `${user.username}'s ID: ${user.id}`;
-      const currentUser = UserStore.getCurrentUser();
-      receiveMessage(
-        ctx.channel.id,
-        Object.assign(
-          createBotMessage({ channelId: ctx.channel.id, content }),
-          { author: currentUser }
-        )
-      );
+      sendBemmoMessage(ctx.channel.id, `${user.username}'s ID: ${user.id}`);
     }
   })
 );
@@ -135,7 +140,7 @@ commands.push(
   registerCommand({
     name: "pingrandom",
     displayName: "Ping Random User",
-    description: "Ping a single random user in the server",
+    description: "Ping a single random user",
     applicationId: "-1",
     inputType: 1,
     type: 1,
@@ -145,10 +150,11 @@ commands.push(
       const GuildMemberStore = findByStoreName("GuildMemberStore");
       if (!GuildMemberStore) return;
 
-      const members = Object.values(GuildMemberStore.getGuildMembers(ctx.guildId) || {}).map(m => m.user);
-      if (!members.length) return;
+      const memberIds = Object.keys(GuildMemberStore.getGuildMembers(ctx.guildId) || {});
+      const users = memberIds.map(id => UserStore.getUser(id)).filter(u => u);
+      if (!users.length) return;
 
-      const selected = members[Math.floor(Math.random() * members.length)];
+      const selected = users[Math.floor(Math.random() * users.length)];
       const mention = `<@${selected.id}>`;
 
       MessageActions.sendMessage(
@@ -163,12 +169,10 @@ commands.push(
 
 // ---- Plugin lifecycle ----
 export default {
-  onLoad: () => {
-    logger.log("Raid + FetchProfile + UserID + PingRandom plugin loaded!");
-  },
+  onLoad: () => logger.log("Raid + FetchProfile + UserID plugin loaded!"),
   onUnload: () => {
     for (const unregister of commands) unregister();
-    logger.log("Plugin unloaded.");
+    logger.log("Raid + FetchProfile + UserID plugin unloaded!");
   },
   settings: Settings,
 };
