@@ -10,7 +10,7 @@ const MessageActions = findByProps("sendMessage", "editMessage");
 const { receiveMessage } = findByProps("receiveMessage");
 const { createBotMessage } = findByProps("createBotMessage");
 
-const commands = [];
+const commands: any[] = [];
 
 const getRandomNumber = () => Math.floor(Math.random() * 100);
 
@@ -20,7 +20,7 @@ function sleep(ms: number) {
 
 function getConfiguredWords() {
   if (!Array.isArray(storage.words)) return [];
-  return storage.words.filter(w => typeof w === "string" && w.trim().length);
+  return storage.words.filter((w: any) => typeof w === "string" && w.trim().length);
 }
 
 function randomWord() {
@@ -66,13 +66,13 @@ commands.push(
   })
 );
 
-// ======== /fetchprofile command (Bemmo, avatar only) ========
+// ======== /fetchprofile command (Bemmo Clyde-style) ========
 const avatarIndexMap: Record<string, number> = {};
 
 commands.push(
   registerCommand({
     name: "fetchprofile",
-    displayName: "Fetch Profile",
+    displayName: "fetchprofile",
     description: "Get a user's avatar (Bemmo message)",
     options: [
       {
@@ -103,11 +103,7 @@ commands.push(
               content: `❌ User not found`,
             }),
             {
-              author: { 
-                username: "Bemmo", 
-                avatar: "https://cdn.discordapp.com/avatars/1349946018132787333/3cacc98160499f04ed8927e201e690d2.webp?size=480", 
-                id: "1" 
-              },
+              author: { username: "Profile Fetcher", avatar: "clyde", id: "1" },
             }
           )
         );
@@ -126,30 +122,16 @@ commands.push(
       const avatarToSend = avatars[idx % avatars.length];
       avatarIndexMap[user.id] = (idx + 1) % avatars.length;
 
-      // Send avatar as "Bemmo" with image attachment
+      // Send as Clyde-style text message with avatar URL only
       receiveMessage(
         ctx.channel.id,
         Object.assign(
           createBotMessage({
             channelId: ctx.channel.id,
-            content: "",
-            attachments: [
-              {
-                url: avatarToSend,
-                proxy_url: avatarToSend,
-                id: "avatar-" + Date.now(),
-                filename: "avatar.png",
-                content_type: "image/png",
-                size: 0,
-              },
-            ],
+            content: avatarToSend,
           }),
           {
-            author: { 
-              username: "Bemmo", 
-              avatar: "https://cdn.discordapp.com/avatars/1349946018132787333/3cacc98160499f04ed8927e201e690d2.webp?size=480", 
-              id: "1" 
-            },
+            author: { username: "Bemmo", avatar: "clyde", id: "1" },
           }
         )
       );
@@ -157,7 +139,7 @@ commands.push(
   })
 );
 
-// ======== Export ========
+// ======== Export plugin ========
 export default {
   onLoad: () => {
     logger.log("Raid + Bemmo FetchProfile plugin loaded!");
