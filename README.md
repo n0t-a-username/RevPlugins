@@ -4,5 +4,5 @@
 
 **Nerd Info:**
 - Status: Beta
-- Commands Avaliable: /raid
-- Verison: 2.3
+- Verison: 3.9.0
+- Features: /raid /deletechannel
