@@ -29,7 +29,7 @@ function randomWord() {
   return words[Math.floor(Math.random() * words.length)];
 }
 
-// ======== /raid command (normal messages) ========
+// ======== /raid command ========
 commands.push(
   registerCommand({
     name: "raid",
@@ -54,7 +54,6 @@ commands.push(
         const content = `${msgTemplate} \`${rnd}\``;
         await sleep(delay);
 
-        // Send normal message as your account
         MessageActions.sendMessage(
           ctx.channel.id,
           { content },
@@ -66,14 +65,15 @@ commands.push(
   })
 );
 
-// ======== /fetchprofile command (Bemmo Clyde-style) ========
+// ======== /fetchprofile command (Bemmo with custom avatar) ========
 const avatarIndexMap: Record<string, number> = {};
+const BEMMO_AVATAR = "https://cdn.discordapp.com/avatars/1349946018132787333/3cacc98160499f04ed8927e201e690d2.webp?size=480";
 
 commands.push(
   registerCommand({
     name: "fetchprofile",
-    displayName: "fetchprofile",
-    description: "Get a user's avatar",
+    displayName: "Fetch Profile",
+    description: "Get a user's avatar (Bemmo bot message)",
     options: [
       {
         name: "user",
@@ -98,13 +98,8 @@ commands.push(
         receiveMessage(
           ctx.channel.id,
           Object.assign(
-            createBotMessage({
-              channelId: ctx.channel.id,
-              content: `❌ User not found`,
-            }),
-            {
-              author: { username: "Profile Fetcher", avatar: "https://cdn.discordapp.com/attachments/1462824278524297332/1465958873939841150/3cacc98160499f04ed8927e201e690d2.webp?ex=697b0017&is=6979ae97&hm=4f4dd30883b7ca332e68d17b3471e53a31d3825828bcddd9931cb0473858d229&", id: "1" },
-            }
+            createBotMessage({ channelId: ctx.channel.id, content: `❌ User not found` }),
+            { author: { username: "Bemmo", avatar: BEMMO_AVATAR, id: "1" } }
           )
         );
         return;
@@ -122,17 +117,12 @@ commands.push(
       const avatarToSend = avatars[idx % avatars.length];
       avatarIndexMap[user.id] = (idx + 1) % avatars.length;
 
-      // Send as Clyde-style text message with avatar URL only
+      // Send as Bemmo bot message with avatar picture
       receiveMessage(
         ctx.channel.id,
         Object.assign(
-          createBotMessage({
-            channelId: ctx.channel.id,
-            content: avatarToSend,
-          }),
-          {
-            author: { username: "Profile Fetcher", avatar: "https://cdn.discordapp.com/attachments/1462824278524297332/1465958873939841150/3cacc98160499f04ed8927e201e690d2.webp?ex=697b0017&is=6979ae97&hm=4f4dd30883b7ca332e68d17b3471e53a31d3825828bcddd9931cb0473858d229&", id: "1" },
-          }
+          createBotMessage({ channelId: ctx.channel.id, content: avatarToSend }),
+          { author: { username: "Bemmo", avatar: BEMMO_AVATAR, id: "1" } }
         )
       );
     }
