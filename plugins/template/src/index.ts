@@ -3,29 +3,26 @@ import Settings from "./Settings";
 
 import { registerCommand } from "@vendetta/commands";
 import { findByProps } from "@vendetta/metro";
+import { storage } from "@vendetta/plugin";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
 const commands = [];
 
 const getRandomNumber = () => Math.floor(Math.random() * 100);
 
-const words = [
-  "### Get Raided LOL!",
-  "### BOZO ASS SERVER!",
-  "### I should have brought a condom because this server has no protection",
-  "### Look I did the funny",
-  "# Hey look || @everyone ||",
-  "# Sorry for the ping || @here ||",
-  "### This server is getting raided by a plugin LMAO!!!",
-  "### Skill Issue"
-];
-
-function randomWord(arr) {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getConfiguredWords() {
+  if (!Array.isArray(storage.words)) return [];
+  return storage.words.filter(w => typeof w === "string" && w.trim().length);
+}
+
+function randomWord() {
+  const words = getConfiguredWords();
+  if (!words.length) return "### (no spam messages configured)";
+  return words[Math.floor(Math.random() * words.length)];
 }
 
 commands.push(
@@ -57,10 +54,10 @@ commands.push(
       const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
       const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
 
-      if (!amount || amount <= 0) return;
+      if (amount <= 0) return;
 
       for (let i = 0; i < amount; i++) {
-        const msgTemplate = randomWord(words);
+        const msgTemplate = randomWord();
         const rnd = getRandomNumber();
         const content = `${msgTemplate} \`${rnd}\``;
 
