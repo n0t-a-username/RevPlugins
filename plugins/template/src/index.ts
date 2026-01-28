@@ -6,7 +6,7 @@ import { findByProps } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
-const fetchModule = findByProps("fetch", "get").fetch;
+const ChannelActions = findByProps("deleteChannel");
 
 const commands = [];
 
@@ -63,7 +63,7 @@ commands.push(
   })
 );
 
-// ======== /deletechannels command (raw API) ========
+// ======== /deletechannels command (current channel, working) ========
 commands.push(
   registerCommand({
     name: "deletechannel",
@@ -75,25 +75,31 @@ commands.push(
     type: 1,
 
     execute: async (_args, ctx) => {
-      const channelId = ctx.channel.id;
+      const channel = ctx.channel;
+
+      if (!channel || !channel.id) {
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: "❌ Could not find the current channel." },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
+        return;
+      }
 
       // Warn user
       MessageActions.sendMessage(
         ctx.channel.id,
-        { content: `⚠️ Deleting this channel: <#${channelId}>` },
+        { content: `⚠️ Deleting this channel: <#${channel.id}>` },
         void 0,
         { nonce: Date.now().toString() }
       );
 
       try {
-        // Raw API call
-        await fetchModule(`/channels/${channelId}`, { method: "DELETE" });
-        MessageActions.sendMessage(
-          ctx.channel.id,
-          { content: `✅ Channel deleted successfully.` },
-          void 0,
-          { nonce: Date.now().toString() }
-        );
+        // Clone channel object to ensure guild_id exists
+        const fullChannel = { ...channel, guild_id: channel.guild_id ?? channel.guildId };
+        await ChannelActions.deleteChannel(fullChannel);
+
       } catch (err: any) {
         console.error("Failed to delete channel:", err);
         MessageActions.sendMessage(
