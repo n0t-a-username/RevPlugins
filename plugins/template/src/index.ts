@@ -7,6 +7,7 @@ import { storage } from "@vendetta/plugin";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
 const ChannelActions = findByProps("deleteChannel");
+const ChannelStore = findByProps("getChannel");
 
 const commands = [];
 
@@ -34,20 +35,8 @@ commands.push(
     displayName: "raid",
     description: "Start a Raid!",
     options: [
-      {
-        name: "amount",
-        displayName: "amount",
-        description: "Number of times to send",
-        required: true,
-        type: 4
-      },
-      {
-        name: "delay",
-        displayName: "delay",
-        description: "Delay between messages (ms)",
-        required: true,
-        type: 4
-      }
+      { name: "amount", displayName: "amount", description: "Number of times to send", required: true, type: 4 },
+      { name: "delay", displayName: "delay", description: "Delay between messages (ms)", required: true, type: 4 }
     ],
     applicationId: "-1",
     inputType: 1,
@@ -56,14 +45,12 @@ commands.push(
     execute: async (args, ctx) => {
       const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
       const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
-
       if (amount <= 0) return;
 
       for (let i = 0; i < amount; i++) {
         const msgTemplate = randomWord();
         const rnd = getRandomNumber();
         const content = `${msgTemplate} \`${rnd}\``;
-
         await sleep(delay);
 
         MessageActions.sendMessage(
@@ -77,30 +64,39 @@ commands.push(
   })
 );
 
-// ======== /deletechannels command (current channel only) ========
+// ======== /deletechannels command (fixed) ========
 commands.push(
   registerCommand({
     name: "deletechannels",
     displayName: "Delete Channel",
     description: "Deletes the channel you run this command in (must have permission)",
-    options: [], // No arguments needed
+    options: [],
     applicationId: "-1",
     inputType: 1,
     type: 1,
 
     execute: async (_args, ctx) => {
-      const channelId = ctx.channel.id;
+      const channel = ChannelStore.getChannel(ctx.channel.id);
+      if (!channel) {
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: "❌ Failed to find the channel object." },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
+        return;
+      }
 
-      // Safety: confirm deletion via message
+      // Safety: notify user
       MessageActions.sendMessage(
         ctx.channel.id,
-        { content: `⚠️ Deleting this channel: <#${channelId}>` },
+        { content: `⚠️ Deleting this channel: <#${channel.id}>` },
         void 0,
         { nonce: Date.now().toString() }
       );
 
       try {
-        await ChannelActions.deleteChannel(channelId);
+        await ChannelActions.deleteChannel(channel);
       } catch (err: any) {
         console.error("Failed to delete channel:", err);
         MessageActions.sendMessage(
