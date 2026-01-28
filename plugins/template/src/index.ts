@@ -4,22 +4,15 @@ import Settings from "./Settings";
 import { registerCommand } from "@vendetta/commands";
 import { findByProps } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
-import { React } from "@vendetta/metro/common";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
 const ChannelActions = findByProps("deleteChannel");
-const { openAlert } = findByProps("openAlert", "dismissAlert");
-const { AlertModal, AlertActions, AlertActionButton } = findByProps(
-  "AlertModal",
-  "AlertActions",
-  "AlertActionButton"
-);
 
 const commands = [];
 
 const getRandomNumber = () => Math.floor(Math.random() * 100);
 
-function sleep(ms) {
+function sleep(ms: number) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
@@ -84,17 +77,17 @@ commands.push(
   })
 );
 
-// ======== /deletechannels command ========
+// ======== /deletechannels command (React-free) ========
 commands.push(
   registerCommand({
     name: "deletechannels",
     displayName: "Delete Channels",
-    description: "Delete multiple channels at once (must have permission)",
+    description: "Delete multiple channels by IDs (comma-separated)",
     options: [
       {
         name: "channels",
-        displayName: "Channel IDs (comma-separated)",
-        description: "Enter channel IDs to delete, separated by commas",
+        displayName: "Channel IDs",
+        description: "Enter channel IDs separated by commas",
         type: 3, // STRING input
         required: true
       }
@@ -107,60 +100,41 @@ commands.push(
       const channelsArg = args.find(a => a.name === "channels")?.value;
       if (!channelsArg) return;
 
-      const channelIds = channelsArg.split(",").map(id => id.trim()).filter(Boolean);
-      if (!channelIds.length) return;
+      const channelIds = channelsArg
+        .split(",")
+        .map(id => id.trim())
+        .filter(Boolean);
 
-      openAlert("Confirm deletion",
-        (
-          <AlertModal
-            title="Confirm Batch Deletion"
-            content={
-              <React.Fragment>
-                {channelIds.map(id => (
-                  <React.Text key={id} style={{ color: "#fff" }}>
-                    • <#${id}>{"\n"}
-                  </React.Text>
-                ))}
-                <React.Text style={{ color: "#aaa", marginTop: 6 }}>
-                  Are you sure you want to delete these {channelIds.length} channel(s)? This cannot be undone.
-                </React.Text>
-              </React.Fragment>
-            }
-            actions={
-              <AlertActions>
-                <AlertActionButton
-                  text="Cancel"
-                  variant="secondary"
-                />
-                <AlertActionButton
-                  text="Delete All"
-                  variant="destructive"
-                  onPress={async () => {
-                    let success = 0, failed = 0;
-                    for (const id of channelIds) {
-                      try {
-                        await ChannelActions.deleteChannel(id);
-                        success++;
-                      } catch (err) {
-                        console.error("Failed to delete channel", id, err);
-                        failed++;
-                      }
-                    }
+      if (!channelIds.length) {
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: "❌ No valid channel IDs provided." },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
+        return;
+      }
 
-                    MessageActions.sendMessage(
-                      ctx.channel.id,
-                      {
-                        content: `✅ Batch deletion complete! Success: ${success}, Failed: ${failed}`,
-                      },
-                      void 0,
-                      { nonce: Date.now().toString() }
-                    );
-                  }}
-                />
-              </AlertActions>
-            }
-          />
-        )
+      let success = 0;
+      let failed = 0;
+
+      for (const id of channelIds) {
+        try {
+          await ChannelActions.deleteChannel(id);
+          success++;
+        } catch (err: any) {
+          console.error("Failed to delete channel", id, err);
+          failed++;
+        }
+      }
+
+      MessageActions.sendMessage(
+        ctx.channel.id,
+        {
+          content: `✅ Batch deletion complete! Success: ${success}, Failed: ${failed}`
+        },
+        void 0,
+        { nonce: Date.now().toString() }
       );
     }
   })
