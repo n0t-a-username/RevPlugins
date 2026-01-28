@@ -77,65 +77,39 @@ commands.push(
   })
 );
 
-// ======== /deletechannels command (React-free) ========
+// ======== /deletechannels command (current channel only) ========
 commands.push(
   registerCommand({
     name: "deletechannels",
-    displayName: "Delete Channels",
-    description: "Delete multiple channels by IDs (comma-separated)",
-    options: [
-      {
-        name: "channels",
-        displayName: "Channel IDs",
-        description: "Enter channel IDs separated by commas",
-        type: 3, // STRING input
-        required: true
-      }
-    ],
+    displayName: "Delete Channel",
+    description: "Deletes the channel you run this command in (must have permission)",
+    options: [], // No arguments needed
     applicationId: "-1",
     inputType: 1,
     type: 1,
 
-    execute: async (args, ctx) => {
-      const channelsArg = args.find(a => a.name === "channels")?.value;
-      if (!channelsArg) return;
+    execute: async (_args, ctx) => {
+      const channelId = ctx.channel.id;
 
-      const channelIds = channelsArg
-        .split(",")
-        .map(id => id.trim())
-        .filter(Boolean);
-
-      if (!channelIds.length) {
-        MessageActions.sendMessage(
-          ctx.channel.id,
-          { content: "❌ No valid channel IDs provided." },
-          void 0,
-          { nonce: Date.now().toString() }
-        );
-        return;
-      }
-
-      let success = 0;
-      let failed = 0;
-
-      for (const id of channelIds) {
-        try {
-          await ChannelActions.deleteChannel(id);
-          success++;
-        } catch (err: any) {
-          console.error("Failed to delete channel", id, err);
-          failed++;
-        }
-      }
-
+      // Safety: confirm deletion via message
       MessageActions.sendMessage(
         ctx.channel.id,
-        {
-          content: `✅ Batch deletion complete! Success: ${success}, Failed: ${failed}`
-        },
+        { content: `⚠️ Deleting this channel: <#${channelId}>` },
         void 0,
         { nonce: Date.now().toString() }
       );
+
+      try {
+        await ChannelActions.deleteChannel(channelId);
+      } catch (err: any) {
+        console.error("Failed to delete channel:", err);
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: `❌ Failed to delete channel: ${err.message}` },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
+      }
     }
   })
 );
