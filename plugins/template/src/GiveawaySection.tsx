@@ -12,22 +12,27 @@ export default function GiveawaySection({ userId }: Props) {
   const handlePress = () => {
     const mention = `<@${userId}>`;
 
-    if (!storage.eventGiveawayPing.includes(mention)) {
-      storage.eventGiveawayPing =
-        storage.eventGiveawayPing.trim().length > 0
-          ? storage.eventGiveawayPing + "\n" + mention
-          : mention;
+    // Normalize storage into an array of mentions
+    const mentions = storage.eventGiveawayPing
+      .split("\n")
+      .map((m: string) => m.trim())
+      .filter((m: string) => m.length > 0);
 
-      // Fixed: showToast expects a string message, not an object
-      showToast(`Successfully added to list!`);
+    if (!mentions.includes(mention)) {
+      // Add mention
+      mentions.push(mention);
+      storage.eventGiveawayPing = mentions.join("\n");
+
+      // Show toast only once
+      showToast("Successfully added to list!");
     }
   };
 
   const screenWidth = Dimensions.get("window").width;
-  const buttonWidth = screenWidth * 0.95;
+  const buttonWidth = screenWidth * 0.95; // 95% of screen width
 
   return (
-    <View style={{ marginTop: -30, alignItems: "center" }}> {/* negative margin */}
+    <View style={{ marginTop: 20, marginBottom: 20, alignItems: "center" }}>
       <TouchableOpacity
         style={{
           width: buttonWidth,
