@@ -1,127 +1,143 @@
-import { storage } from "@vendetta/plugin";
+import { logger } from "@vendetta";
+import Settings from "./Settings";
+import GiveawayButton from "./GiveawayButton";
+
 import { registerCommand } from "@vendetta/commands";
+import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
+import { storage } from "@vendetta/plugin";
 import { after } from "@vendetta/patcher";
-import { findByTypeName } from "@vendetta/metro";
 import { findInReactTree } from "@vendetta/utils";
 import { React } from "@vendetta/metro/common";
-import Settings from "./settings.tsx";
-import GiveawaySection from "./GiveawaySection";
 
-/* ============================= */
-/* STORAGE INIT */
-/* ============================= */
+const MessageActions = findByProps("sendMessage", "editMessage");
+const UserStore = findByStoreName("UserStore");
+const commands: (() => void)[] = [];
 
-if (!Array.isArray(storage.words) || storage.words.length !== 10) {
-  storage.words = ["", "", "", "", "", "", "", "", "", ""];
+const { receiveMessage } = findByProps("receiveMessage");
+const { createBotMessage } = findByProps("createBotMessage");
+
+const getRandomNumber = () => Math.floor(Math.random() * 100);
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-if (typeof storage.eventGiveawayPing !== "string") {
-  storage.eventGiveawayPing = "";
+function getConfiguredWords() {
+  if (!Array.isArray(storage.words)) return [];
+  return storage.words.filter(w => typeof w === "string" && w.trim().length);
 }
 
-/* ============================= */
-/* COMMANDS + PATCH */
-/* ============================= */
+function randomWord() {
+  const words = getConfiguredWords();
+  if (!words.length) return "### (no spam messages configured)";
+  return words[Math.floor(Math.random() * words.length)];
+}
 
-let unregisterRaid: any;
-let unregisterFetch: any;
-let unregisterUserId: any;
-const patches: Function[] = [];
-
-export const settings = Settings;
-
-export const onLoad = () => {
-
-  /* /raid */
-  unregisterRaid = registerCommand({
+// ---- /raid ----
+commands.push(
+  registerCommand({
     name: "raid",
-    description: "Send configured raid messages.",
-    options: [],
-    execute: async (_, ctx) => {
-      const channelId = ctx.channel.id;
-
-      for (const msg of storage.words) {
-        if (!msg?.trim()) continue;
-
-        const random = Math.floor(Math.random() * 1000);
-        ctx.sendMessage(channelId, { content: `${msg} ${random}` });
-
-        await new Promise(res => setTimeout(res, 800));
+    displayName: "raid",
+    description: "Start a Raid!",
+    options: [
+      { name: "amount", displayName: "amount", description: "Number of times to send", required: true, type: 4 },
+      { name: "delay", displayName: "delay", description: "Delay between messages (ms)", required: true, type: 4 },
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
+      if (amount <= 0) return;
+      for (let i = 0; i < amount; i++) {
+        const msgTemplate = randomWord();
+        const rnd = getRandomNumber();
+        const content = `${msgTemplate} \`${rnd}\``;
+        await sleep(delay);
+        MessageActions.sendMessage(ctx.channel.id, { content }, void 0, { nonce: Date.now().toString() });
       }
-    }
-  });
+    },
+  })
+);
 
-  /* /fetchprofile */
-  unregisterFetch = registerCommand({
+// ---- /fetchprofile ----
+commands.push(
+  registerCommand({
     name: "fetchprofile",
-    description: "Get avatar URL of mentioned user.",
-    options: [
-      { name: "user", description: "User", type: 6, required: true }
-    ],
-    execute: async (args) => {
-      const user = args[0];
-      if (!user?.avatar) return { content: "No avatar found." };
-
-      return {
-        content: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=1024`
-      };
-    }
-  });
-
-  /* /userid */
-  unregisterUserId = registerCommand({
-    name: "userid",
-    description: "Get user ID of mentioned user.",
-    options: [
-      { name: "user", description: "User", type: 6, required: true }
-    ],
-    execute: async (args) => {
-      return { content: args[0]?.id ?? "Unknown user." };
-    }
-  });
-
-  /* PROFILE PATCH */
-
-  let UserProfile = findByTypeName("UserProfile");
-  if (!UserProfile)
-    UserProfile = findByTypeName("UserProfileContent");
-
-  if (!UserProfile) return;
-
-  patches.push(
-    after("type", UserProfile, (args, ret) => {
-      const profileSections = findInReactTree(
-        ret,
-        r =>
-          r?.type?.displayName === "View" &&
-          r?.props?.children?.findIndex(
-            (i: any) =>
-              i?.type?.name === "UserProfileBio" ||
-              i?.type?.name === "UserProfileAboutMeCard"
-          ) !== -1
-      )?.props?.children;
-
-      let userId = args[0]?.userId;
-      if (!userId) userId = args[0]?.user?.id;
-
-      if (!userId || !profileSections) return;
-
-      if (profileSections.some((c: any) => c?.key === "giveaway-section"))
+    displayName: "Fetch Profile",
+    description: "Fetch a user's avatar as Bemmo",
+    options: [{ name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const input = args.find(a => a.name === "user")?.value?.trim();
+      if (!input) return;
+      const userId = input.replace(/[<@!>]/g, "");
+      const user = UserStore.getUser(userId);
+      if (!user) {
+        MessageActions.sendMessage(ctx.channel.id, { content: "❌ User not found" }, void 0, { nonce: Date.now().toString() });
         return;
+      }
+      const avatarUrl =
+        user.getAvatarURL?.({ format: "png", size: 512 }) ||
+        `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
+      const currentUser = UserStore.getCurrentUser();
+      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: avatarUrl }), { author: currentUser }));
+    },
+  })
+);
 
-      profileSections.push(
-        React.createElement(GiveawaySection, {
-          key: "giveaway-section",
-          userId
-        })
-      );
-    })
-  );
-};
+// ---- /userid ----
+commands.push(
+  registerCommand({
+    name: "userid",
+    displayName: "User ID",
+    description: "Displays a user's ID as Bemmo",
+    options: [{ name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: (args, ctx) => {
+      const input = args.find(a => a.name === "user")?.value?.trim();
+      if (!input) return;
+      const userId = input.replace(/[<@!>]/g, "");
+      const user = UserStore.getUser(userId);
+      if (!user) {
+        MessageActions.sendMessage(ctx.channel.id, { content: "❌ User not found" }, void 0, { nonce: Date.now().toString() });
+        return;
+      }
+      const content = `${user.username}'s ID: ${user.id}`;
+      const currentUser = UserStore.getCurrentUser();
+      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content }), { author: currentUser }));
+    },
+  })
+);
 
-export const onUnload = () => {
-  unregisterRaid?.();
-  unregisterFetch?.();
-  unregisterUserId?.();
-  patches.forEach(p => p());
+// ---- Patch user profiles to add Giveaway Button ----
+let UserProfile = findByTypeName("UserProfile") || findByTypeName("UserProfileContent");
+
+after("type", UserProfile, (_args: any, ret: any) => {
+  const profileSections = findInReactTree(ret, r =>
+    r?.type?.displayName === "View" &&
+    r?.props?.children.findIndex(i => i?.type?.name === "UserProfileBio" || i?.type?.name === "UserProfileAboutMeCard") !== -1
+  )?.props?.children;
+
+  const userId = _args[0]?.userId ?? _args[0]?.user?.id;
+  if (!userId || !profileSections) return;
+
+  profileSections.push(React.createElement(GiveawayButton, { userId }));
+});
+
+// ---- Plugin lifecycle ----
+export default {
+  onLoad: () => {
+    logger.log("Plugin loaded: Raid + FetchProfile + UserID + GiveawayButton");
+  },
+  onUnload: () => {
+    for (const unregister of commands) unregister();
+    logger.log("Plugin unloaded");
+  },
+  settings: Settings,
 };
