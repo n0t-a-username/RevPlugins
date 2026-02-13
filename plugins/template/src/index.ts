@@ -4,7 +4,7 @@ import { after } from "@vendetta/patcher";
 import { findByTypeName } from "@vendetta/metro";
 import { findInReactTree } from "@vendetta/utils";
 import { React } from "@vendetta/metro/common";
-import Settings from "./settings";
+import Settings from "./settings.tsx";
 import GiveawaySection from "./GiveawaySection";
 
 /* ============================= */
