@@ -1,1 +1,1 @@
-{"name":"Bemmo","description":"A self-bot plugin!","authors":[{"name":"NAU","id":"1180328592247090278"}],"main":"index.js","vendetta":{"icon":"ic_qr_code_24dp"},"hash":"602f71d6d7f3a1ae1f0a37bba790d9ed377370e453df77e3f54c9bbd4b4ef31f"}
+{"name":"Bemmo","description":"A self-bot plugin","authors":[{"name":"NAU","id":"1180328592247090278"}],"main":"index.js","vendetta":{"icon":"ic_qr_code_24dp"},"hash":"602f71d6d7f3a1ae1f0a37bba790d9ed377370e453df77e3f54c9bbd4b4ef31f"}
