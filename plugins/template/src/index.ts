@@ -1,13 +1,12 @@
 import { logger } from "@vendetta";
 import Settings from "./Settings";
-import GiveawayButton from "./GiveawayButton";
+import GiveawaySection from "./GiveawaySection";
 
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
-import { after } from "@vendetta/patcher";
-import { findInReactTree } from "@vendetta/utils";
 import { React } from "@vendetta/metro/common";
+import { after } from "@vendetta/patcher";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
 const UserStore = findByStoreName("UserStore");
@@ -50,6 +49,7 @@ commands.push(
       const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
       const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
       if (amount <= 0) return;
+
       for (let i = 0; i < amount; i++) {
         const msgTemplate = randomWord();
         const rnd = getRandomNumber();
@@ -80,9 +80,7 @@ commands.push(
         MessageActions.sendMessage(ctx.channel.id, { content: "❌ User not found" }, void 0, { nonce: Date.now().toString() });
         return;
       }
-      const avatarUrl =
-        user.getAvatarURL?.({ format: "png", size: 512 }) ||
-        `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
+      const avatarUrl = user.getAvatarURL?.({ format: "png", size: 512 }) || `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
       const currentUser = UserStore.getCurrentUser();
       receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: avatarUrl }), { author: currentUser }));
     },
@@ -108,36 +106,28 @@ commands.push(
         MessageActions.sendMessage(ctx.channel.id, { content: "❌ User not found" }, void 0, { nonce: Date.now().toString() });
         return;
       }
-      const content = `${user.username}'s ID: ${user.id}`;
+      const content = `<@${user.id}>`;
       const currentUser = UserStore.getCurrentUser();
       receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content }), { author: currentUser }));
     },
   })
 );
 
-// ---- Patch user profiles to add Giveaway Button ----
-let UserProfile = findByTypeName("UserProfile") || findByTypeName("UserProfileContent");
+// ---- Patch User Profiles to add GiveawaySection ----
+let UserProfile = findByTypeName("UserProfile");
+if (!UserProfile) UserProfile = findByTypeName("UserProfileContent");
 
-after("type", UserProfile, (_args: any, ret: any) => {
-  const profileSections = findInReactTree(ret, r =>
-    r?.type?.displayName === "View" &&
-    r?.props?.children.findIndex(i => i?.type?.name === "UserProfileBio" || i?.type?.name === "UserProfileAboutMeCard") !== -1
-  )?.props?.children;
-
-  const userId = _args[0]?.userId ?? _args[0]?.user?.id;
-  if (!userId || !profileSections) return;
-
-  profileSections.push(React.createElement(GiveawayButton, { userId }));
+after("type", UserProfile, (args, ret) => {
+  const profileSections = ret?.props?.children;
+  if (!profileSections) return;
+  const userId = args[0]?.userId ?? args[0]?.user?.id;
+  if (!userId) return;
+  profileSections.push(React.createElement(GiveawaySection, { userId }));
 });
 
 // ---- Plugin lifecycle ----
 export default {
-  onLoad: () => {
-    logger.log("Plugin loaded: Raid + FetchProfile + UserID + GiveawayButton");
-  },
-  onUnload: () => {
-    for (const unregister of commands) unregister();
-    logger.log("Plugin unloaded");
-  },
+  onLoad: () => logger.log("Raid + FetchProfile + UserID + Giveaway plugin loaded!"),
+  onUnload: () => { for (const unregister of commands) unregister(); logger.log("Plugin unloaded."); },
   settings: Settings,
 };
