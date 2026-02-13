@@ -27,12 +27,12 @@ export default function GiveawaySection({ userId }: Props) {
   const buttonWidth = screenWidth * 0.95;
 
   return (
-    <View style={{ marginTop: -20, alignItems: "center" }}> {/* negative margin */}
+    <View style={{ marginTop: -30, alignItems: "center" }}> {/* negative margin */}
       <TouchableOpacity
         style={{
           width: buttonWidth,
           backgroundColor: "#FF4444",
-          paddingVertical: 30,
+          paddingVertical: 10,
           borderRadius: 12,
           flexDirection: "row",
           alignItems: "center",
