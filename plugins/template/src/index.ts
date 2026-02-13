@@ -1,14 +1,14 @@
 import { storage } from "@vendetta/plugin";
 import { registerCommand } from "@vendetta/commands";
 import { after } from "@vendetta/patcher";
-import { findByProps } from "@vendetta/metro";
-import { React } from "@vendetta/metro/common";
+import { findByTypeName, findByName } from "@vendetta/metro";
+import { findInReactTree } from "@vendetta/utils";
+import { React, ReactNative as RN } from "@vendetta/metro/common";
 
 /* ============================= */
 /* STORAGE INITIALIZATION */
 /* ============================= */
 
-// Ensure 10 raid slots exist
 if (!Array.isArray(storage.words) || storage.words.length !== 10) {
   storage.words = [
     "", "", "", "", "",
@@ -16,9 +16,45 @@ if (!Array.isArray(storage.words) || storage.words.length !== 10) {
   ];
 }
 
-// Giveaway storage
 if (typeof storage.eventGiveawayPing !== "string") {
   storage.eventGiveawayPing = "";
+}
+
+/* ============================= */
+/* GIVEAWAY PROFILE SECTION */
+/* ============================= */
+
+const UserProfileCard = findByName("UserProfileCard");
+
+function GiveawaySection({ userId }: { userId: string }) {
+  return (
+    <RN.View style={{ paddingHorizontal: 16, marginTop: 12 }}>
+      <UserProfileCard title="Event Giveaway">
+        <RN.TouchableOpacity
+          style={{
+            backgroundColor: "#5865F2",
+            paddingVertical: 10,
+            borderRadius: 12,
+            alignItems: "center"
+          }}
+          onPress={() => {
+            const mention = `<@${userId}>`;
+
+            if (!storage.eventGiveawayPing.includes(mention)) {
+              storage.eventGiveawayPing =
+                storage.eventGiveawayPing.trim().length > 0
+                  ? storage.eventGiveawayPing + "\n" + mention
+                  : mention;
+            }
+          }}
+        >
+          <RN.Text style={{ color: "white", fontWeight: "600" }}>
+            Add To Giveaway
+          </RN.Text>
+        </RN.TouchableOpacity>
+      </UserProfileCard>
+    </RN.View>
+  );
 }
 
 /* ============================= */
@@ -51,7 +87,6 @@ export const onLoad = () => {
         const content = `${msg} ${random}`;
 
         ctx.sendMessage(channelId, { content });
-
         await new Promise(res => setTimeout(res, 800));
       }
     }
@@ -72,11 +107,9 @@ export const onLoad = () => {
         required: true
       }
     ],
-    execute: async (args, ctx) => {
+    execute: async (args) => {
       const user = args[0];
-      if (!user?.avatar) {
-        return { content: "No avatar found." };
-      }
+      if (!user?.avatar) return { content: "No avatar found." };
 
       return {
         content: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=1024`
@@ -106,45 +139,41 @@ export const onLoad = () => {
   });
 
   /* ============================= */
-  /* PROFILE GIVEAWAY BUTTON */
+  /* PROFILE PATCH */
   /* ============================= */
 
-  const UserProfileActions = findByProps("UserProfileActions")?.UserProfileActions;
-  const Button = findByProps("Button")?.Button;
+  let UserProfile = findByTypeName("UserProfile");
+  if (!UserProfile)
+    UserProfile = findByTypeName("UserProfileContent");
 
-  if (UserProfileActions && Button) {
+  if (UserProfile) {
     patches.push(
-      after("default", UserProfileActions, (_, args, res) => {
-        try {
-          const user = args?.[0]?.user;
-          if (!user?.id) return;
+      after("type", UserProfile, (args, ret) => {
+        const profileSections = findInReactTree(
+          ret,
+          r =>
+            r?.type?.displayName === "View" &&
+            r?.props?.children?.findIndex(
+              (i: any) =>
+                i?.type?.name === "UserProfileBio" ||
+                i?.type?.name === "UserProfileAboutMeCard"
+            ) !== -1
+        )?.props?.children;
 
-          const children = res?.props?.children;
-          if (!Array.isArray(children)) return;
+        let userId = args[0]?.userId;
+        if (!userId) userId = args[0]?.user?.id;
 
-          // Prevent duplicate button
-          if (children.some(c => c?.key === "event-giveaway-button")) return;
+        if (!userId || !profileSections) return;
 
-          children.push(
-            React.createElement(Button, {
-              key: "event-giveaway-button",
-              text: "Giveaway",
-              size: "SMALL",
-              onPress: () => {
-                const mention = `<@${user.id}>`;
+        if (profileSections.some((c: any) => c?.key === "giveaway-section"))
+          return;
 
-                if (!storage.eventGiveawayPing.includes(mention)) {
-                  storage.eventGiveawayPing =
-                    storage.eventGiveawayPing.trim().length > 0
-                      ? storage.eventGiveawayPing + "\n" + mention
-                      : mention;
-                }
-              }
-            })
-          );
-        } catch (err) {
-          console.log("Giveaway button injection error:", err);
-        }
+        profileSections.push(
+          React.createElement(GiveawaySection, {
+            key: "giveaway-section",
+            userId
+          })
+        );
       })
     );
   }
