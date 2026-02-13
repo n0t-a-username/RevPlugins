@@ -1,9 +1,8 @@
 import { React, ReactNative as RN } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { showToast } from "@vendetta/ui/toasts";
-import { findByName } from "@vendetta/metro";
 
-const { Image, View, Text, TouchableOpacity } = RN;
+const { Image, View, Text, TouchableOpacity, Dimensions } = RN;
 
 interface Props {
   userId: string;
@@ -21,18 +20,22 @@ export default function GiveawaySection({ userId }: Props) {
 
       showToast({
         content: "Successfully added to list!",
-        icon: "ic_checkmark_green_16dp", // green checkmark
+        icon: "ic_checkmark_green_16dp",
       });
     }
   };
 
+  // Get 95% of screen width
+  const screenWidth = Dimensions.get("window").width;
+  const buttonWidth = screenWidth * 0.95;
+
   return (
-    <View style={{}}>
+    <View style={{ marginTop: 12, alignItems: "center" }}> {/* center horizontally */}
       <TouchableOpacity
         style={{
-          backgroundColor: "#FF4444", // red button
+          width: buttonWidth,
+          backgroundColor: "#FF4444",
           paddingVertical: 10,
-          paddingHorizontal: 16,
           borderRadius: 12,
           flexDirection: "row",
           alignItems: "center",
