@@ -32,7 +32,7 @@ export default function GiveawaySection({ userId }: Props) {
   const buttonWidth = screenWidth * 0.95; // 95% of screen width
 
   return (
-    <View style={{ marginTop: 20, marginBottom: 20, alignItems: "center" }}>
+    <View style={{ marginTop: 10, marginBottom: 20, alignItems: "center" }}>
       <TouchableOpacity
         style={{
           width: buttonWidth,
