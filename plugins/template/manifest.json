@@ -9,6 +9,6 @@
     ],
     "main": "src/index.ts",
     "vendetta": {
-        "icon": "ic_audit_emoji_grey_24dp"
+        "icon": "ic_qr_code_24dp"
     }
 }
