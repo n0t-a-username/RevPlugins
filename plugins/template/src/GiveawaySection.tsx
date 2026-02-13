@@ -18,19 +18,16 @@ export default function GiveawaySection({ userId }: Props) {
           ? storage.eventGiveawayPing + "\n" + mention
           : mention;
 
-      showToast({
-        content: "Successfully added to list!",
-        icon: "ic_checkmark_green_16dp",
-      });
+      // Fixed: showToast expects a string message, not an object
+      showToast(`Successfully added to list!`);
     }
   };
 
-  // Get 95% of screen width
   const screenWidth = Dimensions.get("window").width;
   const buttonWidth = screenWidth * 0.95;
 
   return (
-    <View style={{ marginTop: 12, alignItems: "center" }}> {/* center horizontally */}
+    <View style={{ marginTop: -20, alignItems: "center" }}> {/* negative margin */}
       <TouchableOpacity
         style={{
           width: buttonWidth,
