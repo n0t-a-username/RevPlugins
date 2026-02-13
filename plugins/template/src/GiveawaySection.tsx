@@ -32,7 +32,7 @@ export default function GiveawaySection({ userId }: Props) {
         style={{
           width: buttonWidth,
           backgroundColor: "#FF4444",
-          paddingVertical: 10,
+          paddingVertical: 30,
           borderRadius: 12,
           flexDirection: "row",
           alignItems: "center",
