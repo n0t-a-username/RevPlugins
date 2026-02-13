@@ -3,17 +3,15 @@ import { registerCommand } from "@vendetta/commands";
 import { after } from "@vendetta/patcher";
 import { findByTypeName } from "@vendetta/metro";
 import { findInReactTree } from "@vendetta/utils";
+import { React } from "@vendetta/metro/common";
 import GiveawaySection from "./GiveawaySection";
 
 /* ============================= */
-/* STORAGE INITIALIZATION */
+/* STORAGE INIT */
 /* ============================= */
 
 if (!Array.isArray(storage.words) || storage.words.length !== 10) {
-  storage.words = [
-    "", "", "", "", "",
-    "", "", "", "", ""
-  ];
+  storage.words = ["", "", "", "", "", "", "", "", "", ""];
 }
 
 if (typeof storage.eventGiveawayPing !== "string") {
@@ -21,7 +19,7 @@ if (typeof storage.eventGiveawayPing !== "string") {
 }
 
 /* ============================= */
-/* COMMANDS + PATCHES */
+/* COMMANDS + PATCH */
 /* ============================= */
 
 let unregisterRaid: any;
@@ -31,10 +29,7 @@ const patches: Function[] = [];
 
 export const onLoad = () => {
 
-  /* ============================= */
   /* /raid */
-  /* ============================= */
-
   unregisterRaid = registerCommand({
     name: "raid",
     description: "Send configured raid messages.",
@@ -46,34 +41,23 @@ export const onLoad = () => {
         if (!msg?.trim()) continue;
 
         const random = Math.floor(Math.random() * 1000);
-        ctx.sendMessage(channelId, {
-          content: `${msg} ${random}`
-        });
+        ctx.sendMessage(channelId, { content: `${msg} ${random}` });
 
         await new Promise(res => setTimeout(res, 800));
       }
     }
   });
 
-  /* ============================= */
   /* /fetchprofile */
-  /* ============================= */
-
   unregisterFetch = registerCommand({
     name: "fetchprofile",
     description: "Get avatar URL of mentioned user.",
     options: [
-      {
-        name: "user",
-        description: "User to fetch",
-        type: 6,
-        required: true
-      }
+      { name: "user", description: "User", type: 6, required: true }
     ],
     execute: async (args) => {
       const user = args[0];
-      if (!user?.avatar)
-        return { content: "No avatar found." };
+      if (!user?.avatar) return { content: "No avatar found." };
 
       return {
         content: `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=1024`
@@ -81,29 +65,19 @@ export const onLoad = () => {
     }
   });
 
-  /* ============================= */
   /* /userid */
-  /* ============================= */
-
   unregisterUserId = registerCommand({
     name: "userid",
     description: "Get user ID of mentioned user.",
     options: [
-      {
-        name: "user",
-        description: "User",
-        type: 6,
-        required: true
-      }
+      { name: "user", description: "User", type: 6, required: true }
     ],
     execute: async (args) => {
       return { content: args[0]?.id ?? "Unknown user." };
     }
   });
 
-  /* ============================= */
-  /* PROFILE PATCH */
-  /* ============================= */
+  /* PROFILE PATCH (Revenge-safe) */
 
   let UserProfile = findByTypeName("UserProfile");
   if (!UserProfile)
@@ -132,11 +106,12 @@ export const onLoad = () => {
       if (profileSections.some((c: any) => c?.key === "giveaway-section"))
         return;
 
-      profileSections.push({
-        type: GiveawaySection,
-        key: "giveaway-section",
-        props: { userId }
-      });
+      profileSections.push(
+        React.createElement(GiveawaySection, {
+          key: "giveaway-section",
+          userId
+        })
+      );
     })
   );
 };
