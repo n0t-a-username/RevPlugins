@@ -4,6 +4,7 @@ import { after } from "@vendetta/patcher";
 import { findByTypeName } from "@vendetta/metro";
 import { findInReactTree } from "@vendetta/utils";
 import { React } from "@vendetta/metro/common";
+import Settings from "./settings";
 import GiveawaySection from "./GiveawaySection";
 
 /* ============================= */
@@ -26,6 +27,8 @@ let unregisterRaid: any;
 let unregisterFetch: any;
 let unregisterUserId: any;
 const patches: Function[] = [];
+
+export const settings = Settings;
 
 export const onLoad = () => {
 
@@ -77,7 +80,7 @@ export const onLoad = () => {
     }
   });
 
-  /* PROFILE PATCH (Revenge-safe) */
+  /* PROFILE PATCH */
 
   let UserProfile = findByTypeName("UserProfile");
   if (!UserProfile)
