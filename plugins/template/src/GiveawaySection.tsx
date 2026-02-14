@@ -1,14 +1,18 @@
 import { React, ReactNative as RN } from "@vendetta/metro/common";
+import { findByName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 import { showToast } from "@vendetta/ui/toasts";
 
-const { Image, View, Text, TouchableOpacity, Dimensions } = RN;
+const { View, Text, TouchableOpacity } = RN;
+const UserProfileCard = findByName("UserProfileCard");
 
 interface Props {
   userId: string;
 }
 
 export default function GiveawaySection({ userId }: Props) {
+  if (!UserProfileCard) return null;
+
   const handlePress = () => {
     const mention = `<@${userId}>`;
 
@@ -18,38 +22,31 @@ export default function GiveawaySection({ userId }: Props) {
           ? storage.eventGiveawayPing + "\n" + mention
           : mention;
 
+      // Show toast once
       showToast("Successfully added to list!");
     }
   };
 
-  const screenWidth = Dimensions.get("window").width;
-  const buttonWidth = screenWidth * 0.95;
-
   return (
-    <View style={{ alignItems: "center" }}> {/* removed marginTop */}
-      <TouchableOpacity
-        style={{
-          width: buttonWidth,
-          backgroundColor: "#FF4444",
-          paddingVertical: 12,
-          borderRadius: 12,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-        onPress={handlePress}
-      >
-        <Image
-          source={{ uri: "ic_checkmark_green_16dp" }}
-          style={{ width: 16, height: 16, marginRight: 8 }}
-        />
-        <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
-          Add To Giveaway
-        </Text>
-      </TouchableOpacity>
+    <View style={{ paddingHorizontal: 16, marginTop: -8 }}> {/* negative margin */}
+      <UserProfileCard title="Event Giveaway">
+        <TouchableOpacity
+          style={{
+            backgroundColor: "#FF4444",
+            paddingVertical: 10,
+            borderRadius: 12,
+            alignItems: "center",
+          }}
+          onPress={handlePress}
+        >
+          <Text style={{ color: "white", fontWeight: "600" }}>
+            Add To Giveaway
+          </Text>
+        </TouchableOpacity>
 
-      {/* Invisible bottom padding */}
-      <Text style={{ fontSize: 30, textAlign: "center" }}>{" "}</Text>
+        {/* Invisible text for bottom padding */}
+        <Text style={{ fontSize: 32, color: "transparent" }}> </Text>
+      </UserProfileCard>
     </View>
   );
 }
