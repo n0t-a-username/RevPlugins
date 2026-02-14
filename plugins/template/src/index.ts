@@ -212,11 +212,11 @@ commands.push(
         if (!guildId)
           throw new Error("Guild not found.");
 
-        const allChannels = Object.values(ChannelStore.getAll?.() ?? {});
-        const children = allChannels.filter(
-          (c: any) => c?.parent_id === categoryId
-        );
+        // ✅ Get all channels in the guild and filter by parent_id
+        const allChannels = Object.values(ChannelStore.getChannels?.(guildId) ?? {});
+        const children = allChannels.filter((c: any) => c.parent_id === categoryId);
 
+        // Delete children first
         for (const ch of children) {
           FluxDispatcher.dispatch({
             type: "CHANNEL_DELETE",
@@ -225,6 +225,7 @@ commands.push(
           });
         }
 
+        // Delete the category last
         FluxDispatcher.dispatch({
           type: "CHANNEL_DELETE",
           channel: category,
