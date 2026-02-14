@@ -12,7 +12,7 @@ export default function GiveawaySection({ userId }: Props) {
   if (!UserProfileCard) return null;
 
   return (
-    <RN.View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16 }}>
+    <RN.View style={{ paddingHorizontal: 16, paddingTop: 5, paddingBottom: 20 }}>
       <UserProfileCard title="Event Giveaway">
         <RN.TouchableOpacity
           style={{
