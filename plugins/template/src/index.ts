@@ -185,9 +185,6 @@ commands.push(
 //
 // ---- /mass-delete ----
 //
-//
-// ---- /mass-delete ----
-//
 commands.push(
   registerCommand({
     name: "mass-delete",
@@ -204,59 +201,22 @@ commands.push(
 
       try {
         const FluxDispatcher = findByProps("dispatch", "subscribe");
-        if (!FluxDispatcher?.dispatch) {
-          receiveMessage(
-            ctx.channel.id,
-            Object.assign(
-              createBotMessage({
-                channelId: ctx.channel.id,
-                content: "⚠️ Dispatcher not found."
-              }),
-              { author: currentUser }
-            )
-          );
-          return;
-        }
+        if (!FluxDispatcher?.dispatch)
+          throw new Error("Dispatcher not found.");
 
         const category = ChannelStore.getChannel(categoryId);
-
-        if (!category || category.type !== 4) {
-          receiveMessage(
-            ctx.channel.id,
-            Object.assign(
-              createBotMessage({
-                channelId: ctx.channel.id,
-                content: "❌ Invalid category ID."
-              }),
-              { author: currentUser }
-            )
-          );
-          return;
-        }
+        if (!category || category.type !== 4)
+          throw new Error("Invalid category ID.");
 
         const guildId = ctx.guild?.id;
-        if (!guildId) {
-          receiveMessage(
-            ctx.channel.id,
-            Object.assign(
-              createBotMessage({
-                channelId: ctx.channel.id,
-                content: "⚠️ Guild not found."
-              }),
-              { author: currentUser }
-            )
-          );
-          return;
-        }
+        if (!guildId)
+          throw new Error("Guild not found.");
 
-        // ✅ Use ChannelStore.getAll() instead (works everywhere)
         const allChannels = Object.values(ChannelStore.getAll?.() ?? {});
-
         const children = allChannels.filter(
           (c: any) => c?.parent_id === categoryId
         );
 
-        // Delete children first
         for (const ch of children) {
           FluxDispatcher.dispatch({
             type: "CHANNEL_DELETE",
@@ -265,7 +225,6 @@ commands.push(
           });
         }
 
-        // Delete category last
         FluxDispatcher.dispatch({
           type: "CHANNEL_DELETE",
           channel: category,
