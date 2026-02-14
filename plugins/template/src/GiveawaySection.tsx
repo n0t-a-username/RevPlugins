@@ -12,27 +12,24 @@ export default function GiveawaySection({ userId }: Props) {
   const handlePress = () => {
     const mention = `<@${userId}>`;
 
-    // Normalize storage into an array of mentions
     const mentions = storage.eventGiveawayPing
       .split("\n")
       .map((m: string) => m.trim())
       .filter((m: string) => m.length > 0);
 
     if (!mentions.includes(mention)) {
-      // Add mention
       mentions.push(mention);
       storage.eventGiveawayPing = mentions.join("\n");
-
-      // Show toast only once
       showToast("Successfully added to list!");
     }
   };
 
   const screenWidth = Dimensions.get("window").width;
-  const buttonWidth = screenWidth * 0.95; // 95% of screen width
+  const buttonWidth = screenWidth * 0.95; // 95% width
+  const bottomPadding = 10; // space from bottom
 
   return (
-    <View style={{ marginTop: 10, marginBottom: 20, alignItems: "center" }}>
+    <View style={{ flex: 1, justifyContent: "flex-end", alignItems: "center" }}>
       <TouchableOpacity
         style={{
           width: buttonWidth,
@@ -42,6 +39,7 @@ export default function GiveawaySection({ userId }: Props) {
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
+          marginBottom: bottomPadding, // space from bottom
         }}
         onPress={handlePress}
       >
