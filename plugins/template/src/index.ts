@@ -10,12 +10,13 @@ import { after } from "@vendetta/patcher";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
 const ChannelStore = findByStoreName("ChannelStore");
-const ChannelActions = findByStoreName("ChannelActions");
+const ChannelActions = findByProps("deleteChannel"); // ✅ FIXED
 const UserStore = findByStoreName("UserStore");
-const commands: (() => void)[] = [];
 
 const { receiveMessage } = findByProps("receiveMessage");
 const { createBotMessage } = findByProps("createBotMessage");
+
+const commands: (() => void)[] = [];
 
 const getRandomNumber = () => Math.floor(Math.random() * 100);
 
@@ -34,15 +35,17 @@ function randomWord() {
   return words[Math.floor(Math.random() * words.length)];
 }
 
+//
 // ---- /raid ----
+//
 commands.push(
   registerCommand({
     name: "raid",
     displayName: "raid",
     description: "Start a Raid!",
     options: [
-      { name: "amount", displayName: "amount", description: "Number of times to send", required: true, type: 4 },
-      { name: "delay", displayName: "delay", description: "Delay between messages (ms)", required: true, type: 4 },
+      { name: "amount", required: true, type: 4 },
+      { name: "delay", required: true, type: 4 },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -53,30 +56,22 @@ commands.push(
       if (amount <= 0) return;
 
       for (let i = 0; i < amount; i++) {
-        const msgTemplate = randomWord();
-        const rnd = getRandomNumber();
-        const content = `${msgTemplate} \`${rnd}\``;
+        const content = `${randomWord()} \`${getRandomNumber()}\``;
         await sleep(delay);
-        MessageActions.sendMessage(
-          ctx.channel.id,
-          { content },
-          void 0,
-          { nonce: Date.now().toString() }
-        );
+        MessageActions.sendMessage(ctx.channel.id, { content });
       }
     },
   })
 );
 
+//
 // ---- /fetchprofile ----
+//
 commands.push(
   registerCommand({
     name: "fetchprofile",
-    displayName: "Fetch Profile",
     description: "Fetch a user's avatar",
-    options: [
-      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
-    ],
+    options: [{ name: "user", required: true, type: 3 }],
     applicationId: "-1",
     inputType: 1,
     type: 1,
@@ -88,12 +83,7 @@ commands.push(
       const user = UserStore.getUser(userId);
 
       if (!user) {
-        MessageActions.sendMessage(
-          ctx.channel.id,
-          { content: "❌ User not found" },
-          void 0,
-          { nonce: Date.now().toString() }
-        );
+        MessageActions.sendMessage(ctx.channel.id, { content: "❌ User not found" });
         return;
       }
 
@@ -102,7 +92,6 @@ commands.push(
         `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
 
       const currentUser = UserStore.getCurrentUser();
-
       receiveMessage(
         ctx.channel.id,
         Object.assign(
@@ -114,15 +103,14 @@ commands.push(
   })
 );
 
+//
 // ---- /userid ----
+//
 commands.push(
   registerCommand({
     name: "userid",
-    displayName: "User ID",
     description: "Displays a user's ID",
-    options: [
-      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
-    ],
+    options: [{ name: "user", required: true, type: 3 }],
     applicationId: "-1",
     inputType: 1,
     type: 1,
@@ -134,22 +122,15 @@ commands.push(
       const user = UserStore.getUser(userId);
 
       if (!user) {
-        MessageActions.sendMessage(
-          ctx.channel.id,
-          { content: "❌ User not found" },
-          void 0,
-          { nonce: Date.now().toString() }
-        );
+        MessageActions.sendMessage(ctx.channel.id, { content: "❌ User not found" });
         return;
       }
 
-      const content = `<@${user.id}>`;
       const currentUser = UserStore.getCurrentUser();
-
       receiveMessage(
         ctx.channel.id,
         Object.assign(
-          createBotMessage({ channelId: ctx.channel.id, content }),
+          createBotMessage({ channelId: ctx.channel.id, content: `<@${user.id}>` }),
           { author: currentUser }
         )
       );
@@ -157,87 +138,60 @@ commands.push(
   })
 );
 
+//
 // ---- /mass-ping ----
+//
 commands.push(
   registerCommand({
     name: "mass-ping",
-    displayName: "Mass Ping",
-    description: "Outputs all user IDs collected from the mass ping button",
-    options: [
-      {
-        name: "clear",
-        displayName: "clear",
-        description: "Clear the ping list",
-        required: false,
-        type: 5,
-      },
-    ],
+    description: "Outputs all stored user IDs",
+    options: [{ name: "clear", required: false, type: 5 }],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: (args, ctx) => {
-      const shouldClear =
-        args.find(a => a.name === "clear")?.value ?? false;
-
+      const shouldClear = args.find(a => a.name === "clear")?.value ?? false;
       const currentUser = UserStore.getCurrentUser();
-      const list = storage.eventGiveawayPing.trim();
 
-      if (shouldClear === true) {
+      if (shouldClear) {
         storage.eventGiveawayPing = "";
         receiveMessage(
           ctx.channel.id,
           Object.assign(
-            createBotMessage({
-              channelId: ctx.channel.id,
-              content: "✅ Ping list cleared."
-            }),
+            createBotMessage({ channelId: ctx.channel.id, content: "✅ Ping list cleared." }),
             { author: currentUser }
           )
         );
         return;
       }
 
+      const list = storage.eventGiveawayPing?.trim();
       if (!list) {
         receiveMessage(
           ctx.channel.id,
           Object.assign(
-            createBotMessage({
-              channelId: ctx.channel.id,
-              content: "⚠️ No users in the ping list."
-            }),
+            createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No users stored." }),
             { author: currentUser }
           )
         );
         return;
       }
 
-      const formatted = list.split("\n").join(", ");
-
-      MessageActions.sendMessage(
-        ctx.channel.id,
-        { content: `Wake up: \n${formatted}` },
-        void 0,
-        { nonce: Date.now().toString() }
-      );
+      MessageActions.sendMessage(ctx.channel.id, {
+        content: `Wake up:\n${list.split("\n").join(", ")}`
+      });
     },
   })
 );
 
+//
 // ---- /mass-delete ----
+//
 commands.push(
   registerCommand({
     name: "mass-delete",
-    displayName: "Mass Delete Category",
-    description: "Deletes a category and all its channels by category ID",
-    options: [
-      {
-        name: "category_id",
-        displayName: "category_id",
-        description: "ID of the category to delete",
-        required: true,
-        type: 3,
-      },
-    ],
+    description: "Deletes a category and all its channels",
+    options: [{ name: "category_id", required: true, type: 3 }],
     applicationId: "-1",
     inputType: 1,
     type: 1,
@@ -246,6 +200,20 @@ commands.push(
       if (!categoryId) return;
 
       const currentUser = UserStore.getCurrentUser();
+
+      if (!ChannelActions?.deleteChannel) {
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: "⚠️ Delete failed: deleteChannel function not found."
+            }),
+            { author: currentUser }
+          )
+        );
+        return;
+      }
 
       try {
         const category = ChannelStore.getChannel(categoryId);
@@ -260,15 +228,11 @@ commands.push(
           return;
         }
 
-        const allChannels = Object.values(ChannelStore.getAll())
-          .filter(c => c.parent_id === categoryId);
+        const children = Object.values(ChannelStore.getAll())
+          .filter((c: any) => c.parent_id === categoryId);
 
-        for (const ch of allChannels) {
-          try {
-            await ChannelActions.deleteChannel(ch.id);
-          } catch (e) {
-            console.warn(`Failed to delete channel ${ch.id}:`, e);
-          }
+        for (const ch of children) {
+          await ChannelActions.deleteChannel(ch.id);
         }
 
         await ChannelActions.deleteChannel(categoryId);
@@ -276,7 +240,10 @@ commands.push(
         receiveMessage(
           ctx.channel.id,
           Object.assign(
-            createBotMessage({ channelId: ctx.channel.id, content: `🗑️ Category and ${allChannels.length} channels deleted successfully.` }),
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: `🗑️ Category and ${children.length} channels deleted.`
+            }),
             { author: currentUser }
           )
         );
@@ -284,7 +251,10 @@ commands.push(
         receiveMessage(
           ctx.channel.id,
           Object.assign(
-            createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` }),
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: `⚠️ Delete failed: ${String(err)}`
+            }),
             { author: currentUser }
           )
         );
@@ -293,26 +263,26 @@ commands.push(
   })
 );
 
-// ---- Patch User Profiles to add GiveawaySection ----
-let UserProfile = findByTypeName("UserProfile");
-if (!UserProfile) UserProfile = findByTypeName("UserProfileContent");
+//
+// ---- Profile Patch ----
+//
+let UserProfile = findByTypeName("UserProfile") || findByTypeName("UserProfileContent");
 
 after("type", UserProfile, (args, ret) => {
-  const profileSections = ret?.props?.children;
-  if (!profileSections) return;
+  const children = ret?.props?.children;
+  if (!children) return;
 
   const userId = args[0]?.userId ?? args[0]?.user?.id;
   if (!userId) return;
 
-  profileSections.push(
-    React.createElement(GiveawaySection, { userId })
-  );
+  children.push(React.createElement(GiveawaySection, { userId }));
 });
 
-// ---- Plugin lifecycle ----
+//
+// ---- Lifecycle ----
+//
 export default {
-  onLoad: () =>
-    logger.log("Raid + FetchProfile + UserID + Giveaway plugin loaded!"),
+  onLoad: () => logger.log("Plugin loaded."),
   onUnload: () => {
     for (const unregister of commands) unregister();
     logger.log("Plugin unloaded.");
