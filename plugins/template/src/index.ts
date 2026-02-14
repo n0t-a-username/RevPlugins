@@ -113,6 +113,40 @@ commands.push(
   })
 );
 
+// ---- /list-giveaway ----
+commands.push(
+  registerCommand({
+    name: "list-giveaway",
+    displayName: "List Giveaway IDs",
+    description: "Outputs all user IDs collected from the giveaway button",
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: (args, ctx) => {
+      const list = storage.eventGiveawayPing.trim();
+
+      if (!list) {
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: "No users in the giveaway list!" },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
+        return;
+      }
+
+      // Format as comma-separated mentions
+      const formatted = list.split("\n").join(", ");
+      MessageActions.sendMessage(
+        ctx.channel.id,
+        { content: `Giveaway IDs: ${formatted}` },
+        void 0,
+        { nonce: Date.now().toString() }
+      );
+    },
+  })
+);
+
 // ---- Patch User Profiles to add GiveawaySection ----
 let UserProfile = findByTypeName("UserProfile");
 if (!UserProfile) UserProfile = findByTypeName("UserProfileContent");
