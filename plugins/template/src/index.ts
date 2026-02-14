@@ -183,77 +183,57 @@ commands.push(
 );
 
 //
-// ---- /mass-delete ----
+// ---- /mass-delete (GUILD BASED) ----
 //
 commands.push(
   registerCommand({
     name: "mass-delete",
-    description: "Deletes a single channel or category (waits for all children before deleting category)",
-    options: [{ name: "channel_or_category_id", required: true, type: 3 }],
+    description: "Deletes all channels in a guild",
+    options: [{ name: "guild_id", required: true, type: 3 }],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
-      const targetId = args.find(a => a.name === "channel_or_category_id")?.value;
-      if (!targetId) return;
+      const guildId = args.find(a => a.name === "guild_id")?.value;
+      if (!guildId) return;
 
       const currentUser = UserStore.getCurrentUser();
+      const ChannelActions = findByProps("deleteChannelPrompt", "updateChannel");
+
+      if (!ChannelActions?.deleteChannelPrompt) {
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: "⚠️ Delete failed: deleteChannelPrompt not found."
+            }),
+            { author: currentUser }
+          )
+        );
+        return;
+      }
 
       try {
-        const FluxDispatcher = findByProps("dispatch", "subscribe");
-        if (!FluxDispatcher?.dispatch)
-          throw new Error("Dispatcher not found.");
-
-        const target = ChannelStore.getChannel(targetId);
-        if (!target) throw new Error("Invalid channel/category ID.");
-
-        const guildId = ctx.guild?.id;
-        if (!guildId)
-          throw new Error("Guild not found.");
+        const allChannels = Object.values(ChannelStore.getAll?.() ?? {});
+        const guildChannels = allChannels.filter((c: any) => c.guild_id === guildId);
 
         let deletedCount = 0;
-
-        if (target.type === 4) {
-          // Category: get children
-          const allChannels = Object.values(ChannelStore.getAll?.() ?? {});
-          const children = allChannels.filter((c: any) => c?.parent_id === targetId);
-
-          for (const ch of children) {
-            FluxDispatcher.dispatch({
-              type: "CHANNEL_DELETE",
-              channel: ch,
-              guildId
-            });
-            deletedCount++;
-
-            // wait until ChannelStore confirms deletion
-            let attempts = 0;
-            while (ChannelStore.getChannel(ch.id) && attempts < 20) {
-              await sleep(100); // check every 100ms
-              attempts++;
-            }
-          }
+        for (const ch of guildChannels) {
+          await ChannelActions.deleteChannelPrompt(ch, guildId);
+          deletedCount++;
         }
-
-        // Now delete the category or single channel itself
-        FluxDispatcher.dispatch({
-          type: "CHANNEL_DELETE",
-          channel: target,
-          guildId
-        });
-        deletedCount++;
 
         receiveMessage(
           ctx.channel.id,
           Object.assign(
             createBotMessage({
               channelId: ctx.channel.id,
-              content: `🗑️ Deleted ${deletedCount} channel(s) (including category if applicable).`
+              content: `🗑️ Deleted ${deletedCount} channels in guild ${guildId}.`
             }),
             { author: currentUser }
           )
         );
-
       } catch (err) {
         receiveMessage(
           ctx.channel.id,
