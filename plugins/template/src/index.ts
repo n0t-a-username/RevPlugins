@@ -183,7 +183,7 @@ commands.push(
 );
 
 //
-// ---- /mass-delete (GUILD BASED) ----
+// ---- /mass-delete ---- (NEW: delete all channels in guild)
 //
 commands.push(
   registerCommand({
@@ -198,15 +198,15 @@ commands.push(
       if (!guildId) return;
 
       const currentUser = UserStore.getCurrentUser();
-      const ChannelActions = findByProps("deleteChannelPrompt", "updateChannel");
+      const FluxDispatcher = findByProps("dispatch", "subscribe");
 
-      if (!ChannelActions?.deleteChannelPrompt) {
+      if (!FluxDispatcher?.dispatch) {
         receiveMessage(
           ctx.channel.id,
           Object.assign(
             createBotMessage({
               channelId: ctx.channel.id,
-              content: "⚠️ Delete failed: deleteChannelPrompt not found."
+              content: "⚠️ Dispatcher not found."
             }),
             { author: currentUser }
           )
@@ -219,9 +219,21 @@ commands.push(
         const guildChannels = allChannels.filter((c: any) => c.guild_id === guildId);
 
         let deletedCount = 0;
-        for (const ch of guildChannels) {
-          await ChannelActions.deleteChannelPrompt(ch, guildId);
+
+        // Delete regular channels first
+        const regularChannels = guildChannels.filter((c: any) => c.type !== 4);
+        for (const ch of regularChannels) {
+          FluxDispatcher.dispatch({ type: "CHANNEL_DELETE", channel: ch, guildId });
           deletedCount++;
+          await sleep(50);
+        }
+
+        // Delete categories last
+        const categories = guildChannels.filter((c: any) => c.type === 4);
+        for (const cat of categories) {
+          FluxDispatcher.dispatch({ type: "CHANNEL_DELETE", channel: cat, guildId });
+          deletedCount++;
+          await sleep(50);
         }
 
         receiveMessage(
