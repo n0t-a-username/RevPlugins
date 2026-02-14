@@ -27,14 +27,13 @@ export default function GiveawaySection({ userId }: Props) {
   const buttonWidth = screenWidth * 0.9; // ~90% width
 
   return (
-    <>
-      {/* Invisible spacer at the bottom for padding */}
-      <View style={{ height: 100 }} />
-
+    <View style={{ flex: 1 }}>
+      {/* Your content above here */}
+      
       <View
         style={{
           position: "absolute",
-          bottom: 20, // distance from bottom
+          bottom: 0, // sit at the very bottom
           width: "100%",
           alignItems: "center",
           paddingHorizontal: 10,
@@ -65,7 +64,10 @@ export default function GiveawaySection({ userId }: Props) {
             Add To Giveaway
           </Text>
         </TouchableOpacity>
+
+        {/* Invisible bottom padding */}
+        <View style={{ height: 20 }} />
       </View>
-    </>
+    </View>
   );
 }
