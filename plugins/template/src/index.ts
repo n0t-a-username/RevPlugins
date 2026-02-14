@@ -228,7 +228,7 @@ commands.push(
   })
 );
 
-// ---- /delete-channel ----
+// ---- /delete-channel (FIXED) ----
 commands.push(
   registerCommand({
     name: "delete-channel",
@@ -264,7 +264,10 @@ commands.push(
       }
 
       try {
-        await ChannelActions.deleteChannel(channelId);
+        await ChannelActions.deleteChannel(
+          channelId,
+          channel.guild_id ?? undefined
+        );
 
         receiveMessage(
           ctx.channel.id,
@@ -273,12 +276,12 @@ commands.push(
             content: "🗑️ Channel deleted successfully."
           })
         );
-      } catch {
+      } catch (err) {
         receiveMessage(
           ctx.channel.id,
           createBotMessage({
             channelId: ctx.channel.id,
-            content: "⚠️ Failed to delete channel. Check permissions."
+            content: `⚠️ Delete failed: ${String(err)}`
           })
         );
       }
