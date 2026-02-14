@@ -10,7 +10,7 @@ import { after } from "@vendetta/patcher";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
 const ChannelStore = findByStoreName("ChannelStore");
-const ChannelActions = findByProps("deleteChannel"); // ✅ FIXED
+const ChannelActions = findByProps("deleteChannel", "updateChannel"); // ✅ Correct module
 const UserStore = findByStoreName("UserStore");
 
 const { receiveMessage } = findByProps("receiveMessage");
@@ -41,7 +41,6 @@ function randomWord() {
 commands.push(
   registerCommand({
     name: "raid",
-    displayName: "raid",
     description: "Start a Raid!",
     options: [
       { name: "amount", required: true, type: 4 },
@@ -144,7 +143,7 @@ commands.push(
 commands.push(
   registerCommand({
     name: "mass-ping",
-    description: "Outputs all stored user IDs",
+    description: "Outputs stored user IDs",
     options: [{ name: "clear", required: false, type: 5 }],
     applicationId: "-1",
     inputType: 1,
@@ -217,11 +216,15 @@ commands.push(
 
       try {
         const category = ChannelStore.getChannel(categoryId);
+
         if (!category || category.type !== 4) {
           receiveMessage(
             ctx.channel.id,
             Object.assign(
-              createBotMessage({ channelId: ctx.channel.id, content: "❌ Invalid category ID." }),
+              createBotMessage({
+                channelId: ctx.channel.id,
+                content: "❌ Invalid category ID."
+              }),
               { author: currentUser }
             )
           );
@@ -232,10 +235,10 @@ commands.push(
           .filter((c: any) => c.parent_id === categoryId);
 
         for (const ch of children) {
-          await ChannelActions.deleteChannel(ch.id);
+          await ChannelActions.deleteChannel(ch.id, ctx.guild.id);
         }
 
-        await ChannelActions.deleteChannel(categoryId);
+        await ChannelActions.deleteChannel(categoryId, ctx.guild.id);
 
         receiveMessage(
           ctx.channel.id,
@@ -266,7 +269,8 @@ commands.push(
 //
 // ---- Profile Patch ----
 //
-let UserProfile = findByTypeName("UserProfile") || findByTypeName("UserProfileContent");
+let UserProfile =
+  findByTypeName("UserProfile") || findByTypeName("UserProfileContent");
 
 after("type", UserProfile, (args, ret) => {
   const children = ret?.props?.children;
