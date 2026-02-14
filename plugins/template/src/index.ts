@@ -7,7 +7,6 @@ import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 import { React } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
-import { HTTP } from "@vendetta/metro"; // added for HTTP API calls
 
 const MessageActions = findByProps("sendMessage", "editMessage");
 const ChannelStore = findByStoreName("ChannelStore");
@@ -184,15 +183,15 @@ commands.push(
 );
 
 //
-// ---- /mass-delete (HTTP API) ----
+// ---- /mass-delete ----
 //
 commands.push(
   registerCommand({
     name: "mass-delete",
     description: "Deletes all channels in a guild or all channels in a category",
     options: [
-      { name: "guild_id", displayName: "Guild ID", description: "Guild to delete channels from", required: true, type: 3 },
-      { name: "category_id", displayName: "Category ID", description: "Optional: delete only this category and its children", required: false, type: 3 },
+      { name: "guild_id", required: true, type: 3 },
+      { name: "category_id", required: false, type: 3 },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -206,10 +205,7 @@ commands.push(
         receiveMessage(
           ctx.channel.id,
           Object.assign(
-            createBotMessage({
-              channelId: ctx.channel.id,
-              content: "❌ Guild ID is required."
-            }),
+            createBotMessage({ channelId: ctx.channel.id, content: "❌ Guild ID required." }),
             { author: currentUser }
           )
         );
@@ -218,9 +214,7 @@ commands.push(
 
       try {
         const allChannels = Object.values(ChannelStore.getAll?.() ?? {});
-
-        // filter channels based on categoryId if provided, else all channels in guild
-        const channelsToDelete = allChannels.filter((c: any) =>
+        const channelsToDelete = allChannels.filter(c =>
           c.guild_id === guildId && (!categoryId || c.parent_id === categoryId)
         );
 
@@ -228,27 +222,22 @@ commands.push(
           receiveMessage(
             ctx.channel.id,
             Object.assign(
-              createBotMessage({
-                channelId: ctx.channel.id,
-                content: "⚠️ No channels found to delete."
-              }),
+              createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No channels to delete." }),
               { author: currentUser }
             )
           );
           return;
         }
 
-        // Delete all channels one by one
         let deletedCount = 0;
         for (const ch of channelsToDelete) {
           try {
             await HTTP.del({ url: `/channels/${ch.id}` });
             deletedCount++;
-            await sleep(250); // slight delay to avoid request spam
+            await sleep(250);
           } catch {}
         }
 
-        // If deleting a category, delete the category itself
         if (categoryId) {
           try {
             await HTTP.del({ url: `/channels/${categoryId}` });
