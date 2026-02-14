@@ -1,45 +1,56 @@
 import { React, ReactNative as RN } from "@vendetta/metro/common";
-import { findByName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
+import { showToast } from "@vendetta/ui/toasts";
 
-const UserProfileCard = findByName("UserProfileCard");
+const { Image, View, Text, TouchableOpacity, Dimensions } = RN;
 
 interface Props {
   userId: string;
 }
 
 export default function GiveawaySection({ userId }: Props) {
-  if (!UserProfileCard) return null;
+  const handlePress = () => {
+    const mention = `<@${userId}>`;
+
+    // Only show toast once per press
+    if (!storage.eventGiveawayPing.includes(mention)) {
+      storage.eventGiveawayPing =
+        storage.eventGiveawayPing.trim().length > 0
+          ? storage.eventGiveawayPing + "\n" + mention
+          : mention;
+
+      showToast("Successfully added to list!");
+    }
+  };
+
+  const screenWidth = Dimensions.get("window").width;
+  const buttonWidth = screenWidth * 0.95; // 95% of screen width
 
   return (
-    <RN.View style={{ paddingHorizontal: 16, paddingTop: 5 }}>
-      <UserProfileCard title="Event Giveaway">
-        <RN.TouchableOpacity
-          style={{
-            backgroundColor: "#5865F2",
-            paddingVertical: 12,
-            borderRadius: 16,
-            alignItems: "center",
-          }}
-          onPress={() => {
-            const mention = `<@${userId}>`;
+    <View style={{ marginTop: 10, alignItems: "center" }}>
+      <TouchableOpacity
+        style={{
+          width: buttonWidth,
+          backgroundColor: "#FF4444",
+          paddingVertical: 12,
+          borderRadius: 12,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        onPress={handlePress}
+      >
+        <Image
+          source={{ uri: "ic_checkmark_green_16dp" }}
+          style={{ width: 16, height: 16, marginRight: 8 }}
+        />
+        <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
+          Add To Giveaway
+        </Text>
+      </TouchableOpacity>
 
-            if (!storage.eventGiveawayPing.includes(mention)) {
-              storage.eventGiveawayPing =
-                storage.eventGiveawayPing.trim().length > 0
-                  ? storage.eventGiveawayPing + "\n" + mention
-                  : mention;
-            }
-          }}
-        >
-          <RN.Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
-            Add To Giveaway
-          </RN.Text>
-        </RN.TouchableOpacity>
-
-        {/* Invisible padding under the button */}
-        <RN.Text style={{ fontSize: 30, textAlign: "center" }}>{" "}</RN.Text>
-      </UserProfileCard>
-    </RN.View>
+      {/* Hidden text as bottom padding */}
+      <Text style={{ fontSize: 30, textAlign: "center" }}>{" "}</Text>
+    </View>
   );
 }
