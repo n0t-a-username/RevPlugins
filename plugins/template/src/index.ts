@@ -188,7 +188,7 @@ commands.push(
 commands.push(
   registerCommand({
     name: "mass-delete",
-    description: "Deletes a single channel or category (waits for all channels before deleting category)",
+    description: "Deletes a single channel or category (waits for all children before deleting category)",
     options: [{ name: "channel_or_category_id", required: true, type: 3 }],
     applicationId: "-1",
     inputType: 1,
@@ -214,7 +214,7 @@ commands.push(
         let deletedCount = 0;
 
         if (target.type === 4) {
-          // It's a category, delete children first
+          // Category: get children
           const allChannels = Object.values(ChannelStore.getAll?.() ?? {});
           const children = allChannels.filter((c: any) => c?.parent_id === targetId);
 
@@ -225,11 +225,17 @@ commands.push(
               guildId
             });
             deletedCount++;
-            await sleep(100); // wait 100ms between each child deletion
+
+            // wait until ChannelStore confirms deletion
+            let attempts = 0;
+            while (ChannelStore.getChannel(ch.id) && attempts < 20) {
+              await sleep(100); // check every 100ms
+              attempts++;
+            }
           }
         }
 
-        // Delete the target itself (category or single channel)
+        // Now delete the category or single channel itself
         FluxDispatcher.dispatch({
           type: "CHANNEL_DELETE",
           channel: target,
