@@ -1,6 +1,6 @@
 {
     "name": "Bemmo",
-    "description": "A self-bot plbn",
+    "description": "A self-bot pnxndlbn",
     "authors": [
         {
             "name": "NAU",
@@ -9,6 +9,6 @@
     ],
     "main": "src/index.ts",
     "vendetta": {
-        "icon": "img_nitro_sticker_yellow_24px"
+        "icon": "NoReactionIcon"
     }
 }
