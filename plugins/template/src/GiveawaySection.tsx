@@ -12,13 +12,13 @@ export default function GiveawaySection({ userId }: Props) {
   if (!UserProfileCard) return null;
 
   return (
-    <RN.View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+    <RN.View style={{ paddingHorizontal: 16, paddingTop: 5 }}>
       <UserProfileCard title="Event Giveaway">
         <RN.TouchableOpacity
           style={{
             backgroundColor: "#5865F2",
             paddingVertical: 12,
-            borderRadius: 12,
+            borderRadius: 16,
             alignItems: "center",
           }}
           onPress={() => {
