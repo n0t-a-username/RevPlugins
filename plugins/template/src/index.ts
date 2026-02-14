@@ -10,7 +10,7 @@ import { after } from "@vendetta/patcher";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
 const ChannelStore = findByStoreName("ChannelStore");
-const ChannelActions = findByProps("deleteChannel", "updateChannel"); // ✅ Correct module
+const ChannelActions = findByProps("deleteChannelPrompt", "updateChannel"); // ✅ Updated
 const UserStore = findByStoreName("UserStore");
 
 const { receiveMessage } = findByProps("receiveMessage");
@@ -200,13 +200,13 @@ commands.push(
 
       const currentUser = UserStore.getCurrentUser();
 
-      if (!ChannelActions?.deleteChannel) {
+      if (!ChannelActions?.deleteChannelPrompt) {
         receiveMessage(
           ctx.channel.id,
           Object.assign(
             createBotMessage({
               channelId: ctx.channel.id,
-              content: "⚠️ Delete failed: deleteChannel function not found."
+              content: "⚠️ Delete failed: deleteChannelPrompt not found."
             }),
             { author: currentUser }
           )
@@ -235,10 +235,10 @@ commands.push(
           .filter((c: any) => c.parent_id === categoryId);
 
         for (const ch of children) {
-          await ChannelActions.deleteChannel(ch.id, ctx.guild.id);
+          await ChannelActions.deleteChannelPrompt(ch, ctx.guild.id);
         }
 
-        await ChannelActions.deleteChannel(categoryId, ctx.guild.id);
+        await ChannelActions.deleteChannelPrompt(category, ctx.guild.id);
 
         receiveMessage(
           ctx.channel.id,
