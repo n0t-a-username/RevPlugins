@@ -71,7 +71,7 @@ commands.push(
   registerCommand({
     name: "fetchprofile",
     displayName: "Fetch Profile",
-    description: "Fetch a user's avatar as Bemmo",
+    description: "Fetch a user's avatar",
     options: [
       { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
     ],
@@ -117,7 +117,7 @@ commands.push(
   registerCommand({
     name: "userid",
     displayName: "User ID",
-    description: "Displays a user's ID as Bemmo",
+    description: "Displays a user's ID",
     options: [
       { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
     ],
@@ -158,14 +158,14 @@ commands.push(
 // ---- /list-giveaway ----
 commands.push(
   registerCommand({
-    name: "list-giveaway",
-    displayName: "List Giveaway IDs",
-    description: "Outputs all user IDs collected from the giveaway button",
+    name: "mass-ping",
+    displayName: "Mass Ping",
+    description: "Outputs all user IDs collected from the mass ping button",
     options: [
       {
         name: "clear",
         displayName: "clear",
-        description: "Clear the giveaway list after sending",
+        description: "Clear the ping list",
         required: false,
         type: 5,
       },
@@ -177,38 +177,12 @@ commands.push(
       const shouldClear =
         args.find(a => a.name === "clear")?.value ?? false;
 
-      const list = storage.eventGiveawayPing.trim();
       const currentUser = UserStore.getCurrentUser();
+      const list = storage.eventGiveawayPing.trim();
 
-      // Empty list
-      if (!list) {
-        receiveMessage(
-          ctx.channel.id,
-          Object.assign(
-            createBotMessage({
-              channelId: ctx.channel.id,
-              content: shouldClear
-                ? "⚠️ Giveaway list was already empty."
-                : "⚠️ No users in the giveaway list."
-            }),
-            { author: currentUser }
-          )
-        );
-        return;
-      }
-
-      // Send IDs as normal message
-      const formatted = list.split("\n").join(", ");
-
-      MessageActions.sendMessage(
-        ctx.channel.id,
-        { content: `🎉 Giveaway IDs:\n${formatted}` },
-        void 0,
-        { nonce: Date.now().toString() }
-      );
-
-      // Clear after sending if requested
+      // CLEAR MODE
       if (shouldClear === true) {
+        const wasEmpty = !list;
         storage.eventGiveawayPing = "";
 
         receiveMessage(
@@ -216,12 +190,39 @@ commands.push(
           Object.assign(
             createBotMessage({
               channelId: ctx.channel.id,
-              content: "✅ Giveaway list cleared."
+              content: wasEmpty
+                ? "⚠️ Ping list was already empty."
+                : "✅ Ping list cleared."
             }),
             { author: currentUser }
           )
         );
+        return;
       }
+
+      // NORMAL MODE
+      if (!list) {
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: "⚠️ No users in the ping list."
+            }),
+            { author: currentUser }
+          )
+        );
+        return;
+      }
+
+      const formatted = list.split("\n").join(", ");
+
+      MessageActions.sendMessage(
+        ctx.channel.id,
+        { content: `Wake up: \n${formatted}` },
+        void 0,
+        { nonce: Date.now().toString() }
+      );
     },
   })
 );
