@@ -24,7 +24,7 @@ export default function GiveawaySection({ userId }: Props) {
   };
 
   const screenWidth = Dimensions.get("window").width;
-  const buttonWidth = screenWidth * 0.95; // 95% of screen width
+  const buttonWidth = screenWidth * 0.94; // 95% of screen width
 
   return (
     <View style={{ marginTop: 10, alignItems: "center" }}>
@@ -50,7 +50,7 @@ export default function GiveawaySection({ userId }: Props) {
       </TouchableOpacity>
 
       {/* Hidden text as bottom padding */}
-      <Text style={{ fontSize: 30, textAlign: "center" }}>{" "}</Text>
+      <Text style={{ fontSize: 80, textAlign: "center" }}>{" "}</Text>
     </View>
   );
 }
