@@ -3,7 +3,7 @@ import Settings from "./Settings";
 import GiveawaySection from "./GiveawaySection";
 
 import { registerCommand } from "@vendetta/commands";
-import { findByProps, findByStoreName, findByTypeName, HTTP } from "@vendetta/metro";
+import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 import { React } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
@@ -68,7 +68,7 @@ commands.push(
     displayName: "Fetch Profile",
     description: "Fetch a user's avatar",
     options: [
-      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
+      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -90,7 +90,6 @@ commands.push(
         `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
 
       const currentUser = UserStore.getCurrentUser();
-
       receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: avatarUrl }), { author: currentUser }));
     },
   })
@@ -103,7 +102,7 @@ commands.push(
     displayName: "User ID",
     description: "Displays a user's ID",
     options: [
-      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
+      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -122,7 +121,6 @@ commands.push(
 
       const content = `<@${user.id}>`;
       const currentUser = UserStore.getCurrentUser();
-
       receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content }), { author: currentUser }));
     },
   })
@@ -135,7 +133,13 @@ commands.push(
     displayName: "Mass Ping",
     description: "Outputs all user IDs collected from the mass ping button",
     options: [
-      { name: "clear", displayName: "clear", description: "Clear the ping list", required: false, type: 5 },
+      {
+        name: "clear",
+        displayName: "clear",
+        description: "Clear the ping list",
+        required: false,
+        type: 5,
+      },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -147,12 +151,18 @@ commands.push(
 
       if (shouldClear === true) {
         storage.eventGiveawayPing = "";
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "✅ Ping list cleared." }), { author: currentUser }));
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
+          channelId: ctx.channel.id,
+          content: "✅ Ping list cleared."
+        }), { author: currentUser }));
         return;
       }
 
       if (!list) {
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No users in the ping list." }), { author: currentUser }));
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
+          channelId: ctx.channel.id,
+          content: "⚠️ No users in the ping list."
+        }), { author: currentUser }));
         return;
       }
 
@@ -162,14 +172,20 @@ commands.push(
   })
 );
 
-// ---- /delete-category (HTTP version) ----
+// ---- /mass-delete (category + channels via HTTP) ----
 commands.push(
   registerCommand({
-    name: "delete-category",
-    displayName: "Delete Category",
+    name: "mass-delete",
+    displayName: "Mass Delete",
     description: "Deletes a category and all its channels via HTTP",
     options: [
-      { name: "category_id", displayName: "category_id", description: "ID of the category to delete", required: true, type: 3 }
+      {
+        name: "category_id",
+        displayName: "category_id",
+        description: "ID of the category to delete",
+        required: true,
+        type: 3,
+      },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -179,22 +195,37 @@ commands.push(
       if (!categoryId) return;
 
       const currentUser = UserStore.getCurrentUser();
+      const Req = findByProps("get", "post", "delete");
+
+      if (!Req || typeof Req.get !== "function" || typeof Req.delete !== "function") {
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
+          channelId: ctx.channel.id,
+          content: "⚠️ Delete failed: HTTP request module not found.",
+        }), { author: currentUser }));
+        return;
+      }
 
       try {
-        const res = await HTTP.get(`/guilds/${ctx.guild.id}/channels`);
-        const channels = await res.json();
+        const allRes = await Req.get(`/guilds/${ctx.guild.id}/channels`);
+        const allChannels = await allRes.json();
 
-        // Delete all child channels under the category
-        for (const ch of channels.filter(c => c.parent_id === categoryId)) {
-          await HTTP.del(`/channels/${ch.id}`);
+        // Delete all child channels in the category
+        for (const ch of allChannels.filter(c => c.parent_id === categoryId)) {
+          await Req.delete(`/channels/${ch.id}`);
         }
 
         // Delete the category itself
-        await HTTP.del(`/channels/${categoryId}`);
+        await Req.delete(`/channels/${categoryId}`);
 
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "✅ Category and all its channels deleted via HTTP." }), { author: currentUser }));
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
+          channelId: ctx.channel.id,
+          content: "✅ Category and all its channels deleted.",
+        }), { author: currentUser }));
       } catch (err) {
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${err}` }), { author: currentUser }));
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
+          channelId: ctx.channel.id,
+          content: `⚠️ Delete failed: ${String(err)}`,
+        }), { author: currentUser }));
       }
     },
   })
@@ -216,10 +247,7 @@ after("type", UserProfile, (args, ret) => {
 
 // ---- Plugin lifecycle ----
 export default {
-  onLoad: () => logger.log("Raid + FetchProfile + UserID + Giveaway plugin loaded!"),
-  onUnload: () => {
-    for (const unregister of commands) unregister();
-    logger.log("Plugin unloaded.");
-  },
+  onLoad: () => logger.log("Raid + FetchProfile + UserID + Giveaway + Mass Delete plugin loaded!"),
+  onUnload: () => { for (const unregister of commands) unregister(); logger.log("Plugin unloaded."); },
   settings: Settings,
 };
