@@ -11,7 +11,6 @@ interface Props {
 export default function GiveawaySection({ userId }: Props) {
   const handlePress = () => {
     const mention = `<@${userId}>`;
-
     const mentions = storage.eventGiveawayPing
       .split("\n")
       .map((m: string) => m.trim())
@@ -25,43 +24,48 @@ export default function GiveawaySection({ userId }: Props) {
   };
 
   const screenWidth = Dimensions.get("window").width;
-  const buttonWidth = screenWidth * 0.9; // ~90% of screen width
+  const buttonWidth = screenWidth * 0.9; // ~90% width
 
   return (
-    <View
-      style={{
-        position: "absolute",
-        bottom: 20, // space from bottom
-        width: "100%",
-        alignItems: "center",
-        paddingHorizontal: 10,
-      }}
-    >
-      <TouchableOpacity
+    <>
+      {/* Invisible spacer at the bottom for padding */}
+      <View style={{ height: 100 }} />
+
+      <View
         style={{
-          width: buttonWidth,
-          backgroundColor: "#FF4444",
-          paddingVertical: 12,
-          borderRadius: 16,
-          flexDirection: "row",
+          position: "absolute",
+          bottom: 20, // distance from bottom
+          width: "100%",
           alignItems: "center",
-          justifyContent: "center",
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: 2 },
-          shadowOpacity: 0.3,
-          shadowRadius: 4,
-          elevation: 5,
+          paddingHorizontal: 10,
         }}
-        onPress={handlePress}
       >
-        <Image
-          source={{ uri: "ic_checkmark_green_16dp" }}
-          style={{ width: 16, height: 16, marginRight: 8 }}
-        />
-        <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
-          Add To Giveaway
-        </Text>
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity
+          style={{
+            width: buttonWidth,
+            backgroundColor: "#FF4444",
+            paddingVertical: 12,
+            borderRadius: 16,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4,
+            elevation: 5,
+          }}
+          onPress={handlePress}
+        >
+          <Image
+            source={{ uri: "ic_checkmark_green_16dp" }}
+            style={{ width: 16, height: 16, marginRight: 8 }}
+          />
+          <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
+            Add To Giveaway
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </>
   );
 }
