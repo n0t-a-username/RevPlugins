@@ -188,7 +188,7 @@ commands.push(
 commands.push(
   registerCommand({
     name: "mass-delete",
-    description: "Deletes a single channel or category (with children)",
+    description: "Deletes a single channel or category (waits for all channels before deleting category)",
     options: [{ name: "channel_or_category_id", required: true, type: 3 }],
     applicationId: "-1",
     inputType: 1,
@@ -208,7 +208,8 @@ commands.push(
         if (!target) throw new Error("Invalid channel/category ID.");
 
         const guildId = ctx.guild?.id;
-        if (!guildId) throw new Error("Guild not found.");
+        if (!guildId)
+          throw new Error("Guild not found.");
 
         let deletedCount = 0;
 
@@ -224,10 +225,11 @@ commands.push(
               guildId
             });
             deletedCount++;
+            await sleep(100); // wait 100ms between each child deletion
           }
         }
 
-        // Delete the target itself (channel or category)
+        // Delete the target itself (category or single channel)
         FluxDispatcher.dispatch({
           type: "CHANNEL_DELETE",
           channel: target,
@@ -240,11 +242,12 @@ commands.push(
           Object.assign(
             createBotMessage({
               channelId: ctx.channel.id,
-              content: `🗑️ Deleted ${deletedCount} channel(s).`
+              content: `🗑️ Deleted ${deletedCount} channel(s) (including category if applicable).`
             }),
             { author: currentUser }
           )
         );
+
       } catch (err) {
         receiveMessage(
           ctx.channel.id,
