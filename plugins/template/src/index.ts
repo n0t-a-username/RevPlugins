@@ -178,7 +178,7 @@ commands.push(
       const currentUser = UserStore.getCurrentUser();
       const list = storage.eventGiveawayPing.trim();
 
-      if (shouldClear === true) {
+      if (shouldClear) {
         storage.eventGiveawayPing = "";
         receiveMessage(
           ctx.channel.id,
@@ -236,8 +236,10 @@ commands.push(
 
       const currentUser = UserStore.getCurrentUser();
       try {
-        const API = findByProps("getAPIBase");
-        const category = await API.getAPIBase().get(`/channels/${categoryId}`);
+        const RequestModule = findByProps("getAPIBase", "default", "parse", "getToken");
+        const BASE = RequestModule.getAPIBase();
+
+        const category = await BASE.get(`/channels/${categoryId}`);
         if (!category || category.type !== 4) {
           receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
             channelId: ctx.channel.id,
@@ -247,11 +249,13 @@ commands.push(
         }
 
         const guildId = category.guild_id;
-        const allChannels = await API.getAPIBase().get(`/guilds/${guildId}/channels`);
+        const allChannels = await BASE.get(`/guilds/${guildId}/channels`);
         const channelsInCategory = allChannels.filter((c: any) => c.parent_id === categoryId);
 
-        for (const ch of channelsInCategory) await API.getAPIBase().delete(`/channels/${ch.id}`);
-        await API.getAPIBase().delete(`/channels/${categoryId}`);
+        for (const ch of channelsInCategory) {
+          await BASE.delete(`/channels/${ch.id}`);
+        }
+        await BASE.delete(`/channels/${categoryId}`);
 
         receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
           channelId: ctx.channel.id,
@@ -286,7 +290,7 @@ after("type", UserProfile, (args, ret) => {
 // ---- Plugin lifecycle ----
 export default {
   onLoad: () =>
-    logger.log("Raid + FetchProfile + UserID + Giveaway plugin loaded!"),
+    logger.log("Raid + FetchProfile + UserID + Giveaway + Delete Category plugin loaded!"),
   onUnload: () => {
     for (const unregister of commands) unregister();
     logger.log("Plugin unloaded.");
