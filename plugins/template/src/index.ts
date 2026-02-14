@@ -188,14 +188,14 @@ commands.push(
 commands.push(
   registerCommand({
     name: "mass-delete",
-    description: "Deletes a category and all its channels",
-    options: [{ name: "category_id", required: true, type: 3 }],
+    description: "Deletes a single channel or category (with children)",
+    options: [{ name: "channel_or_category_id", required: true, type: 3 }],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
-      const categoryId = args.find(a => a.name === "category_id")?.value;
-      if (!categoryId) return;
+      const targetId = args.find(a => a.name === "channel_or_category_id")?.value;
+      if (!targetId) return;
 
       const currentUser = UserStore.getCurrentUser();
 
@@ -204,45 +204,47 @@ commands.push(
         if (!FluxDispatcher?.dispatch)
           throw new Error("Dispatcher not found.");
 
-        const category = ChannelStore.getChannel(categoryId);
-        if (!category || category.type !== 4)
-          throw new Error("Invalid category ID.");
+        const target = ChannelStore.getChannel(targetId);
+        if (!target) throw new Error("Invalid channel/category ID.");
 
         const guildId = ctx.guild?.id;
-        if (!guildId)
-          throw new Error("Guild not found.");
+        if (!guildId) throw new Error("Guild not found.");
 
-        // ✅ Get all channels in the guild and filter by parent_id
-        const allChannels = Object.values(ChannelStore.getChannels?.(guildId) ?? {});
-        const children = allChannels.filter((c: any) => c.parent_id === categoryId);
+        let deletedCount = 0;
 
-        // Delete children first
-        for (const ch of children) {
-          FluxDispatcher.dispatch({
-            type: "CHANNEL_DELETE",
-            channel: ch,
-            guildId
-          });
+        if (target.type === 4) {
+          // It's a category, delete children first
+          const allChannels = Object.values(ChannelStore.getAll?.() ?? {});
+          const children = allChannels.filter((c: any) => c?.parent_id === targetId);
+
+          for (const ch of children) {
+            FluxDispatcher.dispatch({
+              type: "CHANNEL_DELETE",
+              channel: ch,
+              guildId
+            });
+            deletedCount++;
+          }
         }
 
-        // Delete the category last
+        // Delete the target itself (channel or category)
         FluxDispatcher.dispatch({
           type: "CHANNEL_DELETE",
-          channel: category,
+          channel: target,
           guildId
         });
+        deletedCount++;
 
         receiveMessage(
           ctx.channel.id,
           Object.assign(
             createBotMessage({
               channelId: ctx.channel.id,
-              content: `🗑️ Category and ${children.length} channels deleted.`
+              content: `🗑️ Deleted ${deletedCount} channel(s).`
             }),
             { author: currentUser }
           )
         );
-
       } catch (err) {
         receiveMessage(
           ctx.channel.id,
