@@ -1,6 +1,6 @@
 {
     "name": "Bemmo",
-    "description": "A self-bot plugin.",
+    "description": "A self-bot plugin!",
     "authors": [
         {
             "name": "NAU",
@@ -9,6 +9,6 @@
     ],
     "main": "src/index.ts",
     "vendetta": {
-        "icon": "ic_qr_code_24dp"
+        "icon": "img_nitro_sticker_yellow_24px"
     }
 }
