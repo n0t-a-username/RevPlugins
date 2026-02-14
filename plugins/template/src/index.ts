@@ -167,7 +167,7 @@ commands.push(
         displayName: "clear",
         description: "Clear the giveaway list after sending",
         required: false,
-        type: 5, // BOOLEAN
+        type: 5,
       },
     ],
     applicationId: "-1",
@@ -178,34 +178,48 @@ commands.push(
         args.find(a => a.name === "clear")?.value ?? false;
 
       const list = storage.eventGiveawayPing.trim();
+      const currentUser = UserStore.getCurrentUser();
 
+      // Empty list
       if (!list) {
-        MessageActions.sendMessage(
+        receiveMessage(
           ctx.channel.id,
-          { content: "No users in the giveaway list!" },
-          void 0,
-          { nonce: Date.now().toString() }
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: shouldClear
+                ? "⚠️ Giveaway list was already empty."
+                : "⚠️ No users in the giveaway list."
+            }),
+            { author: currentUser }
+          )
         );
         return;
       }
 
+      // Send IDs as normal message
       const formatted = list.split("\n").join(", ");
 
       MessageActions.sendMessage(
         ctx.channel.id,
-        { content: `Giveaway IDs: ${formatted}` },
+        { content: `🎉 Giveaway IDs:\n${formatted}` },
         void 0,
         { nonce: Date.now().toString() }
       );
 
+      // Clear after sending if requested
       if (shouldClear === true) {
         storage.eventGiveawayPing = "";
 
-        MessageActions.sendMessage(
+        receiveMessage(
           ctx.channel.id,
-          { content: "✅ Giveaway list cleared." },
-          void 0,
-          { nonce: (Date.now() + 1).toString() }
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: "✅ Giveaway list cleared."
+            }),
+            { author: currentUser }
+          )
         );
       }
     },
