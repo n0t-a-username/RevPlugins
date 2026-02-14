@@ -11,7 +11,7 @@ import { after } from "@vendetta/patcher";
 const MessageActions = findByProps("sendMessage", "editMessage");
 const UserStore = findByStoreName("UserStore");
 const ChannelStore = findByProps("getChannel");
-const ChannelActions = findByProps("deleteChannel");
+const HTTP = findByProps("del", "post", "put");
 
 const commands: (() => void)[] = [];
 
@@ -228,7 +228,7 @@ commands.push(
   })
 );
 
-// ---- /delete-channel (FIXED) ----
+// ---- /delete-channel (HTTP VERSION) ----
 commands.push(
   registerCommand({
     name: "delete-channel",
@@ -264,10 +264,9 @@ commands.push(
       }
 
       try {
-        await ChannelActions.deleteChannel(
-          channelId,
-          channel.guild_id ?? undefined
-        );
+        await HTTP.del({
+          url: `/channels/${channelId}`
+        });
 
         receiveMessage(
           ctx.channel.id,
