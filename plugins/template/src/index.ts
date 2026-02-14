@@ -9,6 +9,8 @@ import { React } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
+const ChannelStore = findByStoreName("ChannelStore");
+const ChannelActions = findByStoreName("ChannelActions");
 const UserStore = findByStoreName("UserStore");
 const commands: (() => void)[] = [];
 
@@ -55,7 +57,12 @@ commands.push(
         const rnd = getRandomNumber();
         const content = `${msgTemplate} \`${rnd}\``;
         await sleep(delay);
-        MessageActions.sendMessage(ctx.channel.id, { content }, void 0, { nonce: Date.now().toString() });
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
       }
     },
   })
@@ -68,7 +75,7 @@ commands.push(
     displayName: "Fetch Profile",
     description: "Fetch a user's avatar",
     options: [
-      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 },
+      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
     ],
     applicationId: "-1",
     inputType: 1,
@@ -81,7 +88,12 @@ commands.push(
       const user = UserStore.getUser(userId);
 
       if (!user) {
-        MessageActions.sendMessage(ctx.channel.id, { content: "❌ User not found" }, void 0, { nonce: Date.now().toString() });
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: "❌ User not found" },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
         return;
       }
 
@@ -90,7 +102,14 @@ commands.push(
         `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
 
       const currentUser = UserStore.getCurrentUser();
-      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: avatarUrl }), { author: currentUser }));
+
+      receiveMessage(
+        ctx.channel.id,
+        Object.assign(
+          createBotMessage({ channelId: ctx.channel.id, content: avatarUrl }),
+          { author: currentUser }
+        )
+      );
     },
   })
 );
@@ -102,7 +121,7 @@ commands.push(
     displayName: "User ID",
     description: "Displays a user's ID",
     options: [
-      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 },
+      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
     ],
     applicationId: "-1",
     inputType: 1,
@@ -115,13 +134,25 @@ commands.push(
       const user = UserStore.getUser(userId);
 
       if (!user) {
-        MessageActions.sendMessage(ctx.channel.id, { content: "❌ User not found" }, void 0, { nonce: Date.now().toString() });
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: "❌ User not found" },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
         return;
       }
 
       const content = `<@${user.id}>`;
       const currentUser = UserStore.getCurrentUser();
-      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content }), { author: currentUser }));
+
+      receiveMessage(
+        ctx.channel.id,
+        Object.assign(
+          createBotMessage({ channelId: ctx.channel.id, content }),
+          { author: currentUser }
+        )
+      );
     },
   })
 );
@@ -145,39 +176,59 @@ commands.push(
     inputType: 1,
     type: 1,
     execute: (args, ctx) => {
-      const shouldClear = args.find(a => a.name === "clear")?.value ?? false;
+      const shouldClear =
+        args.find(a => a.name === "clear")?.value ?? false;
+
       const currentUser = UserStore.getCurrentUser();
       const list = storage.eventGiveawayPing.trim();
 
       if (shouldClear === true) {
         storage.eventGiveawayPing = "";
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-          channelId: ctx.channel.id,
-          content: "✅ Ping list cleared."
-        }), { author: currentUser }));
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: "✅ Ping list cleared."
+            }),
+            { author: currentUser }
+          )
+        );
         return;
       }
 
       if (!list) {
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-          channelId: ctx.channel.id,
-          content: "⚠️ No users in the ping list."
-        }), { author: currentUser }));
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: "⚠️ No users in the ping list."
+            }),
+            { author: currentUser }
+          )
+        );
         return;
       }
 
       const formatted = list.split("\n").join(", ");
-      MessageActions.sendMessage(ctx.channel.id, { content: `Wake up: \n${formatted}` }, void 0, { nonce: Date.now().toString() });
+
+      MessageActions.sendMessage(
+        ctx.channel.id,
+        { content: `Wake up: \n${formatted}` },
+        void 0,
+        { nonce: Date.now().toString() }
+      );
     },
   })
 );
 
-// ---- /mass-delete (category + channels via HTTP) ----
+// ---- /mass-delete ----
 commands.push(
   registerCommand({
     name: "mass-delete",
-    displayName: "Mass Delete",
-    description: "Deletes a category and all its channels via HTTP",
+    displayName: "Mass Delete Category",
+    description: "Deletes a category and all its channels by category ID",
     options: [
       {
         name: "category_id",
@@ -191,41 +242,52 @@ commands.push(
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
-      const categoryId = args.find(a => a.name === "category_id")?.value?.trim();
+      const categoryId = args.find(a => a.name === "category_id")?.value;
       if (!categoryId) return;
 
       const currentUser = UserStore.getCurrentUser();
-      const Req = findByProps("get", "post", "delete");
-
-      if (!Req || typeof Req.get !== "function" || typeof Req.delete !== "function") {
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-          channelId: ctx.channel.id,
-          content: "⚠️ Delete failed: HTTP request module not found.",
-        }), { author: currentUser }));
-        return;
-      }
 
       try {
-        const allRes = await Req.get(`/guilds/${ctx.guild.id}/channels`);
-        const allChannels = await allRes.json();
-
-        // Delete all child channels in the category
-        for (const ch of allChannels.filter(c => c.parent_id === categoryId)) {
-          await Req.delete(`/channels/${ch.id}`);
+        const category = ChannelStore.getChannel(categoryId);
+        if (!category || category.type !== 4) {
+          receiveMessage(
+            ctx.channel.id,
+            Object.assign(
+              createBotMessage({ channelId: ctx.channel.id, content: "❌ Invalid category ID." }),
+              { author: currentUser }
+            )
+          );
+          return;
         }
 
-        // Delete the category itself
-        await Req.delete(`/channels/${categoryId}`);
+        const allChannels = Object.values(ChannelStore.getAll())
+          .filter(c => c.parent_id === categoryId);
 
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-          channelId: ctx.channel.id,
-          content: "✅ Category and all its channels deleted.",
-        }), { author: currentUser }));
+        for (const ch of allChannels) {
+          try {
+            await ChannelActions.deleteChannel(ch.id);
+          } catch (e) {
+            console.warn(`Failed to delete channel ${ch.id}:`, e);
+          }
+        }
+
+        await ChannelActions.deleteChannel(categoryId);
+
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({ channelId: ctx.channel.id, content: `🗑️ Category and ${allChannels.length} channels deleted successfully.` }),
+            { author: currentUser }
+          )
+        );
       } catch (err) {
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-          channelId: ctx.channel.id,
-          content: `⚠️ Delete failed: ${String(err)}`,
-        }), { author: currentUser }));
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` }),
+            { author: currentUser }
+          )
+        );
       }
     },
   })
@@ -242,12 +304,18 @@ after("type", UserProfile, (args, ret) => {
   const userId = args[0]?.userId ?? args[0]?.user?.id;
   if (!userId) return;
 
-  profileSections.push(React.createElement(GiveawaySection, { userId }));
+  profileSections.push(
+    React.createElement(GiveawaySection, { userId })
+  );
 });
 
 // ---- Plugin lifecycle ----
 export default {
-  onLoad: () => logger.log("Raid + FetchProfile + UserID + Giveaway + Mass Delete plugin loaded!"),
-  onUnload: () => { for (const unregister of commands) unregister(); logger.log("Plugin unloaded."); },
+  onLoad: () =>
+    logger.log("Raid + FetchProfile + UserID + Giveaway plugin loaded!"),
+  onUnload: () => {
+    for (const unregister of commands) unregister();
+    logger.log("Plugin unloaded.");
+  },
   settings: Settings,
 };
