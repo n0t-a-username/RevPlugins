@@ -185,6 +185,9 @@ commands.push(
 //
 // ---- /mass-delete ----
 //
+//
+// ---- /mass-delete ----
+//
 commands.push(
   registerCommand({
     name: "mass-delete",
@@ -201,15 +204,13 @@ commands.push(
 
       try {
         const FluxDispatcher = findByProps("dispatch", "subscribe");
-        const GuildChannelsStore = findByStoreName("GuildChannelsStore");
-
         if (!FluxDispatcher?.dispatch) {
           receiveMessage(
             ctx.channel.id,
             Object.assign(
               createBotMessage({
                 channelId: ctx.channel.id,
-                content: "⚠️ Delete failed: Dispatcher not found."
+                content: "⚠️ Dispatcher not found."
               }),
               { author: currentUser }
             )
@@ -248,24 +249,27 @@ commands.push(
           return;
         }
 
-        const guildChannels = GuildChannelsStore.getChannels(guildId);
+        // ✅ Use ChannelStore.getAll() instead (works everywhere)
+        const allChannels = Object.values(ChannelStore.getAll?.() ?? {});
 
-        const children = Object.values(guildChannels)
-          .flat()
-          .filter((c: any) => c.parent_id === categoryId);
+        const children = allChannels.filter(
+          (c: any) => c?.parent_id === categoryId
+        );
 
+        // Delete children first
         for (const ch of children) {
           FluxDispatcher.dispatch({
             type: "CHANNEL_DELETE",
             channel: ch,
-            guildId: guildId
+            guildId
           });
         }
 
+        // Delete category last
         FluxDispatcher.dispatch({
           type: "CHANNEL_DELETE",
           channel: category,
-          guildId: guildId
+          guildId
         });
 
         receiveMessage(
