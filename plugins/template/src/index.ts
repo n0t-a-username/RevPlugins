@@ -55,7 +55,12 @@ commands.push(
         const rnd = getRandomNumber();
         const content = `${msgTemplate} \`${rnd}\``;
         await sleep(delay);
-        MessageActions.sendMessage(ctx.channel.id, { content }, void 0, { nonce: Date.now().toString() });
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
       }
     },
   })
@@ -67,22 +72,42 @@ commands.push(
     name: "fetchprofile",
     displayName: "Fetch Profile",
     description: "Fetch a user's avatar as Bemmo",
-    options: [{ name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }],
+    options: [
+      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
+    ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
       const input = args.find(a => a.name === "user")?.value?.trim();
       if (!input) return;
+
       const userId = input.replace(/[<@!>]/g, "");
       const user = UserStore.getUser(userId);
+
       if (!user) {
-        MessageActions.sendMessage(ctx.channel.id, { content: "❌ User not found" }, void 0, { nonce: Date.now().toString() });
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: "❌ User not found" },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
         return;
       }
-      const avatarUrl = user.getAvatarURL?.({ format: "png", size: 512 }) || `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
+
+      const avatarUrl =
+        user.getAvatarURL?.({ format: "png", size: 512 }) ||
+        `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;
+
       const currentUser = UserStore.getCurrentUser();
-      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: avatarUrl }), { author: currentUser }));
+
+      receiveMessage(
+        ctx.channel.id,
+        Object.assign(
+          createBotMessage({ channelId: ctx.channel.id, content: avatarUrl }),
+          { author: currentUser }
+        )
+      );
     },
   })
 );
@@ -93,22 +118,39 @@ commands.push(
     name: "userid",
     displayName: "User ID",
     description: "Displays a user's ID as Bemmo",
-    options: [{ name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }],
+    options: [
+      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
+    ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: (args, ctx) => {
       const input = args.find(a => a.name === "user")?.value?.trim();
       if (!input) return;
+
       const userId = input.replace(/[<@!>]/g, "");
       const user = UserStore.getUser(userId);
+
       if (!user) {
-        MessageActions.sendMessage(ctx.channel.id, { content: "❌ User not found" }, void 0, { nonce: Date.now().toString() });
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: "❌ User not found" },
+          void 0,
+          { nonce: Date.now().toString() }
+        );
         return;
       }
+
       const content = `<@${user.id}>`;
       const currentUser = UserStore.getCurrentUser();
-      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content }), { author: currentUser }));
+
+      receiveMessage(
+        ctx.channel.id,
+        Object.assign(
+          createBotMessage({ channelId: ctx.channel.id, content }),
+          { author: currentUser }
+        )
+      );
     },
   })
 );
@@ -119,10 +161,22 @@ commands.push(
     name: "list-giveaway",
     displayName: "List Giveaway IDs",
     description: "Outputs all user IDs collected from the giveaway button",
+    options: [
+      {
+        name: "clear",
+        displayName: "clear",
+        description: "Clear the giveaway list after sending",
+        required: false,
+        type: 5, // BOOLEAN
+      },
+    ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: (args, ctx) => {
+      const shouldClear =
+        args.find(a => a.name === "clear")?.value ?? false;
+
       const list = storage.eventGiveawayPing.trim();
 
       if (!list) {
@@ -135,14 +189,25 @@ commands.push(
         return;
       }
 
-      // Format as comma-separated mentions
       const formatted = list.split("\n").join(", ");
+
       MessageActions.sendMessage(
         ctx.channel.id,
         { content: `Giveaway IDs: ${formatted}` },
         void 0,
         { nonce: Date.now().toString() }
       );
+
+      if (shouldClear === true) {
+        storage.eventGiveawayPing = "";
+
+        MessageActions.sendMessage(
+          ctx.channel.id,
+          { content: "✅ Giveaway list cleared." },
+          void 0,
+          { nonce: (Date.now() + 1).toString() }
+        );
+      }
     },
   })
 );
@@ -154,14 +219,22 @@ if (!UserProfile) UserProfile = findByTypeName("UserProfileContent");
 after("type", UserProfile, (args, ret) => {
   const profileSections = ret?.props?.children;
   if (!profileSections) return;
+
   const userId = args[0]?.userId ?? args[0]?.user?.id;
   if (!userId) return;
-  profileSections.push(React.createElement(GiveawaySection, { userId }));
+
+  profileSections.push(
+    React.createElement(GiveawaySection, { userId })
+  );
 });
 
 // ---- Plugin lifecycle ----
 export default {
-  onLoad: () => logger.log("Raid + FetchProfile + UserID + Giveaway plugin loaded!"),
-  onUnload: () => { for (const unregister of commands) unregister(); logger.log("Plugin unloaded."); },
+  onLoad: () =>
+    logger.log("Raid + FetchProfile + UserID + Giveaway plugin loaded!"),
+  onUnload: () => {
+    for (const unregister of commands) unregister();
+    logger.log("Plugin unloaded.");
+  },
   settings: Settings,
 };
