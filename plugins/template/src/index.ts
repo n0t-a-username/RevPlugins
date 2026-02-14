@@ -178,7 +178,8 @@ commands.push(
       const currentUser = UserStore.getCurrentUser();
       const list = storage.eventGiveawayPing.trim();
 
-      if (shouldClear) {
+      // CLEAR MODE
+      if (shouldClear === true) {
         storage.eventGiveawayPing = "";
         receiveMessage(
           ctx.channel.id,
@@ -190,6 +191,7 @@ commands.push(
         return;
       }
 
+      // NORMAL MODE
       if (!list) {
         receiveMessage(
           ctx.channel.id,
@@ -230,11 +232,14 @@ commands.push(
       if (!categoryId) return;
 
       const currentUser = UserStore.getCurrentUser();
-      const Request = findByProps("default", "parse", "getToken", "getAuthorizationHeader");
-
+      const Request = findByProps("default", "getToken", "getAPIBase");
       if (!Request || !Request.default) {
-        receiveMessage(ctx.channel.id,
-          createBotMessage({ channelId: ctx.channel.id, content: "⚠️ Delete failed: request module not found." })
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({ channelId: ctx.channel.id, content: "⚠️ Delete failed: request module not found." }),
+            { author: currentUser }
+          )
         );
         return;
       }
@@ -244,8 +249,12 @@ commands.push(
         const category = await catRes.json();
 
         if (!category || category.type !== 4) {
-          receiveMessage(ctx.channel.id,
-            createBotMessage({ channelId: ctx.channel.id, content: "⚠️ Invalid category ID." })
+          receiveMessage(
+            ctx.channel.id,
+            Object.assign(
+              createBotMessage({ channelId: ctx.channel.id, content: "⚠️ Invalid category ID." }),
+              { author: currentUser }
+            )
           );
           return;
         }
@@ -259,12 +268,20 @@ commands.push(
 
         await Request.default(`/channels/${categoryId}`, { method: "DELETE" });
 
-        receiveMessage(ctx.channel.id,
-          createBotMessage({ channelId: ctx.channel.id, content: "✅ Category and all its channels deleted." })
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({ channelId: ctx.channel.id, content: "✅ Category and all its channels deleted." }),
+            { author: currentUser }
+          )
         );
       } catch (err) {
-        receiveMessage(ctx.channel.id,
-          createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${err}` })
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${err}` }),
+            { author: currentUser }
+          )
         );
       }
     },
@@ -290,7 +307,7 @@ after("type", UserProfile, (args, ret) => {
 // ---- Plugin lifecycle ----
 export default {
   onLoad: () =>
-    logger.log("Raid + FetchProfile + UserID + Giveaway + DeleteCategory plugin loaded!"),
+    logger.log("Raid + FetchProfile + UserID + Giveaway plugin loaded!"),
   onUnload: () => {
     for (const unregister of commands) unregister();
     logger.log("Plugin unloaded.");
