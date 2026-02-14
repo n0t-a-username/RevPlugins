@@ -10,7 +10,6 @@ import { after } from "@vendetta/patcher";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
 const ChannelStore = findByStoreName("ChannelStore");
-const ChannelActions = findByProps("deleteChannelPrompt", "updateChannel"); // ✅ Updated
 const UserStore = findByStoreName("UserStore");
 
 const { receiveMessage } = findByProps("receiveMessage");
@@ -200,21 +199,24 @@ commands.push(
 
       const currentUser = UserStore.getCurrentUser();
 
-      if (!ChannelActions?.deleteChannelPrompt) {
-        receiveMessage(
-          ctx.channel.id,
-          Object.assign(
-            createBotMessage({
-              channelId: ctx.channel.id,
-              content: "⚠️ Delete failed: deleteChannelPrompt not found."
-            }),
-            { author: currentUser }
-          )
-        );
-        return;
-      }
-
       try {
+        const FluxDispatcher = findByProps("dispatch", "subscribe");
+        const GuildChannelsStore = findByStoreName("GuildChannelsStore");
+
+        if (!FluxDispatcher?.dispatch) {
+          receiveMessage(
+            ctx.channel.id,
+            Object.assign(
+              createBotMessage({
+                channelId: ctx.channel.id,
+                content: "⚠️ Delete failed: Dispatcher not found."
+              }),
+              { author: currentUser }
+            )
+          );
+          return;
+        }
+
         const category = ChannelStore.getChannel(categoryId);
 
         if (!category || category.type !== 4) {
@@ -231,14 +233,40 @@ commands.push(
           return;
         }
 
-        const children = Object.values(ChannelStore.getAll())
+        const guildId = ctx.guild?.id;
+        if (!guildId) {
+          receiveMessage(
+            ctx.channel.id,
+            Object.assign(
+              createBotMessage({
+                channelId: ctx.channel.id,
+                content: "⚠️ Guild not found."
+              }),
+              { author: currentUser }
+            )
+          );
+          return;
+        }
+
+        const guildChannels = GuildChannelsStore.getChannels(guildId);
+
+        const children = Object.values(guildChannels)
+          .flat()
           .filter((c: any) => c.parent_id === categoryId);
 
         for (const ch of children) {
-          await ChannelActions.deleteChannelPrompt(ch, ctx.guild.id);
+          FluxDispatcher.dispatch({
+            type: "CHANNEL_DELETE",
+            channel: ch,
+            guildId: guildId
+          });
         }
 
-        await ChannelActions.deleteChannelPrompt(category, ctx.guild.id);
+        FluxDispatcher.dispatch({
+          type: "CHANNEL_DELETE",
+          channel: category,
+          guildId: guildId
+        });
 
         receiveMessage(
           ctx.channel.id,
@@ -250,6 +278,7 @@ commands.push(
             { author: currentUser }
           )
         );
+
       } catch (err) {
         receiveMessage(
           ctx.channel.id,
