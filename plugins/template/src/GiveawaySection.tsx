@@ -24,32 +24,35 @@ export default function GiveawaySection({ userId }: Props) {
     }
   };
 
-  const screenWidth = Dimensions.get("window").width;
-  const buttonWidth = screenWidth * 0.95; // 95% width
-  const bottomPadding = 10; // space from bottom
+  const buttonSize = 56; // circular button size
+  const topSpacing = 10; // distance from top of banner
+  const rightSpacing = 10; // distance from right edge
 
   return (
-    <View style={{ flex: 1, justifyContent: "flex-end", alignItems: "center" }}>
+    <View style={{ flex: 1 }}>
       <TouchableOpacity
         style={{
-          width: buttonWidth,
+          position: "absolute",
+          top: topSpacing,
+          right: rightSpacing,
+          width: buttonSize,
+          height: buttonSize,
+          borderRadius: buttonSize / 2, // makes it circular
           backgroundColor: "#FF4444",
-          paddingVertical: 10,
-          borderRadius: 12,
-          flexDirection: "row",
           alignItems: "center",
           justifyContent: "center",
-          marginBottom: bottomPadding, // space from bottom
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.3,
+          shadowRadius: 3,
+          elevation: 5, // for Android shadow
         }}
         onPress={handlePress}
       >
         <Image
           source={{ uri: "ic_checkmark_green_16dp" }}
-          style={{ width: 16, height: 16, marginRight: 8 }}
+          style={{ width: 24, height: 24 }}
         />
-        <Text style={{ color: "white", fontWeight: "600" }}>
-          Add To Giveaway
-        </Text>
       </TouchableOpacity>
     </View>
   );
