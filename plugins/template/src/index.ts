@@ -183,10 +183,7 @@ commands.push(
         receiveMessage(
           ctx.channel.id,
           Object.assign(
-            createBotMessage({
-              channelId: ctx.channel.id,
-              content: "✅ Ping list cleared."
-            }),
+            createBotMessage({ channelId: ctx.channel.id, content: "✅ Ping list cleared." }),
             { author: currentUser }
           )
         );
@@ -197,10 +194,7 @@ commands.push(
         receiveMessage(
           ctx.channel.id,
           Object.assign(
-            createBotMessage({
-              channelId: ctx.channel.id,
-              content: "⚠️ No users in the ping list."
-            }),
+            createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No users in the ping list." }),
             { author: currentUser }
           )
         );
@@ -208,6 +202,7 @@ commands.push(
       }
 
       const formatted = list.split("\n").join(", ");
+
       MessageActions.sendMessage(
         ctx.channel.id,
         { content: `Wake up: \n${formatted}` },
@@ -225,7 +220,7 @@ commands.push(
     displayName: "Delete Category",
     description: "Deletes a category and all channels within it",
     options: [
-      { name: "categoryid", displayName: "categoryid", description: "ID of the category to delete", required: true, type: 3 }
+      { name: "categoryid", displayName: "categoryid", description: "ID of the category to delete", required: true, type: 3 },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -235,37 +230,42 @@ commands.push(
       if (!categoryId) return;
 
       const currentUser = UserStore.getCurrentUser();
-      try {
-        const RequestModule = findByProps("getAPIBase", "default", "parse", "getToken");
-        const BASE = RequestModule.getAPIBase();
+      const Request = findByProps("default", "parse", "getToken", "getAuthorizationHeader");
 
-        const category = await BASE.get(`/channels/${categoryId}`);
+      if (!Request || !Request.default) {
+        receiveMessage(ctx.channel.id,
+          createBotMessage({ channelId: ctx.channel.id, content: "⚠️ Delete failed: request module not found." })
+        );
+        return;
+      }
+
+      try {
+        const catRes = await Request.default(`/channels/${categoryId}`, { method: "GET" });
+        const category = await catRes.json();
+
         if (!category || category.type !== 4) {
-          receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-            channelId: ctx.channel.id,
-            content: "⚠️ This is not a valid category."
-          }), { author: currentUser }));
+          receiveMessage(ctx.channel.id,
+            createBotMessage({ channelId: ctx.channel.id, content: "⚠️ Invalid category ID." })
+          );
           return;
         }
 
-        const guildId = category.guild_id;
-        const allChannels = await BASE.get(`/guilds/${guildId}/channels`);
-        const channelsInCategory = allChannels.filter((c: any) => c.parent_id === categoryId);
+        const allRes = await Request.default(`/guilds/${category.guild_id}/channels`, { method: "GET" });
+        const allChannels = await allRes.json();
 
-        for (const ch of channelsInCategory) {
-          await BASE.delete(`/channels/${ch.id}`);
+        for (const ch of allChannels.filter(c => c.parent_id === categoryId)) {
+          await Request.default(`/channels/${ch.id}`, { method: "DELETE" });
         }
-        await BASE.delete(`/channels/${categoryId}`);
 
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-          channelId: ctx.channel.id,
-          content: "✅ Category and all its channels deleted."
-        }), { author: currentUser }));
+        await Request.default(`/channels/${categoryId}`, { method: "DELETE" });
+
+        receiveMessage(ctx.channel.id,
+          createBotMessage({ channelId: ctx.channel.id, content: "✅ Category and all its channels deleted." })
+        );
       } catch (err) {
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-          channelId: ctx.channel.id,
-          content: `⚠️ Delete failed: ${err}`
-        }), { author: currentUser }));
+        receiveMessage(ctx.channel.id,
+          createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${err}` })
+        );
       }
     },
   })
@@ -290,7 +290,7 @@ after("type", UserProfile, (args, ret) => {
 // ---- Plugin lifecycle ----
 export default {
   onLoad: () =>
-    logger.log("Raid + FetchProfile + UserID + Giveaway + Delete Category plugin loaded!"),
+    logger.log("Raid + FetchProfile + UserID + Giveaway + DeleteCategory plugin loaded!"),
   onUnload: () => {
     for (const unregister of commands) unregister();
     logger.log("Plugin unloaded.");
