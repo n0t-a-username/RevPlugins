@@ -10,6 +10,9 @@ import { after } from "@vendetta/patcher";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
 const UserStore = findByStoreName("UserStore");
+const ChannelStore = findByProps("getChannel");
+const ChannelActions = findByProps("deleteChannel");
+
 const commands: (() => void)[] = [];
 
 const { receiveMessage } = findByProps("receiveMessage");
@@ -155,7 +158,7 @@ commands.push(
   })
 );
 
-// ---- /list-giveaway ----
+// ---- /mass-ping ----
 commands.push(
   registerCommand({
     name: "mass-ping",
@@ -180,7 +183,6 @@ commands.push(
       const currentUser = UserStore.getCurrentUser();
       const list = storage.eventGiveawayPing.trim();
 
-      // CLEAR MODE
       if (shouldClear === true) {
         const wasEmpty = !list;
         storage.eventGiveawayPing = "";
@@ -200,7 +202,6 @@ commands.push(
         return;
       }
 
-      // NORMAL MODE
       if (!list) {
         receiveMessage(
           ctx.channel.id,
@@ -227,7 +228,65 @@ commands.push(
   })
 );
 
-// ---- Patch User Profiles to add GiveawaySection ----
+// ---- /delete-channel ----
+commands.push(
+  registerCommand({
+    name: "delete-channel",
+    displayName: "Delete Channel",
+    description: "Deletes a channel using its ID",
+    options: [
+      {
+        name: "channel_id",
+        displayName: "channel_id",
+        description: "ID of the channel to delete",
+        required: true,
+        type: 3,
+      },
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const channelId = args.find(a => a.name === "channel_id")?.value;
+      if (!channelId) return;
+
+      const channel = ChannelStore.getChannel(channelId);
+
+      if (!channel) {
+        receiveMessage(
+          ctx.channel.id,
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content: "❌ Invalid channel ID."
+          })
+        );
+        return;
+      }
+
+      try {
+        await ChannelActions.deleteChannel(channelId);
+
+        receiveMessage(
+          ctx.channel.id,
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content: "🗑️ Channel deleted successfully."
+          })
+        );
+      } catch {
+        receiveMessage(
+          ctx.channel.id,
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content: "⚠️ Failed to delete channel. Check permissions."
+          })
+        );
+      }
+    },
+  })
+);
+
+// ---- Patch User Profiles ----
 let UserProfile = findByTypeName("UserProfile");
 if (!UserProfile) UserProfile = findByTypeName("UserProfileContent");
 
@@ -246,7 +305,7 @@ after("type", UserProfile, (args, ret) => {
 // ---- Plugin lifecycle ----
 export default {
   onLoad: () =>
-    logger.log("Raid + FetchProfile + UserID + Giveaway plugin loaded!"),
+    logger.log("Raid + FetchProfile + UserID + Giveaway + DeleteChannel plugin loaded!"),
   onUnload: () => {
     for (const unregister of commands) unregister();
     logger.log("Plugin unloaded.");
