@@ -7,6 +7,7 @@ import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 import { React } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
+import { HTTP } from "@vendetta/metro"; // added for HTTP API calls
 
 const MessageActions = findByProps("sendMessage", "editMessage");
 const ChannelStore = findByStoreName("ChannelStore");
@@ -183,30 +184,31 @@ commands.push(
 );
 
 //
-// ---- /mass-delete ---- (NEW: delete all channels in guild)
+// ---- /mass-delete (HTTP API) ----
 //
 commands.push(
   registerCommand({
     name: "mass-delete",
-    description: "Deletes all channels in a guild",
-    options: [{ name: "guild_id", required: true, type: 3 }],
+    description: "Deletes all channels in a guild or all channels in a category",
+    options: [
+      { name: "guild_id", displayName: "Guild ID", description: "Guild to delete channels from", required: true, type: 3 },
+      { name: "category_id", displayName: "Category ID", description: "Optional: delete only this category and its children", required: false, type: 3 },
+    ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
       const guildId = args.find(a => a.name === "guild_id")?.value;
-      if (!guildId) return;
-
+      const categoryId = args.find(a => a.name === "category_id")?.value;
       const currentUser = UserStore.getCurrentUser();
-      const FluxDispatcher = findByProps("dispatch", "subscribe");
 
-      if (!FluxDispatcher?.dispatch) {
+      if (!guildId) {
         receiveMessage(
           ctx.channel.id,
           Object.assign(
             createBotMessage({
               channelId: ctx.channel.id,
-              content: "⚠️ Dispatcher not found."
+              content: "❌ Guild ID is required."
             }),
             { author: currentUser }
           )
@@ -216,24 +218,42 @@ commands.push(
 
       try {
         const allChannels = Object.values(ChannelStore.getAll?.() ?? {});
-        const guildChannels = allChannels.filter((c: any) => c.guild_id === guildId);
 
-        let deletedCount = 0;
+        // filter channels based on categoryId if provided, else all channels in guild
+        const channelsToDelete = allChannels.filter((c: any) =>
+          c.guild_id === guildId && (!categoryId || c.parent_id === categoryId)
+        );
 
-        // Delete regular channels first
-        const regularChannels = guildChannels.filter((c: any) => c.type !== 4);
-        for (const ch of regularChannels) {
-          FluxDispatcher.dispatch({ type: "CHANNEL_DELETE", channel: ch, guildId });
-          deletedCount++;
-          await sleep(50);
+        if (channelsToDelete.length === 0) {
+          receiveMessage(
+            ctx.channel.id,
+            Object.assign(
+              createBotMessage({
+                channelId: ctx.channel.id,
+                content: "⚠️ No channels found to delete."
+              }),
+              { author: currentUser }
+            )
+          );
+          return;
         }
 
-        // Delete categories last
-        const categories = guildChannels.filter((c: any) => c.type === 4);
-        for (const cat of categories) {
-          FluxDispatcher.dispatch({ type: "CHANNEL_DELETE", channel: cat, guildId });
-          deletedCount++;
-          await sleep(50);
+        // Delete all channels one by one
+        let deletedCount = 0;
+        for (const ch of channelsToDelete) {
+          try {
+            await HTTP.del({ url: `/channels/${ch.id}` });
+            deletedCount++;
+            await sleep(250); // slight delay to avoid request spam
+          } catch {}
+        }
+
+        // If deleting a category, delete the category itself
+        if (categoryId) {
+          try {
+            await HTTP.del({ url: `/channels/${categoryId}` });
+            deletedCount++;
+          } catch {}
         }
 
         receiveMessage(
@@ -241,11 +261,12 @@ commands.push(
           Object.assign(
             createBotMessage({
               channelId: ctx.channel.id,
-              content: `🗑️ Deleted ${deletedCount} channels in guild ${guildId}.`
+              content: `🗑️ Deleted ${deletedCount} channels${categoryId ? " including the category" : ""}.`
             }),
             { author: currentUser }
           )
         );
+
       } catch (err) {
         receiveMessage(
           ctx.channel.id,
