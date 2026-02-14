@@ -38,8 +38,8 @@ export default function Settings() {
       
       <FormSection title="⚠️ Warning">
         <Text style={{ color: "#aaa", margin: 16 }}>
-          Messages entered here will be used by /raid.
-          You are fully responsible for how this plugin is used.
+          You are fully responsible for how this plugin is used,
+          do not blame anyone but yourself.
         </Text>
       </FormSection>
 
@@ -81,10 +81,10 @@ export default function Settings() {
 
       {/* EVENT GIVEAWAY SECTION */}
 
-      <FormSection title="Event Giveaway Ping">
+      <FormSection title="Mass Ping List">
         <View style={{ marginHorizontal: 16 }}>
           <Text style={{ color: "#aaa", marginBottom: 8 }}>
-            Press the giveaway button on user profiles to collect mentions.
+            Press the "Mass Ping" button on user profiles to collect mentions.
           </Text>
 
           <TextInput
