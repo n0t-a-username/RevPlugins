@@ -28,8 +28,8 @@ export default function GiveawaySection({ userId }: Props) {
   };
 
   return (
-    <View style={{ paddingHorizontal: 16, marginTop: -8 }}> {/* negative margin */}
-      <UserProfileCard title="Event Giveaway">
+    <View style={{ paddingHorizontal: 16, marginTop: -18 }}> {/* negative margin */}
+      <UserProfileCard title="Mass Ping">
         <TouchableOpacity
           style={{
             backgroundColor: "#FF4444",
@@ -40,7 +40,7 @@ export default function GiveawaySection({ userId }: Props) {
           onPress={handlePress}
         >
           <Text style={{ color: "white", fontWeight: "600" }}>
-            Add To Giveaway
+            Add To Mass Ping
           </Text>
         </TouchableOpacity>
 
