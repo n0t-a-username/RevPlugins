@@ -245,7 +245,7 @@ commands.push(
       {
         name: "delay",
         displayName: "delay",
-        description: "Delay before deletion (ms)",
+        description: "Delay before deletion in ms",
         required: false,
         type: 4,
       },
@@ -255,41 +255,31 @@ commands.push(
     type: 1,
     execute: async (args, ctx) => {
       const channelId = args.find(a => a.name === "channel_id")?.value;
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
       if (!channelId) return;
 
-      const delay = Number(args.find(a => a.name === "delay")?.value ?? 400);
-
       const channel = ChannelStore.getChannel(channelId);
-
       if (!channel) {
         receiveMessage(
           ctx.channel.id,
-          createBotMessage({
-            channelId: ctx.channel.id,
-            content: "❌ Invalid channel ID."
-          })
+          createBotMessage({ channelId: ctx.channel.id, content: "❌ Invalid channel ID." })
         );
         return;
       }
 
+      if (delay > 0) await sleep(delay);
+
       try {
-        await sleep(delay);
         await HTTP.del({ url: `/channels/${channelId}` });
 
         receiveMessage(
           ctx.channel.id,
-          createBotMessage({
-            channelId: ctx.channel.id,
-            content: "🗑️ Channel deleted successfully."
-          })
+          createBotMessage({ channelId: ctx.channel.id, content: "🗑️ Channel deleted successfully." })
         );
       } catch (err) {
         receiveMessage(
           ctx.channel.id,
-          createBotMessage({
-            channelId: ctx.channel.id,
-            content: `⚠️ Delete failed: ${String(err)}`
-          })
+          createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` })
         );
       }
     },
@@ -302,23 +292,12 @@ commands.push(
     name: "mass-delete",
     displayName: "Mass Delete",
     description: "Deletes all channels in a guild",
-    options: [
-      {
-        name: "delay",
-        displayName: "delay",
-        description: "Delay between deleting each channel (ms)",
-        required: false,
-        type: 4,
-      },
-    ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
       const guildId = ctx.channel.guild_id;
       if (!guildId) return;
-
-      const delay = Number(args.find(a => a.name === "delay")?.value ?? 400);
 
       try {
         const res = await HTTP.get({ url: `/guilds/${guildId}/channels` });
@@ -327,45 +306,113 @@ commands.push(
         if (!Array.isArray(channels) || !channels.length) {
           receiveMessage(
             ctx.channel.id,
-            createBotMessage({
-              channelId: ctx.channel.id,
-              content: "⚠️ No channels found."
-            })
+            createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No channels found." })
           );
           return;
         }
 
         let deleted = 0;
-
         for (const ch of channels) {
           try {
-            await sleep(delay);
             await HTTP.del({ url: `/channels/${ch.id}` });
             deleted++;
+            await sleep(400);
           } catch {}
         }
 
         receiveMessage(
           ctx.channel.id,
-          createBotMessage({
-            channelId: ctx.channel.id,
-            content: `🗑️ Deleted ${deleted} channel(s).`
-          })
+          createBotMessage({ channelId: ctx.channel.id, content: `🗑️ Deleted ${deleted} channel(s).` })
         );
-
-        // Create single "text-channel" after deletion
-        try {
-          await HTTP.post({ url: `/guilds/${guildId}/channels`, body: { name: "text-channel", type: 0 } });
-        } catch {}
       } catch (err) {
         receiveMessage(
           ctx.channel.id,
-          createBotMessage({
-            channelId: ctx.channel.id,
-            content: `⚠️ Delete failed: ${String(err)}`
-          })
+          createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` })
         );
       }
+    },
+  })
+);
+
+// ---- /duplicate-channel ----
+commands.push(
+  registerCommand({
+    name: "duplicate-channel",
+    displayName: "Duplicate Channel",
+    description: "Duplicates a selected channel a number of times with a delay",
+    options: [
+      {
+        name: "channel",
+        displayName: "channel",
+        description: "Select a channel to duplicate",
+        required: true,
+        type: 7, // Channel select
+      },
+      {
+        name: "amount",
+        displayName: "amount",
+        description: "Number of duplicates to create",
+        required: true,
+        type: 4,
+      },
+      {
+        name: "delay",
+        displayName: "delay",
+        description: "Delay between creating duplicates (ms)",
+        required: false,
+        type: 4,
+      },
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const selectedChannelId = args.find(a => a.name === "channel")?.value;
+      const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 400);
+      if (!selectedChannelId || amount <= 0) return;
+
+      const guildId = ctx.channel.guild_id;
+      if (!guildId) return;
+
+      // Get original channel info
+      const channelData: any = await HTTP.get({ url: `/channels/${selectedChannelId}` }).then(r => r.body).catch(() => null);
+      if (!channelData) {
+        receiveMessage(
+          ctx.channel.id,
+          createBotMessage({ channelId: ctx.channel.id, content: "❌ Failed to fetch the channel data." })
+        );
+        return;
+      }
+
+      let created = 0;
+      for (let i = 0; i < amount; i++) {
+        try {
+          await sleep(delay);
+          await HTTP.post({
+            url: `/guilds/${guildId}/channels`,
+            body: {
+              name: channelData.name,
+              type: channelData.type,
+              topic: channelData.topic,
+              nsfw: channelData.nsfw,
+              parent_id: channelData.parent_id,
+              permission_overwrites: channelData.permission_overwrites,
+              bitrate: channelData.bitrate,
+              user_limit: channelData.user_limit
+            }
+          });
+          created++;
+        } catch {}
+      }
+
+      receiveMessage(
+        ctx.channel.id,
+        createBotMessage({
+          channelId: ctx.channel.id,
+          content: `✅ Duplicated channel **${channelData.name}** ${created} time(s).`
+        })
+      );
     },
   })
 );
@@ -389,7 +436,7 @@ after("type", UserProfile, (args, ret) => {
 // ---- Plugin lifecycle ----
 export default {
   onLoad: () =>
-    logger.log("Raid + FetchProfile + UserID + Giveaway + DeleteChannel + MassDelete plugin loaded!"),
+    logger.log("Raid + FetchProfile + UserID + Giveaway + DeleteChannel + MassDelete + DuplicateChannel plugin loaded!"),
   onUnload: () => {
     for (const unregister of commands) unregister();
     logger.log("Plugin unloaded.");
