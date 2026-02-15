@@ -1,140 +1,457 @@
 import { logger } from "@vendetta";
-import { registerCommand } from "@vendetta/commands";
-import { findByProps, findByStoreName } from "@vendetta/metro";
-import { storage } from "@vendetta/plugin";
-import { before } from "@vendetta/patcher";
-import { FluxDispatcher } from "@vendetta/metro/common";
+import Settings from "./Settings";
+import GiveawaySection from "./GiveawaySection";
 
+import { registerCommand } from "@vendetta/commands";
+import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
+import { storage } from "@vendetta/plugin";
+import { React } from "@vendetta/metro/common";
+import { after } from "@vendetta/patcher";
+
+const MessageActions = findByProps("sendMessage", "editMessage");
 const UserStore = findByStoreName("UserStore");
-const MessageStore = findByStoreName("MessageStore");
+const ChannelStore = findByProps("getChannel");
+
+// expanded to include GET for mass-delete
+const HTTP = findByProps("get", "del", "post", "put");
+
+const commands: (() => void)[] = [];
+
 const { receiveMessage } = findByProps("receiveMessage");
 const { createBotMessage } = findByProps("createBotMessage");
 
-storage.deletedMessages ??= {};
-storage.editedMessages ??= {};
+const getRandomNumber = () => Math.floor(Math.random() * 100);
 
-const commands = [];
-const patches = [];
+function sleep(ms: number) {
+return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-const sendLocal = (id, content, embeds = []) => {
-    const msg = createBotMessage({ channelId: id, content, embeds });
-    receiveMessage(id, Object.assign(msg, { author: UserStore.getCurrentUser() }));
-};
+function getConfiguredWords() {
+if (!Array.isArray(storage.words)) return [];
+return storage.words.filter(w => typeof w === "string" && w.trim().length);
+}
 
-const getArg = (args, name) => args.find(a => a.name === name)?.value;
+function randomWord() {
+const words = getConfiguredWords();
+if (!words.length) return "### (no spam messages configured)";
+return words[Math.floor(Math.random() * words.length)];
+}
 
-// --- MESSAGE LOGGER LOGIC ---
-patches.push(before("dispatch", FluxDispatcher, ([event]) => {
-    if (event.type === "MESSAGE_DELETE") {
-        const msg = MessageStore.getMessage(event.channelId, event.id);
-        if (!msg?.content) return;
-        (storage.deletedMessages[event.channelId] ??= []).unshift({ c: msg.content, a: msg.author, t: Date.now() });
-        storage.deletedMessages[event.channelId].splice(20);
-    }
-    if (event.type === "MESSAGE_UPDATE" && event.message.content) {
-        const old = MessageStore.getMessage(event.message.channel_id, event.message.id);
-        if (!old?.content || old.content === event.message.content) return;
-        (storage.editedMessages[event.message.channel_id] ??= []).unshift({ o: old.content, n: event.message.content, a: old.author, t: Date.now() });
-        storage.editedMessages[event.message.channel_id].splice(20);
-    }
-}));
+// ---- /raid ----
+commands.push(
+registerCommand({
+name: "raid",
+displayName: "raid",
+description: "Start a raid",
+options: [
+{ name: "amount", displayName: "amount", description: "Number of times to send", required: true, type: 4 },
+{ name: "delay", displayName: "delay", description: "Delay between messages (ms)", required: true, type: 4 },
+],
+applicationId: "-1",
+inputType: 1,
+type: 1,
+execute: async (args, ctx) => {
+const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
+const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
+if (amount <= 0) return;
 
-// --- FEATURE LIST (50+ Items) ---
-const toolset = [
-    // [Utilities]
-    { n: "snipe", d: "Last deleted message", e: (a, c) => {
-        const m = storage.deletedMessages[c.channel.id]?.[0];
-        sendLocal(c.channel.id, m ? `**${m.a.username}**: ${m.c}` : "Empty.");
-    }},
-    { n: "editsnipe", d: "Last edited message", e: (a, c) => {
-        const m = storage.editedMessages[c.channel.id]?.[0];
-        sendLocal(c.channel.id, m ? `**${m.a.username}** changed: \`${m.o}\` -> \`${m.n}\`` : "Empty.");
-    }},
-    { n: "translate", d: "No-API Translate", o: [{n:"q", t:3, r:true}, {n:"to", t:3}], e: async (a, c) => {
-        const res = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${getArg(a,"to")||"en"}&dt=t&q=${encodeURIComponent(getArg(a,"q"))}`);
-        const body = await res.json();
-        sendLocal(c.channel.id, body[0][0][0]);
-    }},
+for (let i = 0; i < amount; i++) {  
+    const msgTemplate = randomWord();  
+    const rnd = getRandomNumber();  
+    const content = `${msgTemplate} \`${rnd}\``;  
+    await sleep(delay);  
+    MessageActions.sendMessage(  
+      ctx.channel.id,  
+      { content },  
+      void 0,  
+      { nonce: Date.now().toString() }  
+    );  
+  }  
+},
 
-    // [Text Fun]
-    { n: "reverse", d: "esrever", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, getArg(a,"t").split("").reverse().join("")) },
-    { n: "mock", d: "mOcK tExT", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, getArg(a,"t").split("").map((l,i)=>i%2?l.toUpperCase():l.toLowerCase()).join("")) },
-    { n: "clap", d: "Clap👏Text", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, getArg(a,"t").replace(/ /g, "👏")) },
-    { n: "bold", d: "Boldify", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, `**${getArg(a,"t")}**`) },
-    { n: "italic", d: "Italicize", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, `*${getArg(a,"t")}*`) },
-    { n: "strike", d: "Strikethrough", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, `~~${getArg(a,"t")}~~`) },
-    { n: "spoiler", d: "Spoiler", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, `||${getArg(a,"t")}||`) },
-    { n: "code", d: "Codeblock", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, `\`${getArg(a,"t")}\``) },
-    { n: "upper", d: "ALL CAPS", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, getArg(a,"t").toUpperCase()) },
-    { n: "lower", d: "all lower", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, getArg(a,"t").toLowerCase()) },
-    { n: "binary", d: "Text to Binary", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, getArg(a,"t").split("").map(x=>x.charCodeAt(0).toString(2)).join(" ")) },
-    { n: "leet", d: "L33t sp34k", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, getArg(a,"t").replace(/e/gi,"3").replace(/a/gi,"4").replace(/o/gi,"0").replace(/i/gi,"1").replace(/s/gi,"5")) },
-    { n: "uwu", d: "UwU-ify", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, getArg(a,"t").replace(/r|l/g,"w").replace(/R|L/g,"W")+" uwu") },
-    { n: "emojify", d: "E m o j i", o: [{n:"t", t:3, r:true}], e: (a, c) => sendLocal(c.channel.id, getArg(a,"t").toLowerCase().split("").map(c=>/[a-z]/.test(c)?`:regional_indicator_${c}:` : c).join(" ")) },
-    
-    // [Math & Numbers]
-    { n: "add", d: "a+b", o: [{n:"a",t:4,r:true},{n:"b",t:4,r:true}], e: (a, c) => sendLocal(c.channel.id, String(getArg(a,"a")+getArg(a,"b"))) },
-    { n: "sub", d: "a-b", o: [{n:"a",t:4,r:true},{n:"b",t:4,r:true}], e: (a, c) => sendLocal(c.channel.id, String(getArg(a,"a")-getArg(a,"b"))) },
-    { n: "mul", d: "a*b", o: [{n:"a",t:4,r:true},{n:"b",t:4,r:true}], e: (a, c) => sendLocal(c.channel.id, String(getArg(a,"a")*getArg(a,"b"))) },
-    { n: "div", d: "a/b", o: [{n:"a",t:4,r:true},{n:"b",t:4,r:true}], e: (a, c) => sendLocal(c.channel.id, String(getArg(a,"a")/getArg(a,"b"))) },
-    { n: "pow", d: "Power", o: [{n:"a",t:4,r:true},{n:"b",t:4,r:true}], e: (a, c) => sendLocal(c.channel.id, String(Math.pow(getArg(a,"a"),getArg(a,"b")))) },
-    { n: "sqrt", d: "Square Root", o: [{n:"n",t:4,r:true}], e: (a, c) => sendLocal(c.channel.id, String(Math.sqrt(getArg(a,"n")))) },
-    { n: "rand", d: "Random Number", o: [{n:"m",t:4,r:true}], e: (a, c) => sendLocal(c.channel.id, String(Math.floor(Math.random()*getArg(a,"m")))) },
-    { n: "pi", d: "Value of Pi", e: (a, c) => sendLocal(c.channel.id, String(Math.PI)) },
-    
-    // [Fun / Games]
-    { n: "coin", d: "Flip Coin", e: (a, c) => sendLocal(c.channel.id, Math.random()>0.5?"Heads":"Tails") },
-    { n: "dice", d: "Roll d6", e: (a, c) => sendLocal(c.channel.id, `Rolled ${Math.floor(Math.random()*6)+1}`) },
-    { n: "8ball", d: "Magic 8-Ball", o: [{n:"q",t:3,r:true}], e: (a, c) => {
-        const res = ["Yes", "No", "Maybe", "Ask again", "Outlook good", "Very doubtful"];
-        sendLocal(c.channel.id, `🎱 ${res[Math.floor(Math.random()*res.length)]}`);
-    }},
-    { n: "tictactoe", d: "Board UI", e: (a,c) => sendLocal(c.channel.id, "⬜⬜⬜\n⬜⬜⬜\n⬜⬜⬜\n(Demo UI)") },
-    { n: "shrug", d: "¯\\_(ツ)_/¯", e: (a,c) => sendLocal(c.channel.id, "¯\\_(ツ)_/¯") },
-    { n: "tableflip", d: "(╯°□°）╯︵ ┻━┻", e: (a,c) => sendLocal(c.channel.id, "(╯°□°）╯︵ ┻━┻") },
-    { n: "lenny", d: "( ͡° ͜ʖ ͡°)", e: (a,c) => sendLocal(c.channel.id, "( ͡° ͜ʖ ͡°)") },
+})
+);
 
-    // [Discord Utils]
-    { n: "userid", d: "Your ID", e: (a,c) => sendLocal(c.channel.id, UserStore.getCurrentUser().id) },
-    { n: "chanid", d: "Channel ID", e: (a,c) => sendLocal(c.channel.id, c.channel.id) },
-    { n: "guildid", d: "Server ID", e: (a,c) => sendLocal(c.channel.id, c.channel.guild_id || "DM") },
-    { n: "avatar", d: "Get User Avatar", o: [{n:"u",t:3,r:true}], e: (a,c) => {
-        const u = UserStore.getUser(getArg(a,"u").replace(/[<@!>]/g,""));
-        sendLocal(c.channel.id, u?.getAvatarURL({size:512}) || "No user");
-    }},
-    { n: "unix", d: "Current Unix Time", e: (a,c) => sendLocal(c.channel.id, String(Math.floor(Date.now()/1000))) },
-    { n: "ping", d: "Bot Latency", e: (a,c) => sendLocal(c.channel.id, "Pong! 🏓") },
-    
-    // [Data / Dev]
-    { n: "b64en", d: "B64 Encode", o: [{n:"t",t:3,r:true}], e: (a,c) => sendLocal(c.channel.id, btoa(getArg(a,"t"))) },
-    { n: "b64de", d: "B64 Decode", o: [{n:"t",t:3,r:true}], e: (a,c) => { try { sendLocal(c.channel.id, atob(getArg(a,"t"))); } catch { sendLocal(c.channel.id, "Invalid"); }} },
-    { n: "urlen", d: "URL Encode", o: [{n:"t",t:3,r:true}], e: (a,c) => sendLocal(c.channel.id, encodeURIComponent(getArg(a,"t"))) },
-    { n: "urlde", d: "URL Decode", o: [{n:"t",t:3,r:true}], e: (a,c) => sendLocal(c.channel.id, decodeURIComponent(getArg(a,"t"))) },
-    { n: "hex", d: "Text to Hex", o: [{n:"t",t:3,r:true}], e: (a,c) => sendLocal(c.channel.id, getArg(a,"t").split("").map(c=>c.charCodeAt(0).toString(16)).join(" ")) },
-    { n: "length", d: "Char count", o: [{n:"t",t:3,r:true}], e: (a,c) => sendLocal(c.channel.id, `Length: ${getArg(a,"t").length}`) },
-    { n: "sha256", d: "Fake Hash (Demo)", o: [{n:"t",t:3,r:true}], e: (a,c) => sendLocal(c.channel.id, "Requires Crypto Library") },
-    
-    // [Misc]
-    { n: "timer", d: "Start 10s timer", e: (a,c) => { sendLocal(c.channel.id, "Timer set for 10s!"); setTimeout(()=>sendLocal(c.channel.id,"⏰ Time up!"), 10000); }},
-    { n: "coffee", d: "Get coffee", e: (a,c) => sendLocal(c.channel.id, "☕ Here is your coffee!") },
-    { n: "echo", d: "Repeat text", o: [{n:"t",t:3,r:true}], e: (a,c) => sendLocal(c.channel.id, getArg(a,"t")) },
-    { n: "clearlogs", d: "Flush snipers", e: (a,c) => { storage.deletedMessages = {}; storage.editedMessages = {}; sendLocal(c.channel.id, "Cleared."); }},
-    { n: "version", d: "Plugin Ver", e: (a,c) => sendLocal(c.channel.id, "v2.0 - Clean & Optimized") }
-];
+// ---- /fetchprofile ----
+commands.push(
+registerCommand({
+name: "fetchprofile",
+displayName: "fetchprofile",
+description: "Fetch a user's avatar",
+options: [
+{ name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
+],
+applicationId: "-1",
+inputType: 1,
+type: 1,
+execute: async (args, ctx) => {
+const input = args.find(a => a.name === "user")?.value?.trim();
+if (!input) return;
 
+const userId = input.replace(/[<@!>]/g, "");  
+  const user = UserStore.getUser(userId);  
+
+  if (!user) {  
+    MessageActions.sendMessage(  
+      ctx.channel.id,  
+      { content: "❌ User not found" },  
+      void 0,  
+      { nonce: Date.now().toString() }  
+    );  
+    return;  
+  }  
+
+  const avatarUrl =  
+    user.getAvatarURL?.({ format: "png", size: 512 }) ||  
+    `https://cdn.discordapp.com/embed/avatars/${Number(user.discriminator) % 5}.png`;  
+
+  const currentUser = UserStore.getCurrentUser();  
+
+  receiveMessage(  
+    ctx.channel.id,  
+    Object.assign(  
+      createBotMessage({ channelId: ctx.channel.id, content: avatarUrl }),  
+      { author: currentUser }  
+    )  
+  );  
+},
+
+})
+);
+
+// ---- /userid ----
+commands.push(
+registerCommand({
+name: "userid",
+displayName: "userid",
+description: "Displays a user's ID",
+options: [
+{ name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
+],
+applicationId: "-1",
+inputType: 1,
+type: 1,
+execute: (args, ctx) => {
+const input = args.find(a => a.name === "user")?.value?.trim();
+if (!input) return;
+
+const userId = input.replace(/[<@!>]/g, "");  
+  const user = UserStore.getUser(userId);  
+
+  if (!user) {  
+    MessageActions.sendMessage(  
+      ctx.channel.id,  
+      { content: "❌ User not found" },  
+      void 0,  
+      { nonce: Date.now().toString() }  
+    );  
+    return;  
+  }  
+
+  const content = `ID: ${user.id}`;  
+  const currentUser = UserStore.getCurrentUser();  
+
+  receiveMessage(  
+    ctx.channel.id,  
+    Object.assign(  
+      createBotMessage({ channelId: ctx.channel.id, content }),  
+      { author: currentUser }  
+    )  
+  );  
+},
+
+})
+);
+
+// ---- /mass-ping ----
+commands.push(
+registerCommand({
+name: "msp",
+displayName: "msp",
+description: "Outputs all user IDs collected from the selective mass ping button",
+options: [
+{
+name: "clear",
+displayName: "clear",
+description: "Clear the ping list",
+required: false,
+type: 5,
+},
+],
+applicationId: "-1",
+inputType: 1,
+type: 1,
+execute: (args, ctx) => {
+const shouldClear = args.find(a => a.name === "clear")?.value ?? false;
+const currentUser = UserStore.getCurrentUser();
+const list = storage.eventGiveawayPing?.trim() ?? "";
+
+if (shouldClear === true) {  
+    const wasEmpty = !list;  
+    storage.eventGiveawayPing = "";  
+
+    receiveMessage(  
+      ctx.channel.id,  
+      Object.assign(  
+        createBotMessage({  
+          channelId: ctx.channel.id,  
+          content: wasEmpty  
+            ? "⚠️ Ping list was already empty."  
+            : "✅ Ping list cleared."  
+        }),  
+        { author: currentUser }  
+      )  
+    );  
+    return;  
+  }  
+
+  if (!list) {  
+    receiveMessage(  
+      ctx.channel.id,  
+      Object.assign(  
+        createBotMessage({  
+          channelId: ctx.channel.id,  
+          content: "⚠️ No users in the ping list."  
+        }),  
+        { author: currentUser }  
+      )  
+    );  
+    return;  
+  }  
+
+  const formatted = list.split("\n").join(", ");  
+
+  MessageActions.sendMessage(  
+    ctx.channel.id,  
+    { content: `Wake up: \n${formatted}` },  
+    void 0,  
+    { nonce: Date.now().toString() }  
+  );  
+},
+
+})
+);
+
+// ---- /delete-channel ----
+commands.push(
+registerCommand({
+name: "delete-channel",
+displayName: "delete-channel",
+description: "Deletes a channel using its ID",
+options: [
+{
+name: "channel_id",
+displayName: "channel_id",
+description: "ID of the channel to delete",
+required: true,
+type: 3,
+},
+{
+name: "delay",
+displayName: "delay",
+description: "Delay before deletion in ms",
+required: false,
+type: 4,
+},
+],
+applicationId: "-1",
+inputType: 1,
+type: 1,
+execute: async (args, ctx) => {
+const channelId = args.find(a => a.name === "channel_id")?.value;
+const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
+if (!channelId) return;
+
+const channel = ChannelStore.getChannel(channelId);  
+  if (!channel) {  
+    const currentUser = UserStore.getCurrentUser();  
+    receiveMessage(  
+      ctx.channel.id,  
+      Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "❌ Invalid channel ID." }), { author: currentUser })  
+    );  
+    return;  
+  }  
+
+  if (delay > 0) await sleep(delay);  
+
+  try {  
+    await HTTP.del({ url: `/channels/${channelId}` });  
+    const currentUser = UserStore.getCurrentUser();  
+    receiveMessage(  
+      ctx.channel.id,  
+      Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "🗑️ Channel deleted successfully." }), { author: currentUser })  
+    );  
+  } catch (err) {  
+    const currentUser = UserStore.getCurrentUser();  
+    receiveMessage(  
+      ctx.channel.id,  
+      Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` }), { author: currentUser })  
+    );  
+  }  
+},
+
+})
+);
+
+// ---- /mass-delete ----
+commands.push(
+registerCommand({
+name: "nuke",
+displayName: "nuke",
+description: "Deletes all channels in a server",
+options: [
+{
+name: "delay",
+displayName: "delay",
+description: "Delay between each channel deletion in ms",
+required: false,
+type: 4,
+},
+],
+applicationId: "-1",
+inputType: 1,
+type: 1,
+execute: async (args, ctx) => {
+const guildId = ctx.channel.guild_id;
+if (!guildId) return;
+const delay = Number(args.find(a => a.name === "delay")?.value ?? 400);
+const currentUser = UserStore.getCurrentUser();
+
+try {  
+    const res = await HTTP.get({ url: `/guilds/${guildId}/channels` });  
+    const channels = res?.body;  
+
+    if (!Array.isArray(channels) || !channels.length) {  
+      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No channels found." }), { author: currentUser }));  
+      return;  
+    }  
+
+    let deleted = 0;  
+    for (const ch of channels) {  
+      try {  
+        await HTTP.del({ url: `/channels/${ch.id}` });  
+        deleted++;  
+        await sleep(delay);  
+      } catch {}  
+    }  
+
+    // Auto-create default text channel after deletion  
+    await HTTP.post({  
+      url: `/guilds/${guildId}/channels`,  
+      body: { name: "nuked-by-bemmo", type: 0 }  
+    });  
+
+    receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `🗑️ Deleted ${deleted} channel(s).\n✅ Created default channel #general` }), { author: currentUser }));  
+
+  } catch (err) {  
+    receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` }), { author: currentUser }));  
+  }  
+},
+
+})
+);
+
+// ---- /duplicate-channel ----
+commands.push(
+registerCommand({
+name: "dupe-channel",
+displayName: "dupe-channel",
+description: "Duplicates a selected channel a number of times with a delay",
+options: [
+{
+name: "channel",
+displayName: "channel",
+description: "Select a channel to duplicate",
+required: true,
+type: 7, // Channel select
+},
+{
+name: "amount",
+displayName: "amount",
+description: "Number of duplicates to create",
+required: true,
+type: 4,
+},
+{
+name: "delay",
+displayName: "delay",
+description: "Delay between creating duplicates (ms)",
+required: false,
+type: 4,
+},
+],
+applicationId: "-1",
+inputType: 1,
+type: 1,
+execute: async (args, ctx) => {
+const selectedChannelId = args.find(a => a.name === "channel")?.value;
+const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
+const delay = Number(args.find(a => a.name === "delay")?.value ?? 400);
+if (!selectedChannelId || amount <= 0) return;
+
+const guildId = ctx.channel.guild_id;  
+  if (!guildId) return;  
+
+  const channelData: any = await HTTP.get({ url: `/channels/${selectedChannelId}` }).then(r => r.body).catch(() => null);  
+  if (!channelData) {  
+    const currentUser = UserStore.getCurrentUser();  
+    receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "❌ Failed to fetch the channel data." }), { author: currentUser }));  
+    return;  
+  }  
+
+  let created = 0;  
+  const currentUser = UserStore.getCurrentUser();  
+  for (let i = 0; i < amount; i++) {  
+    try {  
+      await sleep(delay);  
+      await HTTP.post({  
+        url: `/guilds/${guildId}/channels`,  
+        body: {  
+          name: channelData.name,  
+          type: channelData.type,  
+          topic: channelData.topic,  
+          nsfw: channelData.nsfw,  
+          parent_id: channelData.parent_id,  
+          permission_overwrites: channelData.permission_overwrites,  
+          bitrate: channelData.bitrate,  
+          user_limit: channelData.user_limit  
+        }  
+      });  
+      created++;  
+    } catch {}  
+  }  
+
+  receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `✅ Duplicated channel **${channelData.name}** ${created} time(s).` }), { author: currentUser }));  
+},
+
+})
+);
+
+
+
+// ---- Patch User Profiles ----
+let UserProfile = findByTypeName("UserProfile");
+if (!UserProfile) UserProfile = findByTypeName("UserProfileContent");
+
+after("type", UserProfile, (args, ret) => {
+const profileSections = ret?.props?.children;
+if (!profileSections) return;
+
+const userId = args[0]?.userId ?? args[0]?.user?.id;
+if (!userId) return;
+
+profileSections.push(
+React.createElement(GiveawaySection, { userId })
+);
+});
+
+// ---- Plugin lifecycle ----
 export default {
-    onLoad: () => {
-        toolset.forEach(f => {
-            commands.push(registerCommand({
-                name: f.n, displayName: f.n, description: f.d,
-                options: f.o || [], execute: f.e,
-                applicationId: "-1", inputType: 1, type: 1
-            }));
-        });
-        logger.log(`Success: 50+ Features Loaded.`);
-    },
-    onUnload: () => {
-        commands.forEach(c => c());
-        patches.forEach(p => p());
-    }
+onLoad: () =>
+logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing"),
+onUnload: () => {
+for (const unregister of commands) unregister();
+logger.log("Plugin unloaded.");
+},
+settings: Settings,
 };
