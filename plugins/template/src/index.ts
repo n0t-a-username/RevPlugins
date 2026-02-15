@@ -42,7 +42,7 @@ commands.push(
 registerCommand({
 name: "raid",
 displayName: "raid",
-description: "Start a Raid!",
+description: "Start a raid",
 options: [
 { name: "amount", displayName: "amount", description: "Number of times to send", required: true, type: 4 },
 { name: "delay", displayName: "delay", description: "Delay between messages (ms)", required: true, type: 4 },
@@ -76,7 +76,7 @@ for (let i = 0; i < amount; i++) {
 commands.push(
 registerCommand({
 name: "fetchprofile",
-displayName: "Fetch Profile",
+displayName: "fetchprofile",
 description: "Fetch a user's avatar",
 options: [
 { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
@@ -123,7 +123,7 @@ const userId = input.replace(/[<@!>]/g, "");
 commands.push(
 registerCommand({
 name: "userid",
-displayName: "User ID",
+displayName: "userid",
 description: "Displays a user's ID",
 options: [
 { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
@@ -148,7 +148,7 @@ const userId = input.replace(/[<@!>]/g, "");
     return;  
   }  
 
-  const content = `<@${user.id}>`;  
+  const content = `ID: ${user.id}`;  
   const currentUser = UserStore.getCurrentUser();  
 
   receiveMessage(  
@@ -166,9 +166,9 @@ const userId = input.replace(/[<@!>]/g, "");
 // ---- /mass-ping ----
 commands.push(
 registerCommand({
-name: "mass-ping",
-displayName: "Mass Ping",
-description: "Outputs all user IDs collected from the mass ping button",
+name: "msp",
+displayName: "msp",
+description: "Outputs all user IDs collected from the selective mass ping button",
 options: [
 {
 name: "clear",
@@ -296,14 +296,14 @@ const channel = ChannelStore.getChannel(channelId);
 // ---- /mass-delete ----
 commands.push(
 registerCommand({
-name: "mass-delete",
-displayName: "Mass Delete",
-description: "Deletes all channels in a guild",
+name: "nuke",
+displayName: "nuke",
+description: "Deletes all channels in a server",
 options: [
 {
 name: "delay",
 displayName: "delay",
-description: "Delay between each deletion in ms",
+description: "Delay between each channel deletion in ms",
 required: false,
 type: 4,
 },
@@ -338,7 +338,7 @@ try {
     // Auto-create default text channel after deletion  
     await HTTP.post({  
       url: `/guilds/${guildId}/channels`,  
-      body: { name: "general", type: 0 }  
+      body: { name: "nuked-by-bemmo", type: 0 }  
     });  
 
     receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `🗑️ Deleted ${deleted} channel(s).\n✅ Created default channel #general` }), { author: currentUser }));  
@@ -354,8 +354,8 @@ try {
 // ---- /duplicate-channel ----
 commands.push(
 registerCommand({
-name: "duplicate-channel",
-displayName: "Duplicate Channel",
+name: "dupe-channel",
+displayName: "dupe-channel",
 description: "Duplicates a selected channel a number of times with a delay",
 options: [
 {
@@ -427,76 +427,7 @@ const guildId = ctx.channel.guild_id;
 })
 );
 
-// ---- /event-ping (cache-based working) ----
-commands.push(
-registerCommand({
-name: "event-ping",
-displayName: "Event Ping",
-description: "Ping up to 30 random cached members multiple times",
-options: [
-{
-name: "amount",
-displayName: "amount",
-description: "Number of messages to send",
-required: true,
-type: 4,
-},
-{
-name: "delay",
-displayName: "delay",
-description: "Delay between messages in ms",
-required: false,
-type: 4,
-},
-],
-applicationId: "-1",
-inputType: 1,
-type: 1,
-execute: async (args, ctx) => {
-const amount = Number(args.find(a => a.name === "amount")?.value ?? 1);
-const delay = Number(args.find(a => a.name === "delay")?.value ?? 1000);
-const guildId = ctx.channel.guild_id;
-const currentUser = UserStore.getCurrentUser();
 
-if (!guildId) return;  
-
-  try {  
-    const GuildMemberStore = findByStoreName("GuildMemberStore");  
-    const allMembers = GuildMemberStore?.getMembers(guildId) || [];  
-
-    if (!allMembers.length) {  
-      receiveMessage(ctx.channel.id, Object.assign(  
-        createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No cached members found in this server." }),  
-        { author: currentUser }  
-      ));  
-      return;  
-    }  
-
-    for (let i = 0; i < amount; i++) {  
-      const randomMembers: string[] = [];  
-      const maxToPing = Math.min(30, allMembers.length);  
-      while (randomMembers.length < maxToPing) {  
-        const member = allMembers[Math.floor(Math.random() * allMembers.length)];  
-        if (member?.user?.id && !randomMembers.includes(`<@${member.user.id}>`)) {  
-          randomMembers.push(`<@${member.user.id}>`);  
-        }  
-      }  
-
-      const content = randomMembers.join(" ");  
-      await sleep(delay);  
-      MessageActions.sendMessage(ctx.channel.id, { content });  
-    }  
-
-  } catch (err) {  
-    receiveMessage(ctx.channel.id, Object.assign(  
-      createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Failed to fetch members: ${String(err)}` }),  
-      { author: currentUser }  
-    ));  
-  }  
-},
-
-})
-);
 
 // ---- Patch User Profiles ----
 let UserProfile = findByTypeName("UserProfile");
