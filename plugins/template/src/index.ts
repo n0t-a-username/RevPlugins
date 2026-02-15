@@ -3,13 +3,12 @@ import Settings from "./Settings";
 import GiveawaySection from "./GiveawaySection";
 
 import { registerCommand } from "@vendetta/commands";
-import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
+import { findByProps, findByStoreName, findByTypeName, HTTP } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
-import { React, HTTP } from "@vendetta/metro/common";
+import { React } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
-const ChannelStore = findByStoreName("ChannelStore");
 const UserStore = findByStoreName("UserStore");
 
 const { receiveMessage } = findByProps("receiveMessage");
@@ -188,7 +187,7 @@ commands.push(
 commands.push(
   registerCommand({
     name: "mass-delete",
-    description: "Deletes all channels in a guild or all channels in a category",
+    description: "Deletes all channels in a guild or in a category",
     options: [
       { name: "guild_id", required: true, type: 3 },
       { name: "category_id", required: false, type: 3 },
@@ -201,40 +200,21 @@ commands.push(
       const categoryId = args.find(a => a.name === "category_id")?.value;
       const currentUser = UserStore.getCurrentUser();
 
-      if (!guildId) {
-        receiveMessage(
-          ctx.channel.id,
-          Object.assign(
-            createBotMessage({
-              channelId: ctx.channel.id,
-              content: "❌ Guild ID required."
-            }),
-            { author: currentUser }
-          )
-        );
-        return;
-      }
+      if (!guildId) return;
 
       try {
-        const response = await HTTP.get({
-          url: `/guilds/${guildId}/channels`,
-        });
+        const res = await HTTP.get({ url: `/guilds/${guildId}/channels` });
+        const channels = res.body;
 
-        const guildChannels = response.body;
-
-        if (!Array.isArray(guildChannels)) {
-          throw new Error("Failed to fetch guild channels.");
+        if (!Array.isArray(channels)) {
+          throw new Error("Channel fetch failed.");
         }
 
-        let channelsToDelete = guildChannels;
+        let targets = categoryId
+          ? channels.filter((c: any) => c.parent_id === categoryId)
+          : channels;
 
-        if (categoryId) {
-          channelsToDelete = guildChannels.filter(
-            (ch: any) => ch.parent_id === categoryId
-          );
-        }
-
-        if (!channelsToDelete.length) {
+        if (!targets.length) {
           receiveMessage(
             ctx.channel.id,
             Object.assign(
@@ -248,12 +228,12 @@ commands.push(
           return;
         }
 
-        let deletedCount = 0;
+        let deleted = 0;
 
-        for (const ch of channelsToDelete) {
+        for (const ch of targets) {
           try {
             await HTTP.del({ url: `/channels/${ch.id}` });
-            deletedCount++;
+            deleted++;
             await sleep(400);
           } catch {}
         }
@@ -261,7 +241,7 @@ commands.push(
         if (categoryId) {
           try {
             await HTTP.del({ url: `/channels/${categoryId}` });
-            deletedCount++;
+            deleted++;
           } catch {}
         }
 
@@ -270,7 +250,7 @@ commands.push(
           Object.assign(
             createBotMessage({
               channelId: ctx.channel.id,
-              content: `🗑️ Deleted ${deletedCount} channel(s).`
+              content: `🗑️ Deleted ${deleted} channel(s).`
             }),
             { author: currentUser }
           )
