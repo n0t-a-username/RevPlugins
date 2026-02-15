@@ -291,7 +291,7 @@ commands.push(
   registerCommand({
     name: "mass-delete",
     displayName: "Mass Delete",
-    description: "Deletes all channels in a guild",
+    description: "Deletes all channels in a guild and creates a 'text-channel'",
     options: [
       {
         name: "guild_id",
@@ -312,7 +312,7 @@ commands.push(
         const res = await HTTP.get({ url: `/guilds/${guildId}/channels` });
         const channels = res?.body;
 
-        if (!Array.isArray(channels) || !channels.length) {
+        if (!Array.isArray(channels) || channels.length === 0) {
           receiveMessage(
             ctx.channel.id,
             createBotMessage({
@@ -333,13 +333,29 @@ commands.push(
           } catch {}
         }
 
-        receiveMessage(
-          ctx.channel.id,
-          createBotMessage({
-            channelId: ctx.channel.id,
-            content: `🗑️ Deleted ${deleted} channel(s).`
-          })
-        );
+        // Recreate a text channel
+        try {
+          await HTTP.post({
+            url: `/guilds/${guildId}/channels`,
+            body: { name: "text-channel", type: 0 } // type 0 = text
+          });
+
+          receiveMessage(
+            ctx.channel.id,
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: `🗑️ Deleted ${deleted} channel(s) and created 'text-channel'.`
+            })
+          );
+        } catch (err) {
+          receiveMessage(
+            ctx.channel.id,
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: `🗑️ Deleted ${deleted} channel(s) but failed to create 'text-channel': ${String(err)}`
+            })
+          );
+        }
 
       } catch (err) {
         receiveMessage(
