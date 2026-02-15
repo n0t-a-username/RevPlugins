@@ -7,7 +7,7 @@ import { Forms as UiForms } from "@vendetta/ui/components";
 import { semanticColors } from "@vendetta/ui";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 
-const { ScrollView, View, Text, TextInput, Animated, Easing } = ReactNative;
+const { ScrollView, View, Text, TextInput, Animated, Easing, Image } = ReactNative;
 const Forms = UiForms || {};
 const { FormRow } = Forms as any;
 
@@ -31,6 +31,11 @@ const inputStyle = {
   borderWidth: 2,
   borderColor: "#333",
 };
+
+// Icons
+const messageHeaderIcon = getAssetIDByName("ic_information_24px");
+const raidHeaderIcon = getAssetIDByName("SlashBoxIcon");
+const massPingHeaderIcon = getAssetIDByName("SlashBoxIcon");
 
 export default function Settings() {
   useProxy(storage);
@@ -63,21 +68,21 @@ export default function Settings() {
         })
       : 0;
 
-  // ---- First Page Content ----
+  // ---- Main Page ----
   const renderMainPage = () => (
     <>
       <Header />
 
       {/* MESSAGE SECTION ABOVE MASS PING */}
-      <BetterTableRowGroup title="Message Section" padding>
-        <Text style={{ color: "#aaa" }}>
+      <BetterTableRowGroup title="Message Section" icon={messageHeaderIcon} padding>
+        <Text style={{ color: "#aaa", marginHorizontal: 16 }}>
           Messages here will be used for /raid. Responsible use only!
         </Text>
       </BetterTableRowGroup>
 
       {/* MASS PING LIST SECTION */}
-      <BetterTableRowGroup title="Mass Ping List" padding>
-        <Text style={{ color: "#aaa", marginBottom: 8 }}>
+      <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
+        <Text style={{ color: "#aaa", marginBottom: 8, marginHorizontal: 16 }}>
           Press the giveaway button on user profiles to collect mentions.
         </Text>
 
@@ -85,7 +90,7 @@ export default function Settings() {
           multiline
           value={storage.eventGiveawayPing}
           onChangeText={(v) => (storage.eventGiveawayPing = v)}
-          style={{ ...inputStyle, minHeight: 120 }}
+          style={{ ...inputStyle, minHeight: 120, marginHorizontal: 16 }}
         />
       </BetterTableRowGroup>
 
@@ -94,7 +99,7 @@ export default function Settings() {
         <FormRow
           label="Edit Raid Messages"
           trailing={
-            <ReactNative.Image
+            <Image
               source={getAssetIDByName("ic_arrow_forward_24px")}
               style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
             />
@@ -102,15 +107,18 @@ export default function Settings() {
           onPress={() => setSelectedPage("raidMessages")}
         />
       )}
+
+      {/* Extra bottom padding */}
+      <View style={{ height: 40 }} />
     </>
   );
 
-  // ---- Second Page Content ----
+  // ---- Raid Messages Page ----
   const renderRaidMessagesPage = () => (
     <>
       <Header />
 
-      <BetterTableRowGroup title="Raid Messages" padding>
+      <BetterTableRowGroup title="Raid Messages" icon={raidHeaderIcon} padding>
         {[...Array(10).keys()].map((i) => (
           <View key={i} style={{ marginBottom: 12 }}>
             <Text style={{ color: "#fff", marginBottom: 6 }}>Message {i + 1}</Text>
@@ -121,23 +129,26 @@ export default function Settings() {
             />
           </View>
         ))}
-
-        {/* Add extra padding at bottom to allow scrolling to back button */}
-        <View style={{ height: 60 }} />
-
-        {FormRow && (
-          <FormRow
-            label="Back"
-            trailing={
-              <ReactNative.Image
-                source={getAssetIDByName("ic_arrow_back_24px")}
-                style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
-              />
-            }
-            onPress={() => setSelectedPage("main")}
-          />
-        )}
       </BetterTableRowGroup>
+
+      {/* Padding BELOW the raid messages card */}
+      <View style={{ height: 40 }} />
+
+      {FormRow && (
+        <FormRow
+          label="Back"
+          trailing={
+            <Image
+              source={getAssetIDByName("ic_arrow_back_24px")}
+              style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
+            />
+          }
+          onPress={() => setSelectedPage("main")}
+        />
+      )}
+
+      {/* Extra bottom scroll padding */}
+      <View style={{ height: 40 }} />
     </>
   );
 
