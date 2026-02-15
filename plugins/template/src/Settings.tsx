@@ -76,24 +76,14 @@ export default function Settings() {
       <Header />
 
       {/* Message Section */}
-      <BetterTableRowGroup
-        title="Message Section"
-        icon={messageHeaderIcon}
-        padding
-        iconSize={20}
-      >
+      <BetterTableRowGroup title="Message Section" icon={messageHeaderIcon} padding>
         <Text style={{ color: "#aaa" }}>
           Messages here will be used for /raid. Responsible use only!
         </Text>
       </BetterTableRowGroup>
 
       {/* Mass Ping Section */}
-      <BetterTableRowGroup
-        title="Mass Ping List"
-        icon={massPingHeaderIcon}
-        padding
-        iconSize={20}
-      >
+      <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
         <Text style={{ color: "#aaa", marginBottom: 8 }}>
           Press the giveaway button on user profiles to collect mentions.
         </Text>
@@ -113,7 +103,7 @@ export default function Settings() {
             arrowForwardIcon && (
               <Image
                 source={arrowForwardIcon}
-                style={{ width: 22, height: 22, tintColor: semanticColors.TEXT_MUTED }}
+                style={{ width: 24, height: 24, tintColor: semanticColors.TEXT_MUTED }}
               />
             )
           }
@@ -128,12 +118,7 @@ export default function Settings() {
     <>
       <Header />
 
-      <BetterTableRowGroup
-        title="Raid Messages"
-        icon={raidHeaderIcon}
-        padding
-        iconSize={20}
-      >
+      <BetterTableRowGroup title="Raid Messages" icon={raidHeaderIcon} padding>
         {[...Array(10).keys()].map((i) => (
           <View key={i} style={{ marginBottom: 12 }}>
             <Text style={{ color: "#fff", marginBottom: 6 }}>Message {i + 1}</Text>
@@ -155,7 +140,7 @@ export default function Settings() {
             arrowBackIcon && (
               <Image
                 source={arrowBackIcon}
-                style={{ width: 22, height: 22, tintColor: semanticColors.TEXT_MUTED }}
+                style={{ width: 24, height: 24, tintColor: semanticColors.TEXT_MUTED }}
               />
             )
           }
