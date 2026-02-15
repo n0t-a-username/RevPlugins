@@ -5,7 +5,7 @@ import GiveawaySection from "./GiveawaySection";
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
-import { React } from "@vendetta/metro/common";
+import { React, HTTP } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
@@ -205,7 +205,10 @@ commands.push(
         receiveMessage(
           ctx.channel.id,
           Object.assign(
-            createBotMessage({ channelId: ctx.channel.id, content: "❌ Guild ID required." }),
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: "❌ Guild ID required."
+            }),
             { author: currentUser }
           )
         );
@@ -213,16 +216,32 @@ commands.push(
       }
 
       try {
-        const allChannels = Object.values(ChannelStore.getAll?.() ?? {});
-        const channelsToDelete = allChannels.filter(c =>
-          c.guild_id === guildId && (!categoryId || c.parent_id === categoryId)
-        );
+        const response = await HTTP.get({
+          url: `/guilds/${guildId}/channels`,
+        });
 
-        if (channelsToDelete.length === 0) {
+        const guildChannels = response.body;
+
+        if (!Array.isArray(guildChannels)) {
+          throw new Error("Failed to fetch guild channels.");
+        }
+
+        let channelsToDelete = guildChannels;
+
+        if (categoryId) {
+          channelsToDelete = guildChannels.filter(
+            (ch: any) => ch.parent_id === categoryId
+          );
+        }
+
+        if (!channelsToDelete.length) {
           receiveMessage(
             ctx.channel.id,
             Object.assign(
-              createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No channels to delete." }),
+              createBotMessage({
+                channelId: ctx.channel.id,
+                content: "⚠️ No channels to delete."
+              }),
               { author: currentUser }
             )
           );
@@ -230,11 +249,12 @@ commands.push(
         }
 
         let deletedCount = 0;
+
         for (const ch of channelsToDelete) {
           try {
             await HTTP.del({ url: `/channels/${ch.id}` });
             deletedCount++;
-            await sleep(250);
+            await sleep(400);
           } catch {}
         }
 
@@ -250,7 +270,7 @@ commands.push(
           Object.assign(
             createBotMessage({
               channelId: ctx.channel.id,
-              content: `🗑️ Deleted ${deletedCount} channels${categoryId ? " including the category" : ""}.`
+              content: `🗑️ Deleted ${deletedCount} channel(s).`
             }),
             { author: currentUser }
           )
