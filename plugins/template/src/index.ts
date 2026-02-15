@@ -236,7 +236,7 @@ if (shouldClear === true) {
 commands.push(
 registerCommand({
 name: "delete-channel",
-displayName: "Delete Channel",
+displayName: "delete-channel",
 description: "Deletes a channel using its ID",
 options: [
 {
