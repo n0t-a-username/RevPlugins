@@ -27,15 +27,15 @@ export default function BetterTableRowGroup({
       marginTop: 8,
       gap: 8,
       flexDirection: "row",
-      alignItems: "baseline", // icon bottom aligned with text
+      alignItems: "center", // center icon vertically with text
     },
     icon: {
-      width: 24,        // slightly bigger icon
-      height: 24,
+      width: 22,        // reduced by 2 pixels
+      height: 22,       // reduced by 2 pixels
       tintColor: semanticColors.TEXT_MUTED,
     },
     titleText: {
-      fontSize: 16,     // increased from 14 to 16
+      fontSize: 16,
       fontWeight: "600",
       color: semanticColors.TEXT_MUTED,
     },
