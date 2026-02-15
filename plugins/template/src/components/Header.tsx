@@ -1,40 +1,50 @@
-import { storage } from "@vendetta/plugin";
 import { React, ReactNative as RN, stylesheet } from "@vendetta/metro/common";
 import { semanticColors } from "@vendetta/ui";
+import { showToast } from "@vendetta/ui/toasts";
+import { getAssetIDByName } from "@vendetta/ui/assets";
+import { storage } from "@vendetta/plugin";
 
 export default function Header() {
   const [clickCounter, setClickCounter] = React.useState(0);
-  const [clickTimeout, setClickTimeout] = React.useState<NodeJS.Timeout | null>(null);
-
-  const bemmoImage = {
-    uri: "https://raw.githubusercontent.com/n0t-a-username/RevPlugins/refs/heads/master/plugins/template/src/components/Bemmo.png",
-  };
+  const [clickTimeout, setClickTimeout] = React.useState<NodeJS.Timeout | null>(
+    null
+  );
 
   const styles = stylesheet.createThemedStyleSheet({
     container: {
-      width: "100%",
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
       paddingVertical: 24,
       paddingHorizontal: 16,
-      alignItems: "center", // vertically center children
+      width: "100%",
     },
-    rowWrapper: {
+    leftSection: {
       flexDirection: "row",
-      alignItems: "center",        // vertically center text with avatar
-      justifyContent: "center",    // horizontally center as a unit
-      gap: 16,                     // space between avatar and text
+      alignItems: "center",
+      gap: 20,
+      maxWidth: 500,
     },
-    avatar: {
+    avatarWrapper: {
       width: 72,
       height: 72,
-      borderRadius: 36,
-      flexShrink: 0,               // prevent shrinking
+      borderRadius: 20,
+      overflow: "hidden",
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: semanticColors.BACKGROUND_SECONDARY,
+    },
+    avatar: {
+      width: 68,
+      height: 68,
+      borderRadius: 18,
     },
     textContainer: {
-      flexShrink: 1,               // allow text to wrap if needed
-      justifyContent: "center",    // vertical alignment with avatar
+      justifyContent: "center",
+      flexShrink: 1,
     },
     title: {
-      fontSize: 24,
+      fontSize: 22,
       fontWeight: "700",
       color: semanticColors.TEXT_DEFAULT,
     },
@@ -43,28 +53,30 @@ export default function Header() {
       fontSize: 14,
       fontWeight: "600",
       color: semanticColors.TEXT_MUTED,
-      flexWrap: "wrap",
     },
   });
 
   const handleAvatarPress = () => {
     if (storage.hiddenSettings?.enabled) {
       storage.hiddenSettings.visible = !storage.hiddenSettings.visible;
+      showToast(
+        `Hidden settings ${storage.hiddenSettings.visible ? "visible" : "hidden"}`,
+        getAssetIDByName("SettingsIcon")
+      );
       const refresh = (globalThis as any).__animalCommandsRefreshSettings;
       if (typeof refresh === "function") refresh();
       return;
     }
 
     if (clickTimeout) clearTimeout(clickTimeout);
-
     const newTimeout = setTimeout(() => setClickCounter(0), 1000);
     setClickTimeout(newTimeout);
 
     const newCounter = clickCounter + 1;
     setClickCounter(newCounter);
-
     if (newCounter < 10) return;
 
+    showToast("Hidden settings unlocked!", getAssetIDByName("CheckmarkIcon"));
     storage.hiddenSettings = { ...storage.hiddenSettings, enabled: true, visible: true };
     const refresh = (globalThis as any).__animalCommandsRefreshSettings;
     if (typeof refresh === "function") refresh();
@@ -73,15 +85,22 @@ export default function Header() {
 
   return (
     <RN.View style={styles.container}>
-      <RN.Pressable onPress={handleAvatarPress} style={styles.rowWrapper}>
-        <RN.Image source={bemmoImage} style={styles.avatar} resizeMode="cover" />
+      <RN.View style={styles.leftSection}>
+        <RN.Pressable style={styles.avatarWrapper} onPress={handleAvatarPress}>
+          <RN.Image
+            source={{ uri: "https://raw.githubusercontent.com/n0t-a-username/RevPlugins/refs/heads/master/plugins/template/src/components/Bemmo.png" }}
+            style={styles.avatar}
+            resizeMode="cover"
+          />
+        </RN.Pressable>
+
         <RN.View style={styles.textContainer}>
           <RN.Text style={styles.title}>Bemmo</RN.Text>
           <RN.Text style={styles.subtitle}>
-            The only self-bot for Vendetta fork-based mobile clients!
+            The only self-bot for vendetta fork based mobile clients!
           </RN.Text>
         </RN.View>
-      </RN.Pressable>
+      </RN.View>
     </RN.View>
   );
 }
