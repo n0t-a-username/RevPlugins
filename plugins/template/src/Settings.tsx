@@ -1,15 +1,16 @@
 import { React, ReactNative } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
+import { semanticColors } from "@vendetta/ui";
+import Header from "./components/Header";
+import BetterTableRowGroup from "./components/BetterTableRowGroup";
 
 const { ScrollView, View, Text, TextInput, Animated, Easing } = ReactNative;
 
-// Hard initialize exactly 10 raid slots
+// Initialize storage
 if (!Array.isArray(storage.words) || storage.words.length !== 10) {
   storage.words = Array(10).fill("");
 }
-
-// Initialize giveaway storage
 if (typeof storage.eventGiveawayPing !== "string") {
   storage.eventGiveawayPing = "";
 }
@@ -32,7 +33,6 @@ export default function Settings() {
   const [containerWidth, setContainerWidth] = React.useState(0);
   const slideAnim = React.useRef(new Animated.Value(0)).current;
 
-  // Slide animation when page changes
   React.useEffect(() => {
     Animated.timing(slideAnim, {
       toValue: activePage,
@@ -44,51 +44,83 @@ export default function Settings() {
 
   const translateX =
     containerWidth > 0
-      ? slideAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, -containerWidth],
-        })
+      ? slideAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -containerWidth] })
       : 0;
 
-  // PAGE CONTENTS
-  const pageRaidMessages = (
-    <ScrollView style={{ flex: 1, padding: 16 }}>
-      <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600", marginBottom: 12 }}>
-        Raid Messages
-      </Text>
+  const renderPage1 = () => (
+    <>
+      <Header />
 
-      {storage.words.map((word, i) => (
-        <View key={i} style={{ marginBottom: 14 }}>
-          <Text style={{ color: "#fff", marginBottom: 6 }}>Message {i + 1}</Text>
-          <TextInput
-            style={inputStyle}
-            value={word}
-            onChangeText={(v) => (storage.words[i] = v)}
-          />
+      <BetterTableRowGroup title="Raid Messages" padding>
+        <View style={{ gap: 14 }}>
+          <Text style={{ color: "#fff", marginBottom: 6 }}>Message 1</Text>
+          <TextInput style={inputStyle} value={storage.words[0]} onChangeText={(v) => (storage.words[0] = v)} />
+
+          <Text style={{ color: "#fff", marginBottom: 6 }}>Message 2</Text>
+          <TextInput style={inputStyle} value={storage.words[1]} onChangeText={(v) => (storage.words[1] = v)} />
+
+          <Text style={{ color: "#fff", marginBottom: 6 }}>Message 3</Text>
+          <TextInput style={inputStyle} value={storage.words[2]} onChangeText={(v) => (storage.words[2] = v)} />
+
+          <Text style={{ color: "#fff", marginBottom: 6 }}>Message 4</Text>
+          <TextInput style={inputStyle} value={storage.words[3]} onChangeText={(v) => (storage.words[3] = v)} />
+
+          <Text style={{ color: "#fff", marginBottom: 6 }}>Message 5</Text>
+          <TextInput style={inputStyle} value={storage.words[4]} onChangeText={(v) => (storage.words[4] = v)} />
+
+          <Text style={{ color: "#fff", marginBottom: 6 }}>Message 6</Text>
+          <TextInput style={inputStyle} value={storage.words[5]} onChangeText={(v) => (storage.words[5] = v)} />
+
+          <Text style={{ color: "#fff", marginBottom: 6 }}>Message 7</Text>
+          <TextInput style={inputStyle} value={storage.words[6]} onChangeText={(v) => (storage.words[6] = v)} />
+
+          <Text style={{ color: "#fff", marginBottom: 6 }}>Message 8</Text>
+          <TextInput style={inputStyle} value={storage.words[7]} onChangeText={(v) => (storage.words[7] = v)} />
+
+          <Text style={{ color: "#fff", marginBottom: 6 }}>Message 9</Text>
+          <TextInput style={inputStyle} value={storage.words[8]} onChangeText={(v) => (storage.words[8] = v)} />
+
+          <Text style={{ color: "#fff", marginBottom: 6 }}>Message 10</Text>
+          <TextInput style={inputStyle} value={storage.words[9]} onChangeText={(v) => (storage.words[9] = v)} />
         </View>
-      ))}
-    </ScrollView>
+      </BetterTableRowGroup>
+
+      <BetterTableRowGroup title="Navigation">
+        <Text style={{ color: semanticColors.INTERACTIVE_NORMAL }} onPress={() => setActivePage(1)}>
+          Next: Info & Mass Ping
+        </Text>
+      </BetterTableRowGroup>
+    </>
   );
 
-  const pageInfo = (
-    <ScrollView style={{ flex: 1, padding: 16 }}>
-      <Text style={{ color: "#aaa", marginBottom: 16 }}>
-        ⚠️ You are fully responsible for how this plugin is used.
-      </Text>
+  const renderPage2 = () => (
+    <>
+      <Header />
 
-      <Text style={{ color: "#fff", fontSize: 16, fontWeight: "600", marginBottom: 12 }}>
-        Mass Ping List
-      </Text>
-      <Text style={{ color: "#aaa", marginBottom: 8 }}>
-        Press the "Mass Ping" button on user profiles to collect mentions.
-      </Text>
-      <TextInput
-        multiline
-        value={storage.eventGiveawayPing}
-        onChangeText={(v) => (storage.eventGiveawayPing = v)}
-        style={{ ...inputStyle, minHeight: 120 }}
-      />
-    </ScrollView>
+      <BetterTableRowGroup title="⚠️ Warning" padding>
+        <Text style={{ color: "#aaa" }}>
+          You are fully responsible for how this plugin is used, do not blame anyone but yourself.
+        </Text>
+      </BetterTableRowGroup>
+
+      <BetterTableRowGroup title="Mass Ping List" padding>
+        <Text style={{ color: "#aaa", marginBottom: 8 }}>
+          Press the "Mass Ping" button on user profiles to collect mentions.
+        </Text>
+        <TextInput
+          multiline
+          value={storage.eventGiveawayPing}
+          onChangeText={(v) => (storage.eventGiveawayPing = v)}
+          style={{ ...inputStyle, minHeight: 120 }}
+        />
+      </BetterTableRowGroup>
+
+      <BetterTableRowGroup title="Navigation">
+        <Text style={{ color: semanticColors.INTERACTIVE_NORMAL }} onPress={() => setActivePage(0)}>
+          Back to Raid Messages
+        </Text>
+      </BetterTableRowGroup>
+    </>
   );
 
   return (
@@ -96,45 +128,23 @@ export default function Settings() {
       style={{ flex: 1, backgroundColor: "#111" }}
       onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
     >
-      {/* PAGE NAV BUTTONS */}
-      <View style={{ flexDirection: "row" }}>
-        <Text
+      <ScrollView ref={scrollRef} style={{ flex: 1 }} scrollEnabled>
+        <Animated.View
           style={{
-            flex: 1,
-            textAlign: "center",
-            padding: 12,
-            color: activePage === 0 ? "#fff" : "#888",
-            fontWeight: activePage === 0 ? "700" : "400",
+            flexDirection: "row",
+            width: containerWidth > 0 ? containerWidth * 2 : "200%",
+            transform: [{ translateX }],
           }}
-          onPress={() => setActivePage(0)}
         >
-          Raid Messages
-        </Text>
-        <Text
-          style={{
-            flex: 1,
-            textAlign: "center",
-            padding: 12,
-            color: activePage === 1 ? "#fff" : "#888",
-            fontWeight: activePage === 1 ? "700" : "400",
-          }}
-          onPress={() => setActivePage(1)}
-        >
-          Info
-        </Text>
-      </View>
-
-      {/* PAGES */}
-      <Animated.View
-        style={{
-          flexDirection: "row",
-          width: containerWidth * 2,
-          transform: [{ translateX }],
-        }}
-      >
-        <View style={{ width: containerWidth }}>{pageRaidMessages}</View>
-        <View style={{ width: containerWidth }}>{pageInfo}</View>
-      </Animated.View>
+          <View style={{ width: containerWidth || "100%" }} pointerEvents={activePage === 0 ? "auto" : "none"}>
+            {renderPage1()}
+          </View>
+          <View style={{ width: containerWidth || "100%" }} pointerEvents={activePage === 1 ? "auto" : "none"}>
+            {renderPage2()}
+          </View>
+        </Animated.View>
+      </ScrollView>
+      <View style={{ height: 80 }} />
     </View>
   );
 }
