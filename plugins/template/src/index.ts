@@ -425,41 +425,85 @@ commands.push(
   registerCommand({
     name: "event-ping",
     displayName: "Event Ping",
-    description: "Ping a random set of users multiple times",
+    description: "Ping random members for an event multiple times",
     options: [
-      { name: "amount", displayName: "amount", description: "Number of random users per message", required: true, type: 4 },
-      { name: "repeats", displayName: "repeats", description: "Number of times to send the message", required: true, type: 4 },
-      { name: "delay", displayName: "delay", description: "Delay between messages (ms)", required: true, type: 4 }
+      {
+        name: "amount",
+        displayName: "amount",
+        description: "Number of users to ping per message",
+        required: true,
+        type: 4,
+      },
+      {
+        name: "messages",
+        displayName: "messages",
+        description: "Number of messages to send",
+        required: true,
+        type: 4,
+      },
+      {
+        name: "delay",
+        displayName: "delay",
+        description: "Delay between messages (ms)",
+        required: false,
+        type: 4,
+      },
     ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
       const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
-      const repeats = Number(args.find(a => a.name === "repeats")?.value ?? 0);
-      const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
+      const messages = Number(args.find(a => a.name === "messages")?.value ?? 0);
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 500);
+
+      if (amount <= 0 || messages <= 0) return;
+
       const guildId = ctx.channel.guild_id;
-      if (!guildId || amount <= 0 || repeats <= 0 || delay < 0) return;
+      if (!guildId) return;
 
-      const GuildMemberStore = findByStoreName("GuildMemberStore");
-      const membersObj = GuildMemberStore.getMembers(guildId) || {};
-      const members = Object.values(membersObj).filter(m => !m.user?.bot);
+      const currentUser = UserStore.getCurrentUser();
 
-      if (!members.length) {
-        MessageActions.sendMessage(ctx.channel.id, { content: "⚠️ No human members found to ping." }, void 0, { nonce: Date.now().toString() });
-        return;
+      try {
+        const res = await HTTP.get({ url: `/guilds/${guildId}/members?limit=1000` });
+        const members = res?.body?.filter((m: any) => !m.user?.bot);
+        if (!members || !members.length) {
+          receiveMessage(
+            ctx.channel.id,
+            Object.assign(
+              createBotMessage({ channelId: ctx.channel.id, content: "⚠️ Failed to fetch members or no non-bot members found." }),
+              { author: currentUser }
+            )
+          );
+          return;
+        }
+
+        for (let i = 0; i < messages; i++) {
+          const shuffled = members.sort(() => 0.5 - Math.random());
+          const selected = shuffled.slice(0, Math.min(amount, shuffled.length));
+          const pingText = selected.map((m: any) => `<@${m.user.id}>`).join(" ");
+
+          await MessageActions.sendMessage(ctx.channel.id, { content: pingText });
+          await sleep(delay);
+        }
+
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({ channelId: ctx.channel.id, content: `✅ Sent ${messages} message(s) pinging random members.` }),
+            { author: currentUser }
+          )
+        );
+      } catch (err) {
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Failed to fetch members: ${String(err)}` }),
+            { author: currentUser }
+          )
+        );
       }
-
-      for (let i = 0; i < repeats; i++) {
-        const shuffled = members.sort(() => 0.5 - Math.random());
-        const selected = shuffled.slice(0, Math.min(amount, shuffled.length));
-        const mentions = selected.map(u => `<@${u.user.id}>`).join(", ");
-
-        MessageActions.sendMessage(ctx.channel.id, { content: `📢 Event Ping:\n${mentions}` }, void 0, { nonce: Date.now().toString() });
-
-        if (i < repeats - 1) await sleep(delay);
-      }
-    }
+    },
   })
 );
 
