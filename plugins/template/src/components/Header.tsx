@@ -13,33 +13,30 @@ export default function Header() {
   const styles = stylesheet.createThemedStyleSheet({
     container: {
       width: "100%",
-      flexDirection: "row",
-      justifyContent: "center",  // horizontally center entire row
       paddingVertical: 24,
-      paddingHorizontal: 16,     // keep padding for wrapping
+      paddingHorizontal: 16,
+      alignItems: "center", // vertically center children
     },
-    avatarContainer: {
-      width: 72,
-      height: 72,
-      justifyContent: "center",
-      alignItems: "center",
-      marginRight: 16,           // space between avatar and text
-      flexShrink: 0,             // prevent shrinking
+    rowWrapper: {
+      flexDirection: "row",
+      alignItems: "center",        // vertically center text with avatar
+      justifyContent: "center",    // horizontally center as a unit
+      gap: 16,                     // space between avatar and text
     },
     avatar: {
       width: 72,
       height: 72,
       borderRadius: 36,
+      flexShrink: 0,               // prevent shrinking
     },
     textContainer: {
-      flex: 1,                   // allow text to wrap
-      justifyContent: "center",  // vertically center with avatar
+      flexShrink: 1,               // allow text to wrap if needed
+      justifyContent: "center",    // vertical alignment with avatar
     },
     title: {
       fontSize: 24,
       fontWeight: "700",
       color: semanticColors.TEXT_DEFAULT,
-      flexWrap: "wrap",
     },
     subtitle: {
       marginTop: 4,
@@ -76,15 +73,15 @@ export default function Header() {
 
   return (
     <RN.View style={styles.container}>
-      <RN.Pressable style={styles.avatarContainer} onPress={handleAvatarPress}>
+      <RN.Pressable onPress={handleAvatarPress} style={styles.rowWrapper}>
         <RN.Image source={bemmoImage} style={styles.avatar} resizeMode="cover" />
+        <RN.View style={styles.textContainer}>
+          <RN.Text style={styles.title}>Bemmo</RN.Text>
+          <RN.Text style={styles.subtitle}>
+            The only self-bot for Vendetta fork-based mobile clients!
+          </RN.Text>
+        </RN.View>
       </RN.Pressable>
-      <RN.View style={styles.textContainer}>
-        <RN.Text style={styles.title}>Bemmo</RN.Text>
-        <RN.Text style={styles.subtitle}>
-          The only self-bot for Vendetta fork-based mobile clients!
-        </RN.Text>
-      </RN.View>
     </RN.View>
   );
 }
