@@ -12,7 +12,7 @@ const MessageActions = findByProps("sendMessage", "editMessage");
 const UserStore = findByStoreName("UserStore");
 const ChannelStore = findByProps("getChannel");
 
-// expanded to include GET for mass-delete
+// expanded to include GET for mass-delet
 const HTTP = findByProps("get", "del", "post", "put");
 
 const commands: (() => void)[] = [];
