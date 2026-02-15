@@ -11,7 +11,7 @@ const { ScrollView, View, Text, TextInput, Animated, Easing, Image } = ReactNati
 const Forms = UiForms || {};
 const { FormRow } = Forms as any;
 
-// Hard initialize exactly 10 raid slots
+// Ensure exactly 10 raid messages
 if (!Array.isArray(storage.words) || storage.words.length !== 10) {
   storage.words = Array(10).fill("");
 }
@@ -32,10 +32,12 @@ const inputStyle = {
   borderColor: "#333",
 };
 
-// Icons
+// Discord asset IDs with safe fallback
 const messageHeaderIcon = getAssetIDByName("ic_information_24px");
 const raidHeaderIcon = getAssetIDByName("SlashBoxIcon");
 const massPingHeaderIcon = getAssetIDByName("SlashBoxIcon");
+const arrowForwardIcon = getAssetIDByName("ic_arrow_forward_24px");
+const arrowBackIcon = getAssetIDByName("ic_arrow_back_24px");
 
 export default function Settings() {
   useProxy(storage);
@@ -73,43 +75,41 @@ export default function Settings() {
     <>
       <Header />
 
-      {/* MESSAGE SECTION ABOVE MASS PING */}
+      {/* Message Section */}
       <BetterTableRowGroup title="Message Section" icon={messageHeaderIcon} padding>
-        <Text style={{ color: "#aaa", marginHorizontal: 16 }}>
+        <Text style={{ color: "#aaa" }}>
           Messages here will be used for /raid. Responsible use only!
         </Text>
       </BetterTableRowGroup>
 
-      {/* MASS PING LIST SECTION */}
+      {/* Mass Ping Section */}
       <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
-        <Text style={{ color: "#aaa", marginBottom: 8, marginHorizontal: 16 }}>
+        <Text style={{ color: "#aaa", marginBottom: 8 }}>
           Press the giveaway button on user profiles to collect mentions.
         </Text>
-
         <TextInput
           multiline
           value={storage.eventGiveawayPing}
           onChangeText={(v) => (storage.eventGiveawayPing = v)}
-          style={{ ...inputStyle, minHeight: 120, marginHorizontal: 16 }}
+          style={{ ...inputStyle, minHeight: 120 }}
         />
       </BetterTableRowGroup>
 
-      {/* BUTTON TO EDIT RAID MESSAGES */}
+      {/* Edit Raid Messages Button */}
       {FormRow && (
         <FormRow
           label="Edit Raid Messages"
           trailing={
-            <Image
-              source={getAssetIDByName("ic_arrow_forward_24px")}
-              style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
-            />
+            arrowForwardIcon && (
+              <Image
+                source={arrowForwardIcon}
+                style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
+              />
+            )
           }
           onPress={() => setSelectedPage("raidMessages")}
         />
       )}
-
-      {/* Extra bottom padding */}
-      <View style={{ height: 40 }} />
     </>
   );
 
@@ -131,24 +131,25 @@ export default function Settings() {
         ))}
       </BetterTableRowGroup>
 
-      {/* Padding BELOW the raid messages card */}
-      <View style={{ height: 40 }} />
-
+      {/* Back Button outside padding view */}
+      <View style={{ height: 20 }} />
       {FormRow && (
         <FormRow
           label="Back"
           trailing={
-            <Image
-              source={getAssetIDByName("ic_arrow_back_24px")}
-              style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
-            />
+            arrowBackIcon && (
+              <Image
+                source={arrowBackIcon}
+                style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
+              />
+            )
           }
           onPress={() => setSelectedPage("main")}
         />
       )}
 
-      {/* Extra bottom scroll padding */}
-      <View style={{ height: 40 }} />
+      {/* Extra bottom padding to scroll back button into view */}
+      <View style={{ height: 60 }} />
     </>
   );
 
