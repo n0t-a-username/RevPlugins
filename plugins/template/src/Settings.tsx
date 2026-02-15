@@ -85,7 +85,7 @@ export default function Settings() {
       {/* Mass Ping Section */}
       <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
         <Text style={{ color: "#aaa", marginBottom: 8 }}>
-          Press the giveaway button on user profiles to collect mentions.
+          Press the "Mass Selective Ping" button on user profiles to collect mentions.
         </Text>
         <TextInput
           multiline
