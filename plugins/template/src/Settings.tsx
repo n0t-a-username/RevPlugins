@@ -8,8 +8,7 @@ import { semanticColors } from "@vendetta/ui";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 
 const { ScrollView, View, Text, TextInput, Animated, Easing } = ReactNative;
-const Forms =
-  UiForms || {};
+const Forms = UiForms || {};
 const { FormRow } = Forms as any;
 
 // Hard initialize exactly 10 raid slots
@@ -69,6 +68,14 @@ export default function Settings() {
     <>
       <Header />
 
+      {/* MESSAGE SECTION ABOVE MASS PING */}
+      <BetterTableRowGroup title="Message Section" padding>
+        <Text style={{ color: "#aaa" }}>
+          Messages here will be used for /raid. Responsible use only!
+        </Text>
+      </BetterTableRowGroup>
+
+      {/* MASS PING LIST SECTION */}
       <BetterTableRowGroup title="Mass Ping List" padding>
         <Text style={{ color: "#aaa", marginBottom: 8 }}>
           Press the giveaway button on user profiles to collect mentions.
@@ -80,18 +87,21 @@ export default function Settings() {
           onChangeText={(v) => (storage.eventGiveawayPing = v)}
           style={{ ...inputStyle, minHeight: 120 }}
         />
+      </BetterTableRowGroup>
 
-        {FormRow && (
-          <FormRow
-            label="Edit Raid Messages"
-            trailing={<ReactNative.Image
+      {/* BUTTON TO EDIT RAID MESSAGES */}
+      {FormRow && (
+        <FormRow
+          label="Edit Raid Messages"
+          trailing={
+            <ReactNative.Image
               source={getAssetIDByName("ic_arrow_forward_24px")}
               style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
-            />}
-            onPress={() => setSelectedPage("raidMessages")}
-          />
-        )}
-      </BetterTableRowGroup>
+            />
+          }
+          onPress={() => setSelectedPage("raidMessages")}
+        />
+      )}
     </>
   );
 
@@ -101,43 +111,29 @@ export default function Settings() {
       <Header />
 
       <BetterTableRowGroup title="Raid Messages" padding>
-        <Text style={{ color: "#fff", marginBottom: 6 }}>Message 1</Text>
-        <TextInput style={inputStyle} value={storage.words[0]} onChangeText={v => storage.words[0] = v} />
+        {[...Array(10).keys()].map((i) => (
+          <View key={i} style={{ marginBottom: 12 }}>
+            <Text style={{ color: "#fff", marginBottom: 6 }}>Message {i + 1}</Text>
+            <TextInput
+              style={inputStyle}
+              value={storage.words[i]}
+              onChangeText={(v) => (storage.words[i] = v)}
+            />
+          </View>
+        ))}
 
-        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 2</Text>
-        <TextInput style={inputStyle} value={storage.words[1]} onChangeText={v => storage.words[1] = v} />
-
-        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 3</Text>
-        <TextInput style={inputStyle} value={storage.words[2]} onChangeText={v => storage.words[2] = v} />
-
-        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 4</Text>
-        <TextInput style={inputStyle} value={storage.words[3]} onChangeText={v => storage.words[3] = v} />
-
-        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 5</Text>
-        <TextInput style={inputStyle} value={storage.words[4]} onChangeText={v => storage.words[4] = v} />
-
-        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 6</Text>
-        <TextInput style={inputStyle} value={storage.words[5]} onChangeText={v => storage.words[5] = v} />
-
-        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 7</Text>
-        <TextInput style={inputStyle} value={storage.words[6]} onChangeText={v => storage.words[6] = v} />
-
-        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 8</Text>
-        <TextInput style={inputStyle} value={storage.words[7]} onChangeText={v => storage.words[7] = v} />
-
-        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 9</Text>
-        <TextInput style={inputStyle} value={storage.words[8]} onChangeText={v => storage.words[8] = v} />
-
-        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 10</Text>
-        <TextInput style={inputStyle} value={storage.words[9]} onChangeText={v => storage.words[9] = v} />
+        {/* Add extra padding at bottom to allow scrolling to back button */}
+        <View style={{ height: 60 }} />
 
         {FormRow && (
           <FormRow
             label="Back"
-            trailing={<ReactNative.Image
-              source={getAssetIDByName("ic_arrow_back_24px")}
-              style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
-            />}
+            trailing={
+              <ReactNative.Image
+                source={getAssetIDByName("ic_arrow_back_24px")}
+                style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
+              />
+            }
             onPress={() => setSelectedPage("main")}
           />
         )}
