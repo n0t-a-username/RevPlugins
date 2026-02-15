@@ -40,7 +40,7 @@ export default function GiveawaySection({ userId }: Props) {
           onPress={handlePress}
         >
           <Text style={{ color: "white", fontWeight: "600" }}>
-            Add To Mass Ping
+            Add To Mass Selective Ping List
           </Text>
         </TouchableOpacity>
 
