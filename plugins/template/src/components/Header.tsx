@@ -4,8 +4,8 @@ import { semanticColors } from "@vendetta/ui";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "@vendetta/ui/toasts";
 
-// Import the local Bemmo image directly
-import bemmoImage from "./Bemmo.png";
+// Use require for local image
+const bemmoImage = require("./Bemmo.png");
 
 export default function Header() {
   const [clickCounter, setClickCounter] = React.useState(0);
@@ -37,7 +37,7 @@ export default function Header() {
     avatarWrapper: {
       width: 96,
       height: 96,
-      borderRadius: 24,
+      borderRadius: 48, // fully circular
       backgroundColor: semanticColors.BACKGROUND_SECONDARY,
       justifyContent: "center",
       alignItems: "center",
@@ -47,7 +47,7 @@ export default function Header() {
     avatar: {
       width: 96,
       height: 96,
-      borderRadius: 24,
+      borderRadius: 48, // fully circular
     },
     textContainer: {
       flex: 1,
@@ -102,9 +102,9 @@ export default function Header() {
         <RN.Pressable style={styles.avatarContainer} onPress={handleAvatarPress}>
           <RN.View style={styles.avatarWrapper}>
             <RN.Image
-              source={bemmoImage} // use local static asset
+              source={bemmoImage} // local require works here
               style={styles.avatar}
-              resizeMode="cover" // scales image down to fit 96x96
+              resizeMode="cover"
             />
           </RN.View>
         </RN.Pressable>
