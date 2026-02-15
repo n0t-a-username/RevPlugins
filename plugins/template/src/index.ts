@@ -11,8 +11,6 @@ import { after } from "@vendetta/patcher";
 const MessageActions = findByProps("sendMessage", "editMessage");
 const UserStore = findByStoreName("UserStore");
 const ChannelStore = findByProps("getChannel");
-
-// expanded to include GET for mass-delete
 const HTTP = findByProps("get", "del", "post", "put");
 
 const commands: (() => void)[] = [];
@@ -259,8 +257,9 @@ commands.push(
       if (!channelId) return;
 
       const channel = ChannelStore.getChannel(channelId);
+      const currentUser = UserStore.getCurrentUser();
+
       if (!channel) {
-        const currentUser = UserStore.getCurrentUser();
         receiveMessage(
           ctx.channel.id,
           Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "❌ Invalid channel ID." }), { author: currentUser })
@@ -272,13 +271,11 @@ commands.push(
 
       try {
         await HTTP.del({ url: `/channels/${channelId}` });
-        const currentUser = UserStore.getCurrentUser();
         receiveMessage(
           ctx.channel.id,
           Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "🗑️ Channel deleted successfully." }), { author: currentUser })
         );
       } catch (err) {
-        const currentUser = UserStore.getCurrentUser();
         receiveMessage(
           ctx.channel.id,
           Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` }), { author: currentUser })
@@ -425,18 +422,11 @@ commands.push(
   registerCommand({
     name: "event-ping",
     displayName: "Event Ping",
-    description: "Ping random members for an event multiple times",
+    description: "Ping up to 30 random members multiple times",
     options: [
       {
         name: "amount",
         displayName: "amount",
-        description: "Number of users to ping per message",
-        required: true,
-        type: 4,
-      },
-      {
-        name: "messages",
-        displayName: "messages",
         description: "Number of messages to send",
         required: true,
         type: 4,
@@ -444,7 +434,7 @@ commands.push(
       {
         name: "delay",
         displayName: "delay",
-        description: "Delay between messages (ms)",
+        description: "Delay between messages in ms",
         required: false,
         type: 4,
       },
@@ -453,55 +443,44 @@ commands.push(
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
-      const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
-      const messages = Number(args.find(a => a.name === "messages")?.value ?? 0);
-      const delay = Number(args.find(a => a.name === "delay")?.value ?? 500);
-
-      if (amount <= 0 || messages <= 0) return;
-
+      const amount = Number(args.find(a => a.name === "amount")?.value ?? 1);
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 1000);
       const guildId = ctx.channel.guild_id;
-      if (!guildId) return;
-
       const currentUser = UserStore.getCurrentUser();
+
+      if (!guildId) return;
 
       try {
         const res = await HTTP.get({ url: `/guilds/${guildId}/members?limit=1000` });
-        const members = res?.body?.filter((m: any) => !m.user?.bot);
-        if (!members || !members.length) {
-          receiveMessage(
-            ctx.channel.id,
-            Object.assign(
-              createBotMessage({ channelId: ctx.channel.id, content: "⚠️ Failed to fetch members or no non-bot members found." }),
-              { author: currentUser }
-            )
-          );
+        const members = res?.body;
+        if (!Array.isArray(members) || !members.length) {
+          receiveMessage(ctx.channel.id, Object.assign(
+            createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Failed to fetch members or none found.` }),
+            { author: currentUser }
+          ));
           return;
         }
 
-        for (let i = 0; i < messages; i++) {
-          const shuffled = members.sort(() => 0.5 - Math.random());
-          const selected = shuffled.slice(0, Math.min(amount, shuffled.length));
-          const pingText = selected.map((m: any) => `<@${m.user.id}>`).join(" ");
+        for (let i = 0; i < amount; i++) {
+          const randomMembers = [];
+          const maxToPing = Math.min(30, members.length); // Use available members if < 30
+          while (randomMembers.length < maxToPing) {
+            const member = members[Math.floor(Math.random() * members.length)];
+            if (member?.user?.id && !randomMembers.includes(`<@${member.user.id}>`)) {
+              randomMembers.push(`<@${member.user.id}>`);
+            }
+          }
 
-          await MessageActions.sendMessage(ctx.channel.id, { content: pingText });
+          const content = randomMembers.join(" ");
           await sleep(delay);
+          MessageActions.sendMessage(ctx.channel.id, { content });
         }
 
-        receiveMessage(
-          ctx.channel.id,
-          Object.assign(
-            createBotMessage({ channelId: ctx.channel.id, content: `✅ Sent ${messages} message(s) pinging random members.` }),
-            { author: currentUser }
-          )
-        );
       } catch (err) {
-        receiveMessage(
-          ctx.channel.id,
-          Object.assign(
-            createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Failed to fetch members: ${String(err)}` }),
-            { author: currentUser }
-          )
-        );
+        receiveMessage(ctx.channel.id, Object.assign(
+          createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Failed to fetch members: ${String(err)}` }),
+          { author: currentUser }
+        ));
       }
     },
   })
