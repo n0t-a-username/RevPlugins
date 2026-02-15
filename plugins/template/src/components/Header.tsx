@@ -3,13 +3,15 @@ import { React, ReactNative as RN, stylesheet } from "@vendetta/metro/common";
 import { semanticColors } from "@vendetta/ui";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "@vendetta/ui/toasts";
-
-// Use require for local image
-const bemmoImage = require("./Bemmo.png");
+import { findByProps } from "@vendetta/metro";
 
 export default function Header() {
   const [clickCounter, setClickCounter] = React.useState(0);
   const [clickTimeout, setClickTimeout] = React.useState<NodeJS.Timeout | null>(null);
+
+  const bemmoImage = {
+    uri: "https://raw.githubusercontent.com/n0t-a-username/RevPlugins/refs/heads/master/plugins/template/src/components/Bemmo.png",
+  };
 
   const styles = stylesheet.createThemedStyleSheet({
     container: {
@@ -34,20 +36,10 @@ export default function Header() {
       justifyContent: "center",
       alignItems: "center",
     },
-    avatarWrapper: {
-      width: 96,
-      height: 96,
-      borderRadius: 48, // fully circular
-      backgroundColor: semanticColors.BACKGROUND_SECONDARY,
-      justifyContent: "center",
-      alignItems: "center",
-      overflow: "hidden",
-      borderWidth: 0, // remove black border
-    },
     avatar: {
       width: 96,
       height: 96,
-      borderRadius: 48, // fully circular
+      borderRadius: 48, // circular
     },
     textContainer: {
       flex: 1,
@@ -72,7 +64,7 @@ export default function Header() {
       storage.hiddenSettings.visible = !storage.hiddenSettings.visible;
       showToast(
         `Hidden settings ${storage.hiddenSettings.visible ? "visible" : "hidden"}`,
-        getAssetIDByName("SettingsIcon")
+        getAssetIDByName("SettingsIcon"),
       );
       const refresh = (globalThis as any).__animalCommandsRefreshSettings;
       if (typeof refresh === "function") refresh();
@@ -100,19 +92,13 @@ export default function Header() {
     <RN.View style={styles.container}>
       <RN.View style={styles.leftSection}>
         <RN.Pressable style={styles.avatarContainer} onPress={handleAvatarPress}>
-          <RN.View style={styles.avatarWrapper}>
-            <RN.Image
-              source={bemmoImage} // local require works here
-              style={styles.avatar}
-              resizeMode="cover"
-            />
-          </RN.View>
+          <RN.Image source={bemmoImage} style={styles.avatar} resizeMode="cover" />
         </RN.Pressable>
 
         <RN.View style={styles.textContainer}>
           <RN.Text style={styles.title}>Bemmo</RN.Text>
           <RN.Text style={styles.subtitle}>
-            The only self-bot for vendetta fork based mobile clients!
+            The only self-bot for Vendetta fork-based mobile clients!
           </RN.Text>
         </RN.View>
       </RN.View>
