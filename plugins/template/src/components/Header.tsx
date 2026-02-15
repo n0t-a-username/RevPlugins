@@ -1,19 +1,15 @@
-/*
-Thanks to kmmiio99o who I stole this code from :D
-*/
-
 import { storage } from "@vendetta/plugin";
 import { React, ReactNative as RN, stylesheet } from "@vendetta/metro/common";
 import { semanticColors } from "@vendetta/ui";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { showToast } from "@vendetta/ui/toasts";
-import { findByProps } from "@vendetta/metro";
+
+// Import the local Bemmo image directly
+import bemmoImage from "./Bemmo.png";
 
 export default function Header() {
   const [clickCounter, setClickCounter] = React.useState(0);
-  const [clickTimeout, setClickTimeout] = React.useState<NodeJS.Timeout | null>(
-    null,
-  );
+  const [clickTimeout, setClickTimeout] = React.useState<NodeJS.Timeout | null>(null);
 
   const styles = stylesheet.createThemedStyleSheet({
     container: {
@@ -76,7 +72,7 @@ export default function Header() {
       storage.hiddenSettings.visible = !storage.hiddenSettings.visible;
       showToast(
         `Hidden settings ${storage.hiddenSettings.visible ? "visible" : "hidden"}`,
-        getAssetIDByName("SettingsIcon"),
+        getAssetIDByName("SettingsIcon")
       );
       const refresh = (globalThis as any).__animalCommandsRefreshSettings;
       if (typeof refresh === "function") refresh();
@@ -106,9 +102,9 @@ export default function Header() {
         <RN.Pressable style={styles.avatarContainer} onPress={handleAvatarPress}>
           <RN.View style={styles.avatarWrapper}>
             <RN.Image
-              source={{ uri: "https://cdn.discordapp.com/attachments/1245199298757525556/1472511845507268731/Bemmo.png" }}
+              source={bemmoImage} // use local static asset
               style={styles.avatar}
-              resizeMode="cover"
+              resizeMode="cover" // scales image down to fit 96x96
             />
           </RN.View>
         </RN.Pressable>
