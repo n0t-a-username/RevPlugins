@@ -29,18 +29,18 @@ export default function BetterTableRowGroup({
       marginBottom: 8,
       marginHorizontal: 16,
       marginTop: 8,
-      gap: 4,
+      gap: 8, // spacing between icon and text
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-end", // aligns icon bottom with text
     },
     icon: {
-      width: 16,
-      height: 16,
-      marginTop: 1.5,
+      width: 20,  // bigger icon
+      height: 20,
+      marginRight: 4, // spacing between icon and text
       tintColor: semanticColors.TEXT_MUTED,
     },
     titleText: {
-      fontSize: 14,
+      fontSize: 16, // slightly larger to match icon height
       fontWeight: "600",
       color: semanticColors.TEXT_MUTED,
     },
