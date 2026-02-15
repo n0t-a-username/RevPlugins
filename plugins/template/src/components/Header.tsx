@@ -1,27 +1,23 @@
 import { React, ReactNative as RN, stylesheet } from "@vendetta/metro/common";
 import { semanticColors } from "@vendetta/ui";
 import { showToast } from "@vendetta/ui/toasts";
-import { getAssetIDByName } from "@vendetta/ui/assets";
 import { storage } from "@vendetta/plugin";
 
 export default function Header() {
   const [clickCounter, setClickCounter] = React.useState(0);
-  const [clickTimeout, setClickTimeout] = React.useState<NodeJS.Timeout | null>(
-    null
-  );
+  const [clickTimeout, setClickTimeout] = React.useState<NodeJS.Timeout | null>(null);
 
   const styles = stylesheet.createThemedStyleSheet({
     container: {
       width: "100%",
       paddingVertical: 24,
-      paddingHorizontal: 16,
       justifyContent: "center",
       alignItems: "center",
     },
     innerContainer: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 20,
+      gap: 16,
     },
     avatarWrapper: {
       width: 72,
@@ -38,6 +34,7 @@ export default function Header() {
       borderRadius: 18,
     },
     textContainer: {
+      maxWidth: 220, // limit width so text wraps and keeps horizontal center
       justifyContent: "center",
     },
     title: {
@@ -50,6 +47,7 @@ export default function Header() {
       fontSize: 14,
       fontWeight: "600",
       color: semanticColors.TEXT_MUTED,
+      flexWrap: "wrap",
     },
   });
 
@@ -58,7 +56,7 @@ export default function Header() {
       storage.hiddenSettings.visible = !storage.hiddenSettings.visible;
       showToast(
         `Hidden settings ${storage.hiddenSettings.visible ? "visible" : "hidden"}`,
-        getAssetIDByName("SettingsIcon")
+        null
       );
       const refresh = (globalThis as any).__animalCommandsRefreshSettings;
       if (typeof refresh === "function") refresh();
@@ -73,7 +71,7 @@ export default function Header() {
     setClickCounter(newCounter);
     if (newCounter < 10) return;
 
-    showToast("Hidden settings unlocked!", getAssetIDByName("CheckmarkIcon"));
+    showToast("Hidden settings unlocked!", null);
     storage.hiddenSettings = { ...storage.hiddenSettings, enabled: true, visible: true };
     const refresh = (globalThis as any).__animalCommandsRefreshSettings;
     if (typeof refresh === "function") refresh();
