@@ -32,7 +32,7 @@ const inputStyle = {
   borderColor: "#333",
 };
 
-// Discord asset IDs with safe fallback
+// Discord asset IDs
 const messageHeaderIcon = getAssetIDByName("ic_information_24px");
 const raidHeaderIcon = getAssetIDByName("SlashBoxIcon");
 const massPingHeaderIcon = getAssetIDByName("SlashBoxIcon");
@@ -76,14 +76,24 @@ export default function Settings() {
       <Header />
 
       {/* Message Section */}
-      <BetterTableRowGroup title="Message Section" icon={messageHeaderIcon} padding>
+      <BetterTableRowGroup
+        title="Message Section"
+        icon={messageHeaderIcon}
+        padding
+        iconSize={20}
+      >
         <Text style={{ color: "#aaa" }}>
           Messages here will be used for /raid. Responsible use only!
         </Text>
       </BetterTableRowGroup>
 
       {/* Mass Ping Section */}
-      <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
+      <BetterTableRowGroup
+        title="Mass Ping List"
+        icon={massPingHeaderIcon}
+        padding
+        iconSize={20}
+      >
         <Text style={{ color: "#aaa", marginBottom: 8 }}>
           Press the giveaway button on user profiles to collect mentions.
         </Text>
@@ -103,7 +113,7 @@ export default function Settings() {
             arrowForwardIcon && (
               <Image
                 source={arrowForwardIcon}
-                style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
+                style={{ width: 22, height: 22, tintColor: semanticColors.TEXT_MUTED }}
               />
             )
           }
@@ -118,7 +128,12 @@ export default function Settings() {
     <>
       <Header />
 
-      <BetterTableRowGroup title="Raid Messages" icon={raidHeaderIcon} padding>
+      <BetterTableRowGroup
+        title="Raid Messages"
+        icon={raidHeaderIcon}
+        padding
+        iconSize={20}
+      >
         {[...Array(10).keys()].map((i) => (
           <View key={i} style={{ marginBottom: 12 }}>
             <Text style={{ color: "#fff", marginBottom: 6 }}>Message {i + 1}</Text>
@@ -140,7 +155,7 @@ export default function Settings() {
             arrowBackIcon && (
               <Image
                 source={arrowBackIcon}
-                style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
+                style={{ width: 22, height: 22, tintColor: semanticColors.TEXT_MUTED }}
               />
             )
           }
