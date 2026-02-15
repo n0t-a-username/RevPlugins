@@ -1,10 +1,16 @@
-import { React, ReactNative as RN, stylesheet } from "@vendetta/metro/common";
+import { ReactNative } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import Header from "./components/Header";
 import BetterTableRowGroup from "./components/BetterTableRowGroup";
+import { Forms as UiForms } from "@vendetta/ui/components";
+import { semanticColors } from "@vendetta/ui";
+import { getAssetIDByName } from "@vendetta/ui/assets";
 
-const { ScrollView, View, Text, TextInput, Animated, Easing, Pressable } = RN;
+const { ScrollView, View, Text, TextInput, Animated, Easing } = ReactNative;
+const Forms =
+  UiForms || {};
+const { FormRow } = Forms as any;
 
 // Hard initialize exactly 10 raid slots
 if (!Array.isArray(storage.words) || storage.words.length !== 10) {
@@ -30,116 +36,143 @@ const inputStyle = {
 export default function Settings() {
   useProxy(storage);
 
-  const [activePage, setActivePage] = React.useState<"raid" | "giveaway">("raid");
+  const [selectedPage, setSelectedPage] = React.useState<"main" | "raidMessages">("main");
+  const [containerWidth, setContainerWidth] = React.useState(0);
   const slideAnim = React.useRef(new Animated.Value(0)).current;
-  const containerWidthRef = React.useRef(0);
+  const scrollRef = React.useRef<any>(null);
 
-  // Slide animation when page changes
   React.useEffect(() => {
-    const toValue = activePage === "raid" ? 0 : 1;
     Animated.timing(slideAnim, {
-      toValue,
+      toValue: selectedPage === "raidMessages" ? 1 : 0,
       duration: 220,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  }, [activePage, slideAnim]);
+  }, [selectedPage, slideAnim]);
 
-  const translateX = containerWidthRef.current
-    ? slideAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, -containerWidthRef.current],
-      })
-    : 0;
+  React.useEffect(() => {
+    try {
+      scrollRef.current?.scrollTo?.({ y: 0, animated: false });
+    } catch {}
+  }, [selectedPage]);
 
-  return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: "#111" }}
-      onLayout={(e) => (containerWidthRef.current = e.nativeEvent.layout.width)}
-    >
-      {/* Header */}
+  const translateX =
+    containerWidth > 0
+      ? slideAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, -containerWidth],
+        })
+      : 0;
+
+  // ---- First Page Content ----
+  const renderMainPage = () => (
+    <>
       <Header />
 
-      {/* Page Selector */}
-      <View style={{ flexDirection: "row", justifyContent: "center", marginVertical: 12, gap: 12 }}>
-        <Pressable
-          onPress={() => setActivePage("raid")}
-          style={{ paddingVertical: 6, paddingHorizontal: 16, borderRadius: 12, backgroundColor: activePage === "raid" ? "#444" : "#222" }}
-        >
-          <Text style={{ color: "#fff", fontWeight: "600" }}>Raid Messages</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setActivePage("giveaway")}
-          style={{ paddingVertical: 6, paddingHorizontal: 16, borderRadius: 12, backgroundColor: activePage === "giveaway" ? "#444" : "#222" }}
-        >
-          <Text style={{ color: "#fff", fontWeight: "600" }}>Mass Ping</Text>
-        </Pressable>
-      </View>
+      <BetterTableRowGroup title="Mass Ping List" padding>
+        <Text style={{ color: "#aaa", marginBottom: 8 }}>
+          Press the giveaway button on user profiles to collect mentions.
+        </Text>
 
-      {/* Sliding container */}
-      <Animated.View
-        style={{
-          flexDirection: "row",
-          width: containerWidthRef.current ? containerWidthRef.current * 2 : "200%",
-          transform: [{ translateX }],
-        }}
-      >
-        {/* Page 1: Raid Messages */}
-        <View style={{ width: containerWidthRef.current || "100%" }}>
-          <BetterTableRowGroup title="âš ï¸ Warning" padding>
-            <Text style={{ color: "#aaa" }}>
-              You are fully responsible for how this plugin is used, do not blame anyone but yourself.
-            </Text>
-          </BetterTableRowGroup>
+        <TextInput
+          multiline
+          value={storage.eventGiveawayPing}
+          onChangeText={(v) => (storage.eventGiveawayPing = v)}
+          style={{ ...inputStyle, minHeight: 120 }}
+        />
 
-          <BetterTableRowGroup title="Raid Messages" padding>
-            {storage.words.map((word, i) => (
-              <View key={i} style={{ marginBottom: i < 9 ? 14 : 0 }}>
-                <Text style={{ color: "#fff", marginBottom: 6 }}>Message {i + 1}</Text>
-                <TextInput
-                  style={inputStyle}
-                  value={word}
-                  onChangeText={(v) => (storage.words[i] = v)}
-                />
-              </View>
-            ))}
-          </BetterTableRowGroup>
-        </View>
-
-        {/* Page 2: Mass Ping */}
-        <View style={{ width: containerWidthRef.current || "100%" }}>
-          <BetterTableRowGroup title="Mass Ping List" padding>
-            <Text style={{ color: "#aaa", marginBottom: 8 }}>
-              Press the "Mass Ping" button on user profiles to collect mentions.
-            </Text>
-            <TextInput
-              multiline
-              style={{ ...inputStyle, minHeight: 120 }}
-              value={storage.eventGiveawayPing}
-              onChangeText={(v) => (storage.eventGiveawayPing = v)}
-            />
-          </BetterTableRowGroup>
-        </View>
-      </Animated.View>
-
-      {/* Bottom padding */}
-      <View style={{ height: 80 }} />
-    </ScrollView>
+        {FormRow && (
+          <FormRow
+            label="Edit Raid Messages"
+            trailing={<ReactNative.Image
+              source={getAssetIDByName("ic_arrow_forward_24px")}
+              style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
+            />}
+            onPress={() => setSelectedPage("raidMessages")}
+          />
+        )}
+      </BetterTableRowGroup>
+    </>
   );
-}      style={{ flex: 1, backgroundColor: "#111" }}
-      onLayout={(e) => (containerWidthRef.current = e.nativeEvent.layout.width)}
+
+  // ---- Second Page Content ----
+  const renderRaidMessagesPage = () => (
+    <>
+      <Header />
+
+      <BetterTableRowGroup title="Raid Messages" padding>
+        <Text style={{ color: "#fff", marginBottom: 6 }}>Message 1</Text>
+        <TextInput style={inputStyle} value={storage.words[0]} onChangeText={v => storage.words[0] = v} />
+
+        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 2</Text>
+        <TextInput style={inputStyle} value={storage.words[1]} onChangeText={v => storage.words[1] = v} />
+
+        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 3</Text>
+        <TextInput style={inputStyle} value={storage.words[2]} onChangeText={v => storage.words[2] = v} />
+
+        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 4</Text>
+        <TextInput style={inputStyle} value={storage.words[3]} onChangeText={v => storage.words[3] = v} />
+
+        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 5</Text>
+        <TextInput style={inputStyle} value={storage.words[4]} onChangeText={v => storage.words[4] = v} />
+
+        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 6</Text>
+        <TextInput style={inputStyle} value={storage.words[5]} onChangeText={v => storage.words[5] = v} />
+
+        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 7</Text>
+        <TextInput style={inputStyle} value={storage.words[6]} onChangeText={v => storage.words[6] = v} />
+
+        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 8</Text>
+        <TextInput style={inputStyle} value={storage.words[7]} onChangeText={v => storage.words[7] = v} />
+
+        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 9</Text>
+        <TextInput style={inputStyle} value={storage.words[8]} onChangeText={v => storage.words[8] = v} />
+
+        <Text style={{ color: "#fff", marginTop: 14, marginBottom: 6 }}>Message 10</Text>
+        <TextInput style={inputStyle} value={storage.words[9]} onChangeText={v => storage.words[9] = v} />
+
+        {FormRow && (
+          <FormRow
+            label="Back"
+            trailing={<ReactNative.Image
+              source={getAssetIDByName("ic_arrow_back_24px")}
+              style={{ width: 20, height: 20, tintColor: semanticColors.TEXT_MUTED }}
+            />}
+            onPress={() => setSelectedPage("main")}
+          />
+        )}
+      </BetterTableRowGroup>
+    </>
+  );
+
+  return (
+    <View
+      style={{ flex: 1 }}
+      onLayout={(event) => setContainerWidth(event.nativeEvent.layout.width)}
     >
-      <Animated.View
-        style={{
-          flexDirection: "row",
-          width: containerWidthRef.current * 2,
-          transform: [{ translateX }],
-        }}
-      >
-        <View style={{ width: containerWidthRef.current }}>{renderRaidPage()}</View>
-        <View style={{ width: containerWidthRef.current }}>{renderGiveawayPage()}</View>
-      </Animated.View>
-      <View style={{ height: 80 }} />
-    </ScrollView>
+      <ScrollView ref={scrollRef} style={{ flex: 1 }} scrollEnabled>
+        <Animated.View
+          style={{
+            flexDirection: "row",
+            width: containerWidth > 0 ? containerWidth * 2 : "200%",
+            transform: [{ translateX }],
+          }}
+        >
+          <View
+            style={{ width: containerWidth || "100%" }}
+            pointerEvents={selectedPage === "main" ? "auto" : "none"}
+          >
+            {renderMainPage()}
+          </View>
+
+          <View
+            style={{ width: containerWidth || "100%" }}
+            pointerEvents={selectedPage === "raidMessages" ? "auto" : "none"}
+          >
+            {renderRaidMessagesPage()}
+          </View>
+        </Animated.View>
+      </ScrollView>
+    </View>
   );
 }
