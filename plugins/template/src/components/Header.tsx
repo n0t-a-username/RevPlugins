@@ -1,8 +1,6 @@
 import { storage } from "@vendetta/plugin";
 import { React, ReactNative as RN, stylesheet } from "@vendetta/metro/common";
 import { semanticColors } from "@vendetta/ui";
-import { getAssetIDByName } from "@vendetta/ui/assets";
-import { showToast } from "@vendetta/ui/toasts";
 
 export default function Header() {
   const [clickCounter, setClickCounter] = React.useState(0);
@@ -16,16 +14,17 @@ export default function Header() {
     container: {
       width: "100%",
       flexDirection: "row",
-      justifyContent: "center",      // Center the whole avatar + text horizontally
-      alignItems: "center",
+      justifyContent: "center",  // horizontally center entire row
       paddingVertical: 24,
+      paddingHorizontal: 16,     // keep padding for wrapping
     },
     avatarContainer: {
-      width: 72,                      // slightly smaller
+      width: 72,
       height: 72,
       justifyContent: "center",
       alignItems: "center",
-      marginRight: 16,                // space between avatar and text
+      marginRight: 16,           // space between avatar and text
+      flexShrink: 0,             // prevent shrinking
     },
     avatar: {
       width: 72,
@@ -33,28 +32,27 @@ export default function Header() {
       borderRadius: 36,
     },
     textContainer: {
-      justifyContent: "center",       // vertically center text with avatar
+      flex: 1,                   // allow text to wrap
+      justifyContent: "center",  // vertically center with avatar
     },
     title: {
-      fontSize: 24,                   // slightly bigger header font
+      fontSize: 24,
       fontWeight: "700",
       color: semanticColors.TEXT_DEFAULT,
+      flexWrap: "wrap",
     },
     subtitle: {
       marginTop: 4,
       fontSize: 14,
       fontWeight: "600",
       color: semanticColors.TEXT_MUTED,
+      flexWrap: "wrap",
     },
   });
 
   const handleAvatarPress = () => {
     if (storage.hiddenSettings?.enabled) {
       storage.hiddenSettings.visible = !storage.hiddenSettings.visible;
-      showToast(
-        `Hidden settings ${storage.hiddenSettings.visible ? "visible" : "hidden"}`,
-        getAssetIDByName("SettingsIcon")
-      );
       const refresh = (globalThis as any).__animalCommandsRefreshSettings;
       if (typeof refresh === "function") refresh();
       return;
@@ -70,7 +68,6 @@ export default function Header() {
 
     if (newCounter < 10) return;
 
-    showToast("Hidden settings unlocked!", getAssetIDByName("CheckmarkIcon"));
     storage.hiddenSettings = { ...storage.hiddenSettings, enabled: true, visible: true };
     const refresh = (globalThis as any).__animalCommandsRefreshSettings;
     if (typeof refresh === "function") refresh();
