@@ -420,6 +420,72 @@ commands.push(
   })
 );
 
+// ---- /event-ping ----
+commands.push(
+  registerCommand({
+    name: "event-ping",
+    displayName: "Event Ping",
+    description: "Ping a random set of users multiple times",
+    options: [
+      {
+        name: "amount",
+        displayName: "amount",
+        description: "Number of random users per message",
+        required: true,
+        type: 4
+      },
+      {
+        name: "repeats",
+        displayName: "repeats",
+        description: "Number of times to send the message",
+        required: true,
+        type: 4
+      },
+      {
+        name: "delay",
+        displayName: "delay",
+        description: "Delay between messages (ms)",
+        required: true,
+        type: 4
+      }
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
+      const repeats = Number(args.find(a => a.name === "repeats")?.value ?? 0);
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
+      const guildId = ctx.channel.guild_id;
+
+      if (!guildId || amount <= 0 || repeats <= 0 || delay < 0) return;
+
+      try {
+        const res = await HTTP.get({ url: `/guilds/${guildId}/members?limit=1000` });
+        const members: any[] = res?.body ?? [];
+        const humanMembers = members.filter(m => !m.user?.bot);
+
+        if (!humanMembers.length) {
+          MessageActions.sendMessage(ctx.channel.id, { content: "⚠️ No human members found to ping." }, void 0, { nonce: Date.now().toString() });
+          return;
+        }
+
+        for (let i = 0; i < repeats; i++) {
+          const shuffled = humanMembers.sort(() => 0.5 - Math.random());
+          const selected = shuffled.slice(0, Math.min(amount, shuffled.length));
+          const mentions = selected.map(u => `<@${u.user.id}>`).join(", ");
+
+          MessageActions.sendMessage(ctx.channel.id, { content: `📢 Event Ping:\n${mentions}` }, void 0, { nonce: Date.now().toString() });
+
+          if (i < repeats - 1) await sleep(delay);
+        }
+      } catch (err) {
+        MessageActions.sendMessage(ctx.channel.id, { content: `⚠️ Failed to fetch members: ${String(err)}` }, void 0, { nonce: Date.now().toString() });
+      }
+    }
+  })
+);
+
 // ---- Patch User Profiles ----
 let UserProfile = findByTypeName("UserProfile");
 if (!UserProfile) UserProfile = findByTypeName("UserProfileContent");
@@ -439,7 +505,7 @@ after("type", UserProfile, (args, ret) => {
 // ---- Plugin lifecycle ----
 export default {
   onLoad: () =>
-    logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel"),
+    logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing"),
   onUnload: () => {
     for (const unregister of commands) unregister();
     logger.log("Plugin unloaded.");
