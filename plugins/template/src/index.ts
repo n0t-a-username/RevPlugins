@@ -260,9 +260,10 @@ commands.push(
 
       const channel = ChannelStore.getChannel(channelId);
       if (!channel) {
+        const currentUser = UserStore.getCurrentUser();
         receiveMessage(
           ctx.channel.id,
-          createBotMessage({ channelId: ctx.channel.id, content: "❌ Invalid channel ID." })
+          Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "❌ Invalid channel ID." }), { author: currentUser })
         );
         return;
       }
@@ -271,15 +272,16 @@ commands.push(
 
       try {
         await HTTP.del({ url: `/channels/${channelId}` });
-
+        const currentUser = UserStore.getCurrentUser();
         receiveMessage(
           ctx.channel.id,
-          createBotMessage({ channelId: ctx.channel.id, content: "🗑️ Channel deleted successfully." })
+          Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "🗑️ Channel deleted successfully." }), { author: currentUser })
         );
       } catch (err) {
+        const currentUser = UserStore.getCurrentUser();
         receiveMessage(
           ctx.channel.id,
-          createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` })
+          Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` }), { author: currentUser })
         );
       }
     },
@@ -292,22 +294,30 @@ commands.push(
     name: "mass-delete",
     displayName: "Mass Delete",
     description: "Deletes all channels in a guild",
+    options: [
+      {
+        name: "delay",
+        displayName: "delay",
+        description: "Delay between each deletion in ms",
+        required: false,
+        type: 4,
+      },
+    ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
       const guildId = ctx.channel.guild_id;
       if (!guildId) return;
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 400);
+      const currentUser = UserStore.getCurrentUser();
 
       try {
         const res = await HTTP.get({ url: `/guilds/${guildId}/channels` });
         const channels = res?.body;
 
         if (!Array.isArray(channels) || !channels.length) {
-          receiveMessage(
-            ctx.channel.id,
-            createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No channels found." })
-          );
+          receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No channels found." }), { author: currentUser }));
           return;
         }
 
@@ -316,19 +326,20 @@ commands.push(
           try {
             await HTTP.del({ url: `/channels/${ch.id}` });
             deleted++;
-            await sleep(400);
+            await sleep(delay);
           } catch {}
         }
 
-        receiveMessage(
-          ctx.channel.id,
-          createBotMessage({ channelId: ctx.channel.id, content: `🗑️ Deleted ${deleted} channel(s).` })
-        );
+        // Auto-create default text channel after deletion
+        await HTTP.post({
+          url: `/guilds/${guildId}/channels`,
+          body: { name: "general", type: 0 }
+        });
+
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `🗑️ Deleted ${deleted} channel(s).\n✅ Created default channel #general` }), { author: currentUser }));
+
       } catch (err) {
-        receiveMessage(
-          ctx.channel.id,
-          createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` })
-        );
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` }), { author: currentUser }));
       }
     },
   })
@@ -375,17 +386,15 @@ commands.push(
       const guildId = ctx.channel.guild_id;
       if (!guildId) return;
 
-      // Get original channel info
       const channelData: any = await HTTP.get({ url: `/channels/${selectedChannelId}` }).then(r => r.body).catch(() => null);
       if (!channelData) {
-        receiveMessage(
-          ctx.channel.id,
-          createBotMessage({ channelId: ctx.channel.id, content: "❌ Failed to fetch the channel data." })
-        );
+        const currentUser = UserStore.getCurrentUser();
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "❌ Failed to fetch the channel data." }), { author: currentUser }));
         return;
       }
 
       let created = 0;
+      const currentUser = UserStore.getCurrentUser();
       for (let i = 0; i < amount; i++) {
         try {
           await sleep(delay);
@@ -406,13 +415,7 @@ commands.push(
         } catch {}
       }
 
-      receiveMessage(
-        ctx.channel.id,
-        createBotMessage({
-          channelId: ctx.channel.id,
-          content: `✅ Duplicated channel **${channelData.name}** ${created} time(s).`
-        })
-      );
+      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `✅ Duplicated channel **${channelData.name}** ${created} time(s).` }), { author: currentUser }));
     },
   })
 );
@@ -436,7 +439,7 @@ after("type", UserProfile, (args, ret) => {
 // ---- Plugin lifecycle ----
 export default {
   onLoad: () =>
-    logger.log("Raid + FetchProfile + UserID + Giveaway + DeleteChannel + MassDelete + DuplicateChannel plugin loaded!"),
+    logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel"),
   onUnload: () => {
     for (const unregister of commands) unregister();
     logger.log("Plugin unloaded.");
