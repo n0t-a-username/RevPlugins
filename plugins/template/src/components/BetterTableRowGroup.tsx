@@ -1,7 +1,3 @@
-/*
-Thanks to kmmiio99o who I stole this code from :D
-*/
-
 import { React, ReactNative as RN, stylesheet } from "@vendetta/metro/common";
 import { rawColors, semanticColors } from "@vendetta/ui";
 
@@ -29,18 +25,17 @@ export default function BetterTableRowGroup({
       marginBottom: 8,
       marginHorizontal: 16,
       marginTop: 8,
-      gap: 8, // spacing between icon and text
+      gap: 8,
       flexDirection: "row",
-      alignItems: "flex-end", // aligns icon bottom with text
+      alignItems: "baseline", // <-- baseline aligns icon bottom with text
     },
     icon: {
-      width: 20,  // bigger icon
-      height: 20,
-      marginRight: 4, // spacing between icon and text
+      width: 24,        // bigger icon
+      height: 24,
       tintColor: semanticColors.TEXT_MUTED,
     },
     titleText: {
-      fontSize: 16, // slightly larger to match icon height
+      fontSize: 14,
       fontWeight: "600",
       color: semanticColors.TEXT_MUTED,
     },
@@ -55,17 +50,13 @@ export default function BetterTableRowGroup({
     <RN.View style={styles.wrapper}>
       {title && (
         <RN.View style={styles.titleContainer}>
-          {icon && (
-            <RN.Image style={styles.icon} source={icon} resizeMode="cover" />
-          )}
+          {icon && <RN.Image style={styles.icon} source={icon} resizeMode="cover" />}
           <RN.Text style={styles.titleText}>{title.toUpperCase()}</RN.Text>
         </RN.View>
       )}
       <RN.View style={styles.main}>
         {padding ? (
-          <RN.View style={{ paddingHorizontal: 16, paddingVertical: 16 }}>
-            {children}
-          </RN.View>
+          <RN.View style={{ paddingHorizontal: 16, paddingVertical: 16 }}>{children}</RN.View>
         ) : (
           children
         )}
