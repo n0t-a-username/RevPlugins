@@ -76,9 +76,16 @@ export default function Settings() {
       <Header />
 
       {/* Message Section */}
-      <BetterTableRowGroup title="Message Section" icon={messageHeaderIcon} padding>
+      <BetterTableRowGroup title="Information" icon={messageHeaderIcon} padding>
         <Text style={{ color: "#aaa" }}>
-          Messages here will be used for /raid. Responsible use only!
+          Command list:
+
+/raid
+/nuke
+/dupe-channel
+/userid
+/delete-channel
+/fetchprofile
         </Text>
       </BetterTableRowGroup>
 
