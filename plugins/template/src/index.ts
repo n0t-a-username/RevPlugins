@@ -235,20 +235,8 @@ commands.push(
     displayName: "Delete Channel",
     description: "Deletes a channel using its ID",
     options: [
-      {
-        name: "channel_id",
-        displayName: "channel_id",
-        description: "ID of the channel to delete",
-        required: true,
-        type: 3,
-      },
-      {
-        name: "delay",
-        displayName: "delay",
-        description: "Delay before deletion in ms",
-        required: false,
-        type: 4,
-      },
+      { name: "channel_id", displayName: "channel_id", description: "ID of the channel to delete", required: true, type: 3 },
+      { name: "delay", displayName: "delay", description: "Delay before deletion in ms", required: false, type: 4 },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -261,8 +249,7 @@ commands.push(
       const channel = ChannelStore.getChannel(channelId);
       if (!channel) {
         const currentUser = UserStore.getCurrentUser();
-        receiveMessage(
-          ctx.channel.id,
+        receiveMessage(ctx.channel.id,
           Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "❌ Invalid channel ID." }), { author: currentUser })
         );
         return;
@@ -273,14 +260,12 @@ commands.push(
       try {
         await HTTP.del({ url: `/channels/${channelId}` });
         const currentUser = UserStore.getCurrentUser();
-        receiveMessage(
-          ctx.channel.id,
+        receiveMessage(ctx.channel.id,
           Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "🗑️ Channel deleted successfully." }), { author: currentUser })
         );
       } catch (err) {
         const currentUser = UserStore.getCurrentUser();
-        receiveMessage(
-          ctx.channel.id,
+        receiveMessage(ctx.channel.id,
           Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` }), { author: currentUser })
         );
       }
@@ -295,13 +280,7 @@ commands.push(
     displayName: "Mass Delete",
     description: "Deletes all channels in a guild",
     options: [
-      {
-        name: "delay",
-        displayName: "delay",
-        description: "Delay between each deletion in ms",
-        required: false,
-        type: 4,
-      },
+      { name: "delay", displayName: "delay", description: "Delay between each deletion in ms", required: false, type: 4 },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -317,7 +296,9 @@ commands.push(
         const channels = res?.body;
 
         if (!Array.isArray(channels) || !channels.length) {
-          receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No channels found." }), { author: currentUser }));
+          receiveMessage(ctx.channel.id,
+            Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No channels found." }), { author: currentUser })
+          );
           return;
         }
 
@@ -330,16 +311,19 @@ commands.push(
           } catch {}
         }
 
-        // Auto-create default text channel after deletion
         await HTTP.post({
           url: `/guilds/${guildId}/channels`,
           body: { name: "general", type: 0 }
         });
 
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `🗑️ Deleted ${deleted} channel(s).\n✅ Created default channel #general` }), { author: currentUser }));
+        receiveMessage(ctx.channel.id,
+          Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `🗑️ Deleted ${deleted} channel(s).\n✅ Created default channel #general` }), { author: currentUser })
+        );
 
       } catch (err) {
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` }), { author: currentUser }));
+        receiveMessage(ctx.channel.id,
+          Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` }), { author: currentUser })
+        );
       }
     },
   })
@@ -352,27 +336,9 @@ commands.push(
     displayName: "Duplicate Channel",
     description: "Duplicates a selected channel a number of times with a delay",
     options: [
-      {
-        name: "channel",
-        displayName: "channel",
-        description: "Select a channel to duplicate",
-        required: true,
-        type: 7, // Channel select
-      },
-      {
-        name: "amount",
-        displayName: "amount",
-        description: "Number of duplicates to create",
-        required: true,
-        type: 4,
-      },
-      {
-        name: "delay",
-        displayName: "delay",
-        description: "Delay between creating duplicates (ms)",
-        required: false,
-        type: 4,
-      },
+      { name: "channel", displayName: "channel", description: "Select a channel to duplicate", required: true, type: 7 },
+      { name: "amount", displayName: "amount", description: "Number of duplicates to create", required: true, type: 4 },
+      { name: "delay", displayName: "delay", description: "Delay between creating duplicates (ms)", required: false, type: 4 },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -389,7 +355,9 @@ commands.push(
       const channelData: any = await HTTP.get({ url: `/channels/${selectedChannelId}` }).then(r => r.body).catch(() => null);
       if (!channelData) {
         const currentUser = UserStore.getCurrentUser();
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "❌ Failed to fetch the channel data." }), { author: currentUser }));
+        receiveMessage(ctx.channel.id,
+          Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "❌ Failed to fetch the channel data." }), { author: currentUser })
+        );
         return;
       }
 
@@ -415,76 +383,69 @@ commands.push(
         } catch {}
       }
 
-      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `✅ Duplicated channel **${channelData.name}** ${created} time(s).` }), { author: currentUser }));
+      receiveMessage(ctx.channel.id,
+        Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `✅ Duplicated channel **${channelData.name}** ${created} time(s).` }), { author: currentUser })
+      );
     },
   })
 );
 
-// ---- /event-ping (cache-based working) ----
+// ---- /event-ping (OPTIMIZED NON-FREEZING VERSION) ----
 commands.push(
   registerCommand({
     name: "event-ping",
     displayName: "Event Ping",
     description: "Ping up to 30 random cached members multiple times",
     options: [
-      {
-        name: "amount",
-        displayName: "amount",
-        description: "Number of messages to send",
-        required: true,
-        type: 4,
-      },
-      {
-        name: "delay",
-        displayName: "delay",
-        description: "Delay between messages in ms",
-        required: false,
-        type: 4,
-      },
+      { name: "amount", displayName: "amount", description: "Number of messages to send", required: true, type: 4 },
+      { name: "delay", displayName: "delay", description: "Delay between messages in ms", required: false, type: 4 },
     ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
-      const amount = Number(args.find(a => a.name === "amount")?.value ?? 1);
-      const delay = Number(args.find(a => a.name === "delay")?.value ?? 1000);
+      const amount = Math.max(1, Number(args.find(a => a.name === "amount")?.value ?? 1));
+      const delay = Math.max(0, Number(args.find(a => a.name === "delay")?.value ?? 1000));
       const guildId = ctx.channel.guild_id;
-      const currentUser = UserStore.getCurrentUser();
-
       if (!guildId) return;
 
       try {
         const GuildMemberStore = findByStoreName("GuildMemberStore");
-        const allMembers = GuildMemberStore?.getMembers(guildId) || [];
+        const membersObj = GuildMemberStore?.getMembers(guildId);
+        if (!membersObj) return;
 
-        if (!allMembers.length) {
-          receiveMessage(ctx.channel.id, Object.assign(
-            createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No cached members found in this server." }),
-            { author: currentUser }
-          ));
-          return;
-        }
+        const members = Object.values(membersObj);
+        if (!members.length) return;
+
+        const maxPerMessage = Math.min(30, members.length);
 
         for (let i = 0; i < amount; i++) {
-          const randomMembers: string[] = [];
-          const maxToPing = Math.min(30, allMembers.length);
-          while (randomMembers.length < maxToPing) {
-            const member = allMembers[Math.floor(Math.random() * allMembers.length)];
-            if (member?.user?.id && !randomMembers.includes(`<@${member.user.id}>`)) {
-              randomMembers.push(`<@${member.user.id}>`);
-            }
+          await new Promise(res => setTimeout(res, 0));
+
+          const selected: string[] = [];
+          const usedIndexes = new Set<number>();
+
+          while (selected.length < maxPerMessage && usedIndexes.size < members.length) {
+            const index = Math.floor(Math.random() * members.length);
+            if (usedIndexes.has(index)) continue;
+            usedIndexes.add(index);
+
+            const m: any = members[index];
+            const id = m?.userId ?? m?.user?.id;
+            if (id) selected.push(`<@${id}>`);
           }
 
-          const content = randomMembers.join(" ");
-          await sleep(delay);
-          MessageActions.sendMessage(ctx.channel.id, { content });
+          if (!selected.length) continue;
+
+          MessageActions.sendMessage(ctx.channel.id, {
+            content: selected.join(" "),
+          });
+
+          if (delay > 0) await sleep(delay);
         }
 
       } catch (err) {
-        receiveMessage(ctx.channel.id, Object.assign(
-          createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Failed to fetch members: ${String(err)}` }),
-          { author: currentUser }
-        ));
+        console.log("EventPing Error:", err);
       }
     },
   })
