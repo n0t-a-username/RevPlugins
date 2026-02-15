@@ -15,28 +15,28 @@ export default function Header() {
   const styles = stylesheet.createThemedStyleSheet({
     container: {
       width: "100%",
-      alignItems: "center",          // Center horizontally
-      justifyContent: "center",
+      flexDirection: "row",
+      justifyContent: "center",      // Center the whole avatar + text horizontally
+      alignItems: "center",
       paddingVertical: 24,
-      paddingHorizontal: 16,
     },
     avatarContainer: {
-      width: 80,                     // Slightly smaller avatar
-      height: 80,
+      width: 72,                      // slightly smaller
+      height: 72,
       justifyContent: "center",
       alignItems: "center",
-      marginBottom: 12,              // Space between avatar and text
+      marginRight: 16,                // space between avatar and text
     },
     avatar: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,              // circular
+      width: 72,
+      height: 72,
+      borderRadius: 36,
     },
     textContainer: {
-      alignItems: "center",          // Center text horizontally
+      justifyContent: "center",       // vertically center text with avatar
     },
     title: {
-      fontSize: 22,
+      fontSize: 24,                   // slightly bigger header font
       fontWeight: "700",
       color: semanticColors.TEXT_DEFAULT,
     },
@@ -45,7 +45,6 @@ export default function Header() {
       fontSize: 14,
       fontWeight: "600",
       color: semanticColors.TEXT_MUTED,
-      textAlign: "center",           // Center subtitle text
     },
   });
 
