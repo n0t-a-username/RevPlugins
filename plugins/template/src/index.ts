@@ -11,6 +11,8 @@ import { after } from "@vendetta/patcher";
 const MessageActions = findByProps("sendMessage", "editMessage");
 const UserStore = findByStoreName("UserStore");
 const ChannelStore = findByProps("getChannel");
+
+// expanded to include GET for mass-delete
 const HTTP = findByProps("get", "del", "post", "put");
 
 const commands: (() => void)[] = [];
@@ -257,9 +259,8 @@ commands.push(
       if (!channelId) return;
 
       const channel = ChannelStore.getChannel(channelId);
-      const currentUser = UserStore.getCurrentUser();
-
       if (!channel) {
+        const currentUser = UserStore.getCurrentUser();
         receiveMessage(
           ctx.channel.id,
           Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "❌ Invalid channel ID." }), { author: currentUser })
@@ -271,11 +272,13 @@ commands.push(
 
       try {
         await HTTP.del({ url: `/channels/${channelId}` });
+        const currentUser = UserStore.getCurrentUser();
         receiveMessage(
           ctx.channel.id,
           Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "🗑️ Channel deleted successfully." }), { author: currentUser })
         );
       } catch (err) {
+        const currentUser = UserStore.getCurrentUser();
         receiveMessage(
           ctx.channel.id,
           Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` }), { author: currentUser })
@@ -417,12 +420,12 @@ commands.push(
   })
 );
 
-// ---- /event-ping ----
+// ---- /event-ping (cache-based working) ----
 commands.push(
   registerCommand({
     name: "event-ping",
     displayName: "Event Ping",
-    description: "Ping up to 30 random members multiple times",
+    description: "Ping up to 30 random cached members multiple times",
     options: [
       {
         name: "amount",
@@ -451,21 +454,22 @@ commands.push(
       if (!guildId) return;
 
       try {
-        const res = await HTTP.get({ url: `/guilds/${guildId}/members?limit=1000` });
-        const members = res?.body;
-        if (!Array.isArray(members) || !members.length) {
+        const GuildMemberStore = findByStoreName("GuildMemberStore");
+        const allMembers = GuildMemberStore?.getMembers(guildId) || [];
+
+        if (!allMembers.length) {
           receiveMessage(ctx.channel.id, Object.assign(
-            createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Failed to fetch members or none found.` }),
+            createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No cached members found in this server." }),
             { author: currentUser }
           ));
           return;
         }
 
         for (let i = 0; i < amount; i++) {
-          const randomMembers = [];
-          const maxToPing = Math.min(30, members.length); // Use available members if < 30
+          const randomMembers: string[] = [];
+          const maxToPing = Math.min(30, allMembers.length);
           while (randomMembers.length < maxToPing) {
-            const member = members[Math.floor(Math.random() * members.length)];
+            const member = allMembers[Math.floor(Math.random() * allMembers.length)];
             if (member?.user?.id && !randomMembers.includes(`<@${member.user.id}>`)) {
               randomMembers.push(`<@${member.user.id}>`);
             }
