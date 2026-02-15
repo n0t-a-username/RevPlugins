@@ -212,9 +212,9 @@ const handleAvatarPress = () => {
         </RN.Pressable>
 
         <RN.View style={styles.textContainer}>
-          <RN.Text style={styles.title}>Commands</RN.Text>
+          <RN.Text style={styles.title}>Bemmo</RN.Text>
           <RN.Text style={styles.subtitle}>
-            Cool animal images with slash commands
+            The only self-bot for vendetta fork based mobile clients!
           </RN.Text>
         </RN.View>
       </RN.View>
