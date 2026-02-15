@@ -12,18 +12,16 @@ export default function Header() {
 
   const styles = stylesheet.createThemedStyleSheet({
     container: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "center",
+      width: "100%",
       paddingVertical: 24,
       paddingHorizontal: 16,
-      width: "100%",
+      justifyContent: "center",
+      alignItems: "center",
     },
-    leftSection: {
+    innerContainer: {
       flexDirection: "row",
       alignItems: "center",
       gap: 20,
-      maxWidth: 500,
     },
     avatarWrapper: {
       width: 72,
@@ -41,7 +39,6 @@ export default function Header() {
     },
     textContainer: {
       justifyContent: "center",
-      flexShrink: 1,
     },
     title: {
       fontSize: 22,
@@ -85,10 +82,12 @@ export default function Header() {
 
   return (
     <RN.View style={styles.container}>
-      <RN.View style={styles.leftSection}>
+      <RN.View style={styles.innerContainer}>
         <RN.Pressable style={styles.avatarWrapper} onPress={handleAvatarPress}>
           <RN.Image
-            source={{ uri: "https://raw.githubusercontent.com/n0t-a-username/RevPlugins/refs/heads/master/plugins/template/src/components/Bemmo.png" }}
+            source={{
+              uri: "https://raw.githubusercontent.com/n0t-a-username/RevPlugins/refs/heads/master/plugins/template/src/components/Bemmo.png",
+            }}
             style={styles.avatar}
             resizeMode="cover"
           />
