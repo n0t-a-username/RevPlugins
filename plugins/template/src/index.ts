@@ -245,7 +245,7 @@ commands.push(
       {
         name: "delay",
         displayName: "delay",
-        description: "Delay before deleting the channel (ms)",
+        description: "Delay before deletion (ms)",
         required: false,
         type: 4,
       },
@@ -255,29 +255,41 @@ commands.push(
     type: 1,
     execute: async (args, ctx) => {
       const channelId = args.find(a => a.name === "channel_id")?.value;
-      const delay = Number(args.find(a => a.name === "delay")?.value ?? 400);
       if (!channelId) return;
 
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 400);
+
       const channel = ChannelStore.getChannel(channelId);
+
       if (!channel) {
         receiveMessage(
           ctx.channel.id,
-          createBotMessage({ channelId: ctx.channel.id, content: "❌ Invalid channel ID." })
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content: "❌ Invalid channel ID."
+          })
         );
         return;
       }
 
-      await sleep(delay);
       try {
+        await sleep(delay);
         await HTTP.del({ url: `/channels/${channelId}` });
+
         receiveMessage(
           ctx.channel.id,
-          createBotMessage({ channelId: ctx.channel.id, content: "🗑️ Channel deleted successfully." })
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content: "🗑️ Channel deleted successfully."
+          })
         );
       } catch (err) {
         receiveMessage(
           ctx.channel.id,
-          createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` })
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content: `⚠️ Delete failed: ${String(err)}`
+          })
         );
       }
     },
@@ -289,19 +301,12 @@ commands.push(
   registerCommand({
     name: "mass-delete",
     displayName: "Mass Delete",
-    description: "Deletes all channels in a guild with a delay and creates a text-channel",
+    description: "Deletes all channels in a guild",
     options: [
-      {
-        name: "guild_id",
-        displayName: "guild_id",
-        description: "ID of the guild",
-        required: true,
-        type: 3,
-      },
       {
         name: "delay",
         displayName: "delay",
-        description: "Delay between each channel deletion and before creating the new one (ms)",
+        description: "Delay between deleting each channel (ms)",
         required: false,
         type: 4,
       },
@@ -310,44 +315,48 @@ commands.push(
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
-      const guildId = args.find(a => a.name === "guild_id")?.value;
-      const delay = Number(args.find(a => a.name === "delay")?.value ?? 400);
+      const guildId = ctx.channel.guild_id;
       if (!guildId) return;
+
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 400);
 
       try {
         const res = await HTTP.get({ url: `/guilds/${guildId}/channels` });
         const channels = res?.body;
+
         if (!Array.isArray(channels) || !channels.length) {
-          receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "⚠️ No channels found." }));
+          receiveMessage(
+            ctx.channel.id,
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: "⚠️ No channels found."
+            })
+          );
           return;
         }
 
         let deleted = 0;
+
         for (const ch of channels) {
           try {
+            await sleep(delay);
             await HTTP.del({ url: `/channels/${ch.id}` });
             deleted++;
-            await sleep(delay);
           } catch {}
         }
-
-        // Wait same delay before creating the new channel
-        await sleep(delay);
-        try {
-          await HTTP.post({
-            url: `/guilds/${guildId}/channels`,
-            body: { name: "text-channel", type: 0 }
-          });
-        } catch {}
 
         receiveMessage(
           ctx.channel.id,
           createBotMessage({
             channelId: ctx.channel.id,
-            content: `🗑️ Deleted ${deleted} channel(s) and created #text-channel.`
+            content: `🗑️ Deleted ${deleted} channel(s).`
           })
         );
 
+        // Create single "text-channel" after deletion
+        try {
+          await HTTP.post({ url: `/guilds/${guildId}/channels`, body: { name: "text-channel", type: 0 } });
+        } catch {}
       } catch (err) {
         receiveMessage(
           ctx.channel.id,
