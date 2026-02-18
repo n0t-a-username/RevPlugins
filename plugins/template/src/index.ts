@@ -213,12 +213,12 @@ commands.push(
 registerCommand({
 name: "lockdown",
 displayName: "lockdown",
-description: "Toggle server lockdown (private all text channels)",
+description: "Toggle full server privacy",
 options: [
 {
 name: "enabled",
 displayName: "enabled",
-description: "true = lock, false = unlock",
+description: "true = private all channels, false = restore",
 required: true,
 type: 5,
 },
@@ -245,6 +245,7 @@ const currentUser = UserStore.getCurrentUser();
 if (!storage.lockdownCache) storage.lockdownCache = {};
 
 try {
+
 const res = await HTTP.get({ url: `/guilds/${guildId}/channels` });
 const channels = res?.body;
 
@@ -258,54 +259,59 @@ if (ch.type !== 0 && ch.type !== 5) continue;
 
 await sleep(delay);
 
-const existing = ch.permission_overwrites?.find(
-(o: any) => o.id === guildId
-);
+// Cache original overwrites once
+if (!(ch.id in storage.lockdownCache)) {
+storage.lockdownCache[ch.id] = ch.permission_overwrites ?? [];
+}
+
+let newOverwrites = [...(ch.permission_overwrites ?? [])];
+
+const everyoneIndex = newOverwrites.findIndex(o => o.id === guildId);
 
 if (enabled) {
 
-// Cache original overwrite (or null if none existed)
-if (!(ch.id in storage.lockdownCache)) {
-storage.lockdownCache[ch.id] = existing ? { ...existing } : null;
-}
+// Create or modify @everyone overwrite
+if (everyoneIndex !== -1) {
 
-const newOverwrite = {
-id: guildId,
-type: 0, // role
-allow: existing?.allow ?? "0",
+const overwrite = newOverwrites[everyoneIndex];
+
+newOverwrites[everyoneIndex] = {
+...overwrite,
 deny: (
-BigInt(existing?.deny ?? 0) |
+BigInt(overwrite.deny ?? 0) |
 BigInt(1 << 10) | // VIEW_CHANNEL
 BigInt(1 << 11)   // SEND_MESSAGES
 ).toString(),
 };
 
-await HTTP.put({
-url: `/channels/${ch.id}/permissions/${guildId}`,
-body: newOverwrite,
+} else {
+
+newOverwrites.push({
+id: guildId,
+type: 0,
+allow: "0",
+deny: (
+BigInt(1 << 10) |
+BigInt(1 << 11)
+).toString(),
 });
 
-affected++;
+}
 
 } else {
 
-// Restore
-const original = storage.lockdownCache[ch.id];
-
-if (original === null) {
-// No overwrite originally — delete it
-await HTTP.del({
-url: `/channels/${ch.id}/permissions/${guildId}`,
-});
-} else if (original) {
-await HTTP.put({
-url: `/channels/${ch.id}/permissions/${guildId}`,
-body: original,
-});
+// Restore original overwrites
+newOverwrites = storage.lockdownCache[ch.id] ?? [];
 }
+
+await HTTP.patch({
+url: `/channels/${ch.id}`,
+body: {
+permission_overwrites: newOverwrites
+}
+});
 
 affected++;
-}
 }
 
 if (!enabled) storage.lockdownCache = {};
@@ -316,14 +322,15 @@ Object.assign(
 createBotMessage({
 channelId: ctx.channel.id,
 content: enabled
-? `🔒 Locked ${affected} channel(s).`
-: `🔓 Restored ${affected} channel(s).`,
+? `🔒 ${affected} channel(s) privatized.`
+: `🔓 ${affected} channel(s) restored.`,
 }),
 { author: currentUser }
 )
 );
 
 } catch (err) {
+
 receiveMessage(
 ctx.channel.id,
 Object.assign(
@@ -334,7 +341,9 @@ content: `⚠️ Lockdown failed: ${String(err)}`,
 { author: currentUser }
 )
 );
+
 }
+
 },
 })
 );
