@@ -207,6 +207,69 @@ commands.push(
   })
 );
 
+commands.push(
+registerCommand({
+  name: "purge-self",
+  displayName: "purge-self",
+  description: "Deletes your own messages in this channel",
+  options: [
+    { name: "amount", displayName: "amount", description: "Number of messages to delete", required: false, type: 4 }
+  ],
+  applicationId: "-1",
+  inputType: 1,
+  type: 1,
+  execute: async (args, ctx) => {
+    const currentUser = UserStore.getCurrentUser();
+    const myId = currentUser.id;
+    const channelId = ctx.channel.id;
+    const amount = Number(args.find(a => a.name === "amount")?.value ?? 50);
+
+    try {
+      // Fetch last 100 messages
+      const res = await HTTP.get({ url: `/channels/${channelId}/messages?limit=100` });
+      const messages = res?.body;
+      if (!Array.isArray(messages)) return;
+
+      // Filter messages authored by you
+      const myMessages = messages.filter((m: any) => m.author.id === myId).slice(0, amount);
+
+      let deletedCount = 0;
+
+      for (const msg of myMessages) {
+        try {
+          await HTTP.del({ url: `/channels/${channelId}/messages/${msg.id}` });
+          deletedCount++;
+          await sleep(100); // small delay to avoid ratelimits
+        } catch {}
+      }
+
+      receiveMessage(
+        channelId,
+        Object.assign(
+          createBotMessage({
+            channelId,
+            content: `🧹 Purged ${deletedCount} of your messages.`,
+          }),
+          { author: currentUser }
+        )
+      );
+
+    } catch (err) {
+      receiveMessage(
+        channelId,
+        Object.assign(
+          createBotMessage({
+            channelId,
+            content: `⚠️ Purge failed: ${String(err)}`,
+          }),
+          { author: currentUser }
+        )
+      );
+    }
+  },
+})
+);
+
 
 // ---- /lockdown ----
 commands.push(
