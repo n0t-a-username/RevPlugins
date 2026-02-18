@@ -208,85 +208,6 @@ commands.push(
 );
 
 
-// ---- /wordreact ----
-commands.push(
-registerCommand({
-  name: "wordreact",
-  displayName: "wordreact",
-  description: "React to a message using a word with regional_indicator emojis",
-  options: [
-    {
-      name: "message_id",
-      displayName: "Message ID",
-      description: "ID of the message to react to",
-      required: true,
-      type: 3, // STRING allows typing anything
-    },
-    {
-      name: "word",
-      displayName: "Word",
-      description: "Word to convert into emoji reactions",
-      required: true,
-      type: 3, // STRING allows typing letters, symbols, etc.
-    },
-    {
-      name: "delay",
-      displayName: "Delay (ms)",
-      description: "Optional delay per reaction (default 300ms)",
-      required: false,
-      type: 4, // INTEGER
-    },
-  ],
-  applicationId: "-1",
-  inputType: 1,
-  type: 1,
-  execute: async (args, ctx) => {
-    const targetMessageId = args.find(a => a.name === "message_id")?.value?.trim();
-    const inputWord = args.find(a => a.name === "word")?.value?.trim();
-    const delay = Number(args.find(a => a.name === "delay")?.value ?? 300);
-
-    if (!targetMessageId || !inputWord) {
-      return MessageActions.sendMessage(ctx.channel.id, {
-        content: "⚠️ You must provide both a message ID and a word.",
-      });
-    }
-
-    const channelId = ctx.channel.id;
-
-    // Remove duplicates and non-letters
-    const uniqueLetters = Array.from(new Set(inputWord.toLowerCase().replace(/[^a-z]/g, "")));
-
-    if (!uniqueLetters.length) {
-      return MessageActions.sendMessage(channelId, {
-        content: "⚠️ No valid letters to react with.",
-      });
-    }
-
-    try {
-      for (const letter of uniqueLetters) {
-        const emoji = `:regional_indicator_${letter}:`;
-        const encodedEmoji = encodeURIComponent(emoji);
-
-        await HTTP.put({
-          url: `/channels/${channelId}/messages/${targetMessageId}/reactions/${encodedEmoji}/@me`,
-        });
-
-        // Wait the user-specified delay between reactions
-        await new Promise(r => setTimeout(r, delay));
-      }
-
-      MessageActions.sendMessage(channelId, {
-        content: `✅ Reacted to message ID ${targetMessageId} with the word "${inputWord}".`,
-      });
-    } catch (err) {
-      MessageActions.sendMessage(channelId, {
-        content: `⚠️ Failed to react: ${String(err)}`,
-      });
-    }
-  },
-})
-);
-
 
 // ---- /purge ----
 commands.push(
@@ -500,46 +421,53 @@ content: `⚠️ Lockdown failed: ${String(err)}`,
 
 // ---- /userid ----
 commands.push(
-registerCommand({
-name: "userid",
-displayName: "userid",
-description: "Displays a user's ID",
-options: [
-{ name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
-],
-applicationId: "-1",
-inputType: 1,
-type: 1,
-execute: (args, ctx) => {
-const input = args.find(a => a.name === "user")?.value?.trim();
-if (!input) return;
+  registerCommand({
+    name: "userid",
+    displayName: "userid",
+    description: "Displays a user's ID",
+    options: [
+      { name: "user", displayName: "user", description: "Mention or ID of the user", required: true, type: 3 }
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: (args, ctx) => {
+      const input = args.find(a => a.name === "user")?.value?.trim();
+      if (!input) return;
 
-const userId = input.replace(/[<@!>]/g, "");  
-  const user = UserStore.getUser(userId);  
+      const userId = input.replace(/[<@!>]/g, "");
+      const user = UserStore.getUser(userId);
+      const currentUser = UserStore.getCurrentUser();
 
-  if (!user) {  
-    MessageActions.sendMessage(  
-      ctx.channel.id,  
-      { content: "❌ User not found" },  
-      void 0,  
-      { nonce: Date.now().toString() }  
-    );  
-    return;  
-  }  
+      if (!user) {
+        // ❌ User not found as a bot message
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: "❌ User not found"
+            }),
+            { author: currentUser }
+          )
+        );
+        return;
+      }
 
-  const content = `ID: ${user.id}`;  
-  const currentUser = UserStore.getCurrentUser();  
-
-  receiveMessage(  
-    ctx.channel.id,  
-    Object.assign(  
-      createBotMessage({ channelId: ctx.channel.id, content }),  
-      { author: currentUser }  
-    )  
-  );  
-},
-
-})
+      // ✅ User found
+      const content = `ID: ${user.id}`;
+      receiveMessage(
+        ctx.channel.id,
+        Object.assign(
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content
+          }),
+          { author: currentUser }
+        )
+      );
+    },
+  })
 );
 
 // ---- /mass-ping ----
@@ -613,63 +541,70 @@ if (shouldClear === true) {
 
 // ---- /delete-channel ----
 commands.push(
-registerCommand({
-name: "delete-channel",
-displayName: "delete-channel",
-description: "Deletes a channel using its ID",
-options: [
-{
-name: "channel_id",
-displayName: "channel_id",
-description: "ID of the channel to delete",
-required: true,
-type: 3,
-},
-{
-name: "delay",
-displayName: "delay",
-description: "Delay before deletion in ms",
-required: false,
-type: 4,
-},
-],
-applicationId: "-1",
-inputType: 1,
-type: 1,
-execute: async (args, ctx) => {
-const channelId = args.find(a => a.name === "channel_id")?.value;
-const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
-if (!channelId) return;
+  registerCommand({
+    name: "delete-channel",
+    displayName: "delete-channel",
+    description: "Deletes a selected channel",
+    options: [
+      {
+        name: "channel",
+        displayName: "Channel",
+        description: "Select the channel to delete",
+        required: true,
+        type: 7, // Channel select
+      },
+      {
+        name: "delay",
+        displayName: "Delay",
+        description: "Delay before deletion in ms",
+        required: false,
+        type: 4, // Integer
+      },
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const selectedChannelId = args.find(a => a.name === "channel")?.value;
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
+      if (!selectedChannelId) return;
 
-const channel = ChannelStore.getChannel(channelId);  
-  if (!channel) {  
-    const currentUser = UserStore.getCurrentUser();  
-    receiveMessage(  
-      ctx.channel.id,  
-      Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "❌ Invalid channel ID." }), { author: currentUser })  
-    );  
-    return;  
-  }  
+      const channel = ChannelStore.getChannel(selectedChannelId);
+      const currentUser = UserStore.getCurrentUser();
 
-  if (delay > 0) await sleep(delay);  
+      if (!channel) {
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({ channelId: ctx.channel.id, content: "❌ Invalid channel." }),
+            { author: currentUser }
+          )
+        );
+        return;
+      }
 
-  try {  
-    await HTTP.del({ url: `/channels/${channelId}` });  
-    const currentUser = UserStore.getCurrentUser();  
-    receiveMessage(  
-      ctx.channel.id,  
-      Object.assign(createBotMessage({ channelId: ctx.channel.id, content: "🗑️ Channel deleted successfully." }), { author: currentUser })  
-    );  
-  } catch (err) {  
-    const currentUser = UserStore.getCurrentUser();  
-    receiveMessage(  
-      ctx.channel.id,  
-      Object.assign(createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` }), { author: currentUser })  
-    );  
-  }  
-},
+      if (delay > 0) await sleep(delay);
 
-})
+      try {
+        await HTTP.del({ url: `/channels/${selectedChannelId}` });
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({ channelId: ctx.channel.id, content: "🗑️ Channel deleted successfully." }),
+            { author: currentUser }
+          )
+        );
+      } catch (err) {
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({ channelId: ctx.channel.id, content: `⚠️ Delete failed: ${String(err)}` }),
+            { author: currentUser }
+          )
+        );
+      }
+    },
+  })
 );
 
 // ---- /mass-delete ----
