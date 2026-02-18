@@ -207,48 +207,47 @@ commands.push(
   })
 );
 
+// ---- /react ----
 commands.push(
 registerCommand({
   name: "react",
   displayName: "react",
-  description: "Add a reaction to a message",
+  description: "Add a reaction to a replied-to message",
   options: [
-    {
-      name: "message_id",
-      displayName: "Message ID",
-      description: "ID of the message to react to",
-      required: true,
-      type: 3,
-    },
     {
       name: "emoji",
       displayName: "Emoji",
-      description: "Emoji to react with (unicode or custom emoji)",
+      description: "Emoji to react with (Unicode or custom emoji)",
       required: true,
-      type: 3,
+      type: 3, // string
     },
   ],
   applicationId: "-1",
   inputType: 1,
   type: 1,
   execute: async (args, ctx) => {
-    const msgId = args.find(a => a.name === "message_id")?.value;
     const emoji = args.find(a => a.name === "emoji")?.value;
     const channelId = ctx.channel.id;
     const currentUser = UserStore.getCurrentUser();
 
-    if (!msgId || !emoji) return;
+    // Ensure the user replied to a message
+    const targetMessage = ctx.targetMessage;
+    if (!targetMessage) {
+      return MessageActions.sendMessage(channelId, {
+        content: "⚠️ You must **reply to a message** to react to it.",
+      });
+    }
 
-    // Encode emoji for custom emojis
+    // Encode emoji for custom emoji format
     const encodedEmoji = encodeURIComponent(emoji);
 
     try {
       await HTTP.put({
-        url: `/channels/${channelId}/messages/${msgId}/reactions/${encodedEmoji}/@me`,
+        url: `/channels/${channelId}/messages/${targetMessage.id}/reactions/${encodedEmoji}/@me`,
       });
 
       MessageActions.sendMessage(channelId, {
-        content: `✅ Reacted with ${emoji} to message ${msgId}`,
+        content: `✅ Reacted with ${emoji} to the replied message.`,
       });
     } catch (err) {
       MessageActions.sendMessage(channelId, {
