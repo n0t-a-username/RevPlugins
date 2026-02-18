@@ -207,6 +207,58 @@ commands.push(
   })
 );
 
+commands.push(
+registerCommand({
+  name: "react",
+  displayName: "react",
+  description: "Add a reaction to a message",
+  options: [
+    {
+      name: "message_id",
+      displayName: "Message ID",
+      description: "ID of the message to react to",
+      required: true,
+      type: 3,
+    },
+    {
+      name: "emoji",
+      displayName: "Emoji",
+      description: "Emoji to react with (unicode or custom emoji)",
+      required: true,
+      type: 3,
+    },
+  ],
+  applicationId: "-1",
+  inputType: 1,
+  type: 1,
+  execute: async (args, ctx) => {
+    const msgId = args.find(a => a.name === "message_id")?.value;
+    const emoji = args.find(a => a.name === "emoji")?.value;
+    const channelId = ctx.channel.id;
+    const currentUser = UserStore.getCurrentUser();
+
+    if (!msgId || !emoji) return;
+
+    // Encode emoji for custom emojis
+    const encodedEmoji = encodeURIComponent(emoji);
+
+    try {
+      await HTTP.put({
+        url: `/channels/${channelId}/messages/${msgId}/reactions/${encodedEmoji}/@me`,
+      });
+
+      MessageActions.sendMessage(channelId, {
+        content: `✅ Reacted with ${emoji} to message ${msgId}`,
+      });
+    } catch (err) {
+      MessageActions.sendMessage(channelId, {
+        content: `⚠️ Failed to react: ${String(err)}`,
+      });
+    }
+  },
+})
+);
+
 
 // ---- /purge ----
 commands.push(
