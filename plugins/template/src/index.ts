@@ -207,47 +207,75 @@ commands.push(
   })
 );
 
-// ---- /react ----
+// ---- /wordreact ----
 commands.push(
 registerCommand({
-  name: "react",
-  displayName: "react",
-  description: "Add a reaction to a replied-to message",
+  name: "wordreact",
+  displayName: "wordreact",
+  description: "React to a message using a word with regional_indicator emojis",
   options: [
     {
-      name: "emoji",
-      displayName: "Emoji",
-      description: "Emoji to react with (Unicode or custom emoji)",
+      name: "word",
+      displayName: "Word",
+      description: "Word to convert to reactions",
       required: true,
       type: 3, // string
+    },
+    {
+      name: "message_id",
+      displayName: "Message ID",
+      description: "Message ID to react to",
+      required: true,
+      type: 3, // string
+    },
+    {
+      name: "delay",
+      displayName: "Delay (ms)",
+      description: "Delay between each reaction in milliseconds (default 300)",
+      required: false,
+      type: 4, // integer
     },
   ],
   applicationId: "-1",
   inputType: 1,
   type: 1,
   execute: async (args, ctx) => {
-    const emoji = args.find(a => a.name === "emoji")?.value;
-    const channelId = ctx.channel.id;
-    const currentUser = UserStore.getCurrentUser();
+    const inputWord = args.find(a => a.name === "word")?.value?.trim();
+    const targetMessageId = args.find(a => a.name === "message_id")?.value?.trim();
+    const delay = Number(args.find(a => a.name === "delay")?.value ?? 300);
 
-    // Ensure the user replied to a message
-    const targetMessage = ctx.targetMessage;
-    if (!targetMessage) {
-      return MessageActions.sendMessage(channelId, {
-        content: "⚠️ You must **reply to a message** to react to it.",
+    if (!inputWord || !targetMessageId) {
+      return MessageActions.sendMessage(ctx.channel.id, {
+        content: "⚠️ You must provide both a word and a message ID.",
       });
     }
 
-    // Encode emoji for custom emoji format
-    const encodedEmoji = encodeURIComponent(emoji);
+    const channelId = ctx.channel.id;
+
+    // Remove duplicates and non-letters
+    const uniqueLetters = Array.from(new Set(inputWord.toLowerCase().replace(/[^a-z]/g, "")));
+
+    if (!uniqueLetters.length) {
+      return MessageActions.sendMessage(channelId, {
+        content: "⚠️ No valid letters to react with.",
+      });
+    }
 
     try {
-      await HTTP.put({
-        url: `/channels/${channelId}/messages/${targetMessage.id}/reactions/${encodedEmoji}/@me`,
-      });
+      for (const letter of uniqueLetters) {
+        const emoji = `:regional_indicator_${letter}:`;
+        const encodedEmoji = encodeURIComponent(emoji);
+
+        await HTTP.put({
+          url: `/channels/${channelId}/messages/${targetMessageId}/reactions/${encodedEmoji}/@me`,
+        });
+
+        // Wait the user-specified delay between reactions
+        await new Promise(r => setTimeout(r, delay));
+      }
 
       MessageActions.sendMessage(channelId, {
-        content: `✅ Reacted with ${emoji} to the replied message.`,
+        content: `✅ Reacted to the message with the word "${inputWord}".`,
       });
     } catch (err) {
       MessageActions.sendMessage(channelId, {
