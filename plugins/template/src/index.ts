@@ -186,7 +186,7 @@ commands.push(
           Object.assign(
             createBotMessage({
               channelId: ctx.channel.id,
-              content: `📢 PSA sent to ${sent} channel(s).`,
+              content: `📢 Message was sent to ${sent} channel(s).`,
             }),
             { author: currentUser }
           )
@@ -197,7 +197,7 @@ commands.push(
           Object.assign(
             createBotMessage({
               channelId: ctx.channel.id,
-              content: `⚠️ PSA failed: ${String(err)}`,
+              content: `⚠️ Message failed: ${String(err)}`,
             }),
             { author: currentUser }
           )
@@ -207,13 +207,17 @@ commands.push(
   })
 );
 
+
+// ---- /purge ----
 commands.push(
 registerCommand({
-  name: "purge-self",
-  displayName: "purge-self",
-  description: "Deletes your own messages in this channel",
+  name: "purge",
+  displayName: "purge",
+  description: "Delete messages in this channel, optionally only your own",
   options: [
-    { name: "amount", displayName: "amount", description: "Number of messages to delete", required: false, type: 4 }
+    { name: "amount", displayName: "amount", description: "Number of messages to delete", required: false, type: 4 },
+    { name: "self", displayName: "self", description: "true = delete only your messages, false = delete all", required: true, type: 5 },
+    { name: "delay", displayName: "delay", description: "Delay between deletions in ms", required: false, type: 4 },
   ],
   applicationId: "-1",
   inputType: 1,
@@ -222,7 +226,10 @@ registerCommand({
     const currentUser = UserStore.getCurrentUser();
     const myId = currentUser.id;
     const channelId = ctx.channel.id;
+
     const amount = Number(args.find(a => a.name === "amount")?.value ?? 50);
+    const selfOnly = args.find(a => a.name === "self")?.value ?? true;
+    const delay = Number(args.find(a => a.name === "delay")?.value ?? 100);
 
     try {
       // Fetch last 100 messages
@@ -230,16 +237,17 @@ registerCommand({
       const messages = res?.body;
       if (!Array.isArray(messages)) return;
 
-      // Filter messages authored by you
-      const myMessages = messages.filter((m: any) => m.author.id === myId).slice(0, amount);
+      // Filter messages
+      let toDelete = messages.slice(0, amount);
+      if (selfOnly) toDelete = toDelete.filter((m: any) => m.author.id === myId);
 
       let deletedCount = 0;
 
-      for (const msg of myMessages) {
+      for (const msg of toDelete) {
         try {
           await HTTP.del({ url: `/channels/${channelId}/messages/${msg.id}` });
           deletedCount++;
-          await sleep(100); // small delay to avoid ratelimits
+          await sleep(delay);
         } catch {}
       }
 
@@ -248,7 +256,7 @@ registerCommand({
         Object.assign(
           createBotMessage({
             channelId,
-            content: `🧹 Purged ${deletedCount} of your messages.`,
+            content: `🧹 Purged ${deletedCount} message(s)${selfOnly ? " (self-only)" : ""}.`,
           }),
           { author: currentUser }
         )
@@ -269,7 +277,6 @@ registerCommand({
   },
 })
 );
-
 
 // ---- /lockdown ----
 commands.push(
