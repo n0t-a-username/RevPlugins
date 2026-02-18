@@ -207,6 +207,7 @@ commands.push(
   })
 );
 
+
 // ---- /wordreact ----
 commands.push(
 registerCommand({
@@ -215,38 +216,38 @@ registerCommand({
   description: "React to a message using a word with regional_indicator emojis",
   options: [
     {
-      name: "word",
-      displayName: "Word",
-      description: "Word to convert to reactions",
-      required: true,
-      type: 3, // string
-    },
-    {
       name: "message_id",
       displayName: "Message ID",
-      description: "Message ID to react to",
+      description: "ID of the message to react to",
       required: true,
-      type: 3, // string
+      type: 3, // STRING allows typing anything
+    },
+    {
+      name: "word",
+      displayName: "Word",
+      description: "Word to convert into emoji reactions",
+      required: true,
+      type: 3, // STRING allows typing letters, symbols, etc.
     },
     {
       name: "delay",
       displayName: "Delay (ms)",
-      description: "Delay between each reaction in milliseconds (default 300)",
+      description: "Optional delay per reaction (default 300ms)",
       required: false,
-      type: 4, // integer
+      type: 4, // INTEGER
     },
   ],
   applicationId: "-1",
   inputType: 1,
   type: 1,
   execute: async (args, ctx) => {
-    const inputWord = args.find(a => a.name === "word")?.value?.trim();
     const targetMessageId = args.find(a => a.name === "message_id")?.value?.trim();
+    const inputWord = args.find(a => a.name === "word")?.value?.trim();
     const delay = Number(args.find(a => a.name === "delay")?.value ?? 300);
 
-    if (!inputWord || !targetMessageId) {
+    if (!targetMessageId || !inputWord) {
       return MessageActions.sendMessage(ctx.channel.id, {
-        content: "⚠️ You must provide both a word and a message ID.",
+        content: "⚠️ You must provide both a message ID and a word.",
       });
     }
 
@@ -275,7 +276,7 @@ registerCommand({
       }
 
       MessageActions.sendMessage(channelId, {
-        content: `✅ Reacted to the message with the word "${inputWord}".`,
+        content: `✅ Reacted to message ID ${targetMessageId} with the word "${inputWord}".`,
       });
     } catch (err) {
       MessageActions.sendMessage(channelId, {
