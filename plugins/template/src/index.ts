@@ -207,6 +207,131 @@ commands.push(
   })
 );
 
+// ---- /lockdown ----
+commands.push(
+registerCommand({
+name: "lockdown",
+displayName: "lockdown",
+description: "Toggle server lockdown (privates or restores all text channels)",
+options: [
+{
+name: "enabled",
+displayName: "enabled",
+description: "true = private channels, false = restore",
+required: true,
+type: 5, // Boolean
+},
+{
+name: "delay",
+displayName: "delay",
+description: "Delay between channel updates (ms)",
+required: false,
+type: 4,
+},
+],
+applicationId: "-1",
+inputType: 1,
+type: 1,
+execute: async (args, ctx) => {
+
+const guildId = ctx.channel.guild_id;
+if (!guildId) return;
+
+const enabled = args.find(a => a.name === "enabled")?.value;
+const delay = Number(args.find(a => a.name === "delay")?.value ?? 300);
+const currentUser = UserStore.getCurrentUser();
+
+if (!storage.lockdownCache) storage.lockdownCache = {};
+
+try {
+const res = await HTTP.get({ url: `/guilds/${guildId}/channels` });
+const channels = res?.body;
+
+if (!Array.isArray(channels)) return;
+
+let affected = 0;
+
+for (const ch of channels) {
+
+if (ch.type !== 0 && ch.type !== 5) continue;
+
+await sleep(delay);
+
+const everyoneOverwrite = ch.permission_overwrites?.find(
+(o: any) => o.id === guildId
+);
+
+if (!everyoneOverwrite) continue;
+
+if (enabled === true) {
+
+// Cache original overwrite once
+if (!storage.lockdownCache[ch.id]) {
+storage.lockdownCache[ch.id] = { ...everyoneOverwrite };
+}
+
+const updatedOverwrite = {
+...everyoneOverwrite,
+deny: (
+BigInt(everyoneOverwrite.deny || 0) |
+BigInt(VIEW_CHANNEL) |
+BigInt(SEND_MESSAGES)
+).toString(),
+};
+
+await HTTP.put({
+url: `/channels/${ch.id}/permissions/${guildId}`,
+body: updatedOverwrite,
+});
+
+affected++;
+
+} else {
+
+// Restore if cached
+const original = storage.lockdownCache[ch.id];
+if (!original) continue;
+
+await HTTP.put({
+url: `/channels/${ch.id}/permissions/${guildId}`,
+body: original,
+});
+
+affected++;
+}
+}
+
+if (enabled === false) storage.lockdownCache = {};
+
+receiveMessage(
+ctx.channel.id,
+Object.assign(
+createBotMessage({
+channelId: ctx.channel.id,
+content: enabled
+? `🔒 Server locked. ${affected} channel(s) privatized.`
+: `🔓 Server unlocked. ${affected} channel(s) restored.`,
+}),
+{ author: currentUser }
+)
+);
+
+} catch (err) {
+receiveMessage(
+ctx.channel.id,
+Object.assign(
+createBotMessage({
+channelId: ctx.channel.id,
+content: `⚠️ Lockdown operation failed: ${String(err)}`,
+}),
+{ author: currentUser }
+)
+);
+}
+},
+})
+);
+
 // ---- /userid ----
 commands.push(
 registerCommand({
