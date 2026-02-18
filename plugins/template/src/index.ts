@@ -119,6 +119,94 @@ const userId = input.replace(/[<@!>]/g, "");
 })
 );
 
+// ---- /mcs ----
+commands.push(
+  registerCommand({
+    name: "mcs",
+    displayName: "mcs",
+    description: "Send a message in every channel",
+    options: [
+      {
+        name: "message",
+        displayName: "message",
+        description: "Type a message to broadcast",
+        required: true,
+        type: 3,
+      },
+      {
+        name: "delay",
+        displayName: "delay",
+        description: "Delay between messages (ms)",
+        required: false,
+        type: 4,
+      },
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const guildId = ctx.channel.guild_id;
+      if (!guildId) return;
+
+      const message = args.find(a => a.name === "message")?.value;
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 500);
+
+      if (!message || !message.trim().length) return;
+
+      const currentUser = UserStore.getCurrentUser();
+
+      try {
+        const res = await HTTP.get({ url: `/guilds/${guildId}/channels` });
+        const channels = res?.body;
+
+        if (!Array.isArray(channels)) return;
+
+        let sent = 0;
+
+        for (const ch of channels) {
+          // Only normal text + announcement channels
+          if (ch.type !== 0 && ch.type !== 5) continue;
+
+          try {
+            await sleep(delay);
+
+            MessageActions.sendMessage(
+              ch.id,
+              { content: message },
+              void 0,
+              { nonce: Date.now().toString() }
+            );
+
+            sent++;
+          } catch {}
+        }
+
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: `📢 PSA sent to ${sent} channel(s).`,
+            }),
+            { author: currentUser }
+          )
+        );
+      } catch (err) {
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: `⚠️ PSA failed: ${String(err)}`,
+            }),
+            { author: currentUser }
+          )
+        );
+      }
+    },
+  })
+);
+
 // ---- /userid ----
 commands.push(
 registerCommand({
