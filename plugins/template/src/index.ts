@@ -72,6 +72,109 @@ for (let i = 0; i < amount; i++) {
 })
 );
 
+commands.push(
+  registerCommand({
+    name: "dupe-server",
+    displayName: "dupe-server",
+    description: "Duplicates this server's channel structure into another guild",
+    options: [
+      {
+        name: "target_guild_id",
+        displayName: "Target Guild ID",
+        description: "ID of the guild to duplicate into",
+        required: true,
+        type: 3,
+      },
+      {
+        name: "delay",
+        displayName: "Delay (ms)",
+        description: "Delay between channel creations (can be 0)",
+        required: false,
+        type: 4,
+      },
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const targetGuildId = args.find(a => a.name === "target_guild_id")?.value?.trim();
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
+
+      if (!targetGuildId) return;
+
+      const sourceGuildId = ctx.guild?.id;
+      const currentUser = UserStore.getCurrentUser();
+
+      try {
+        const sourceRes = await HTTP.get({
+          url: `/guilds/${sourceGuildId}/channels`,
+        });
+
+        const sourceChannels = sourceRes.body;
+        const categoryMap: Record<string, string> = {};
+
+        // Create categories first
+        for (const channel of sourceChannels.filter(c => c.type === 4)) {
+          const newCategory = await HTTP.post({
+            url: `/guilds/${targetGuildId}/channels`,
+            body: {
+              name: channel.name,
+              type: 4,
+            },
+          });
+
+          categoryMap[channel.id] = newCategory.body.id;
+
+          if (delay > 0) {
+            await new Promise(r => setTimeout(r, delay));
+          }
+        }
+
+        // Create remaining channels
+        for (const channel of sourceChannels.filter(c => c.type !== 4)) {
+          await HTTP.post({
+            url: `/guilds/${targetGuildId}/channels`,
+            body: {
+              name: channel.name,
+              type: channel.type,
+              parent_id: channel.parent_id
+                ? categoryMap[channel.parent_id]
+                : null,
+            },
+          });
+
+          if (delay > 0) {
+            await new Promise(r => setTimeout(r, delay));
+          }
+        }
+
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: `✅ Server duplicated with ${delay}ms delay.`,
+            }),
+            { author: currentUser }
+          )
+        );
+
+      } catch (err) {
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: `⚠️ Duplication failed: ${String(err)}`,
+            }),
+            { author: currentUser }
+          )
+        );
+      }
+    },
+  })
+);
+
 // ---- /fetchprofile ----
 commands.push(
 registerCommand({
