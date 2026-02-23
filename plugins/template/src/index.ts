@@ -37,26 +37,30 @@ if (!words.length) return "### (no spam messages configured)";
 return words[Math.floor(Math.random() * words.length)];
 }
 
-const MessageStore = findByStoreName("MessageStore");
-
-// ---- /reaction-send ----
 commands.push(
   registerCommand({
-    name: "reaction-send",
-    displayName: "reaction-send",
-    description: "Send a message based on regional indicator reactions (store-based)",
+    name: "add-reactions",
+    displayName: "add-reactions",
+    description: "Adds regional indicator reactions to a message with delay",
     options: [
       {
         name: "message_id",
         displayName: "message_id",
-        description: "ID of the message to check reactions on",
+        description: "Message ID to react to",
+        required: true,
+        type: 3,
+      },
+      {
+        name: "letters",
+        displayName: "letters",
+        description: "Text to convert (e.g. WHAT)",
         required: true,
         type: 3,
       },
       {
         name: "delay",
         displayName: "delay",
-        description: "Delay before sending message (ms)",
+        description: "Delay between each reaction (ms)",
         required: false,
         type: 4,
       },
@@ -68,45 +72,37 @@ commands.push(
     execute: async (args, ctx) => {
       const channelId = ctx.channel.id;
       const messageId = args.find(a => a.name === "message_id")?.value;
+      const letters = args.find(a => a.name === "letters")?.value;
       const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
 
-      if (!messageId) return;
+      if (!messageId || !letters) return;
 
-      try {
-        // 🔥 Store-based lookup (no HTTP)
-        const message = MessageStore?.getMessage?.(channelId, messageId);
-        if (!message?.reactions?.length) return;
+      const text = String(letters).toUpperCase();
 
-        const regionalMap: Record<string, string> = {
-          "🇦":"A","🇧":"B","🇨":"C","🇩":"D","🇪":"E","🇫":"F",
-          "🇬":"G","🇭":"H","🇮":"I","🇯":"J","🇰":"K","🇱":"L",
-          "🇲":"M","🇳":"N","🇴":"O","🇵":"P","🇶":"Q","🇷":"R",
-          "🇸":"S","🇹":"T","🇺":"U","🇻":"V","🇼":"W","🇽":"X",
-          "🇾":"Y","🇿":"Z",
-        };
+      const regionalMap: Record<string, string> = {
+        A: "🇦", B: "🇧", C: "🇨", D: "🇩", E: "🇪",
+        F: "🇫", G: "🇬", H: "🇭", I: "🇮", J: "🇯",
+        K: "🇰", L: "🇱", M: "🇲", N: "🇳", O: "🇴",
+        P: "🇵", Q: "🇶", R: "🇷", S: "🇸", T: "🇹",
+        U: "🇺", V: "🇻", W: "🇼", X: "🇽", Y: "🇾",
+        Z: "🇿",
+      };
 
-        for (const reaction of message.reactions) {
-          const emoji = reaction?.emoji?.name;
-          if (!emoji) continue;
+      for (const char of text) {
+        const emoji = regionalMap[char];
+        if (!emoji) continue;
 
-          if (regionalMap[emoji]) {
-            const letter = regionalMap[emoji];
+        try {
+          await HTTP.put({
+            url: `/channels/${channelId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}/@me`,
+          });
 
-            if (delay > 0) await sleep(delay);
-
-            MessageActions.sendMessage(
-              channelId,
-              { content: `Triggered by 🇦-🇿 → **${letter}**` },
-              void 0,
-              { nonce: Date.now().toString() }
-            );
-
-            break;
+          if (delay > 0) {
+            await sleep(delay);
           }
+        } catch (err) {
+          logger.error("Failed to add reaction:", err);
         }
-
-      } catch (err) {
-        logger.error("Reaction command error:", err);
       }
     },
   })
