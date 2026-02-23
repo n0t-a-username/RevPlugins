@@ -1,6 +1,6 @@
 import { React, ReactNative } from "@vendetta/metro/common";
 
-const { View, Animated, Dimensions, Easing } = ReactNative;
+const { View, Animated, Dimensions } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const COLORS = [
@@ -13,88 +13,71 @@ const COLORS = [
 
 interface Particle {
   id: number;
-  x: number;
-  y: number;
+  animX: Animated.Value;
+  animY: Animated.Value;
+  opacity: Animated.Value;
   size: number;
   color: string;
-  translateX: Animated.Value;
-  translateY: Animated.Value;
-  opacity: Animated.Value;
 }
 
-export function createBurst(count = 40): Particle[] {
-  const centerX = SCREEN_WIDTH / 2;
-  const centerY = SCREEN_HEIGHT / 3;
+function createBurst(): Particle[] {
+  const particles: Particle[] = [];
 
-  return Array.from({ length: count }).map((_, i) => {
-    const angle = Math.random() * 2 * Math.PI;
-    const distance = 150 + Math.random() * 100;
-
-    return {
+  for (let i = 0; i < 40; i++) {
+    particles.push({
       id: i,
-      x: centerX,
-      y: centerY,
-      size: 6 + Math.random() * 6,
-      color: COLORS[Math.floor(Math.random() * COLORS.length)],
-      translateX: new Animated.Value(0),
-      translateY: new Animated.Value(0),
+      animX: new Animated.Value(SCREEN_WIDTH / 2),
+      animY: new Animated.Value(SCREEN_HEIGHT / 2),
       opacity: new Animated.Value(1),
-    };
-  });
+      size: 6 + Math.random() * 8,
+      color: COLORS[Math.floor(Math.random() * COLORS.length)]
+    });
+  }
+
+  return particles;
 }
 
-const ConfettiItem = ({ particle }: { particle: Particle }) => (
-  <Animated.View
-    style={{
-      position: "absolute",
-      left: particle.x,
-      top: particle.y,
-      width: particle.size,
-      height: particle.size,
-      borderRadius: particle.size / 2,
-      backgroundColor: particle.color,
-      opacity: particle.opacity,
-      transform: [
-        { translateX: particle.translateX },
-        { translateY: particle.translateY },
-      ],
-    }}
-  />
-);
-
-export const ConfettiBurst = ({ onFinish }: { onFinish: () => void }) => {
-  const particles = React.useMemo(() => createBurst(), []);
+export default function Confetti({ trigger }: { trigger: number }) {
+  const [particles, setParticles] = React.useState<Particle[]>([]);
 
   React.useEffect(() => {
-    const animations = particles.map((p) => {
-      const angle = Math.random() * 2 * Math.PI;
-      const distance = 150 + Math.random() * 100;
+    if (!trigger) return;
 
-      return Animated.parallel([
-        Animated.timing(p.translateX, {
-          toValue: Math.cos(angle) * distance,
-          duration: 700,
-          easing: Easing.out(Easing.exp),
-          useNativeDriver: true,
+    const burst = createBurst();
+    setParticles(burst);
+
+    burst.forEach(p => {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = 150 + Math.random() * 200;
+
+      const toX = SCREEN_WIDTH / 2 + Math.cos(angle) * distance;
+      const toY = SCREEN_HEIGHT / 2 + Math.sin(angle) * distance;
+
+      Animated.parallel([
+        Animated.timing(p.animX, {
+          toValue: toX,
+          duration: 800,
+          useNativeDriver: true
         }),
-        Animated.timing(p.translateY, {
-          toValue: Math.sin(angle) * distance,
-          duration: 700,
-          easing: Easing.out(Easing.exp),
-          useNativeDriver: true,
+        Animated.timing(p.animY, {
+          toValue: toY,
+          duration: 800,
+          useNativeDriver: true
         }),
         Animated.timing(p.opacity, {
           toValue: 0,
-          duration: 700,
-          useNativeDriver: true,
-        }),
-      ]);
+          duration: 800,
+          useNativeDriver: true
+        })
+      ]).start();
     });
 
-    Animated.parallel(animations).start(() => {
-      onFinish();
-    });
-  }, []);
+    const cleanup = setTimeout(() => {
+      setParticles([]);
+    }, 900);
+
+    return () => clearTimeout(cleanup);
+  }, [trigger]);
 
   return (
     <View
@@ -105,12 +88,26 @@ export const ConfettiBurst = ({ onFinish }: { onFinish: () => void }) => {
         left: 0,
         right: 0,
         bottom: 0,
-        zIndex: 9999,
+        zIndex: 9999
       }}
     >
-      {particles.map((p) => (
-        <ConfettiItem key={p.id} particle={p} />
+      {particles.map(p => (
+        <Animated.View
+          key={p.id}
+          style={{
+            position: "absolute",
+            width: p.size,
+            height: p.size,
+            borderRadius: p.size / 2,
+            backgroundColor: p.color,
+            opacity: p.opacity,
+            transform: [
+              { translateX: p.animX },
+              { translateY: p.animY }
+            ]
+          }}
+        />
       ))}
     </View>
   );
-};
+}
