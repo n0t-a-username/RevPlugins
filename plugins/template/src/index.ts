@@ -1,7 +1,6 @@
 import { logger } from "@vendetta";
 import Settings from "./Settings";
 import GiveawaySection from "./GiveawaySection";
-import { loadIndex2, unloadIndex2 } from "./index2";
 
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
@@ -766,10 +765,8 @@ React.createElement(GiveawaySection, { userId })
 
 // ---- Plugin lifecycle ----
 export default {
-onLoad: () => {
-  loadIndex2();
-  logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing");
-},
+onLoad: () =>
+logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing"),
 onUnload: () => {
 for (const unregister of commands) unregister();
 logger.log("Plugin unloaded.");
