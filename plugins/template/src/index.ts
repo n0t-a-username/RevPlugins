@@ -37,7 +37,93 @@ if (!words.length) return "### (no spam messages configured)";
 return words[Math.floor(Math.random() * words.length)];
 }
 
+// ---- /reaction-send ----
+commands.push(
+  registerCommand({
+    name: "reaction-send",
+    displayName: "reaction-send",
+    description: "Send a message based on regional indicator reactions",
+    options: [
+      {
+        name: "message_id",
+        displayName: "message_id",
+        description: "ID of the message to check reactions on",
+        required: true,
+        type: 3,
+      },
+      {
+        name: "delay",
+        displayName: "delay",
+        description: "Delay before sending message (ms)",
+        required: false,
+        type: 4,
+      },
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
 
+    execute: async (args, ctx) => {
+      const messageId = args.find(a => a.name === "message_id")?.value;
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
+
+      if (!messageId) return;
+
+      const channelId = ctx.channel.id;
+      const currentUser = UserStore.getCurrentUser();
+
+      try {
+        const res = await HTTP.get({
+          url: `/channels/${channelId}/messages/${messageId}`,
+        });
+
+        const message = res?.body;
+        if (!message?.reactions?.length) return;
+
+        const regionalMap: Record<string, string> = {
+          "🇦": "A","🇧": "B","🇨": "C","🇩": "D","🇪": "E","🇫": "F",
+          "🇬": "G","🇭": "H","🇮": "I","🇯": "J","🇰": "K","🇱": "L",
+          "🇲": "M","🇳": "N","🇴": "O","🇵": "P","🇶": "Q","🇷": "R",
+          "🇸": "S","🇹": "T","🇺": "U","🇻": "V","🇼": "W","🇽": "X",
+          "🇾": "Y","🇿": "Z",
+        };
+
+        for (const reaction of message.reactions) {
+          const emojiName = reaction?.emoji?.name;
+          if (!emojiName) continue;
+
+          if (regionalMap[emojiName]) {
+            const letter = regionalMap[emojiName];
+
+            if (delay > 0) {
+              await sleep(delay);
+            }
+
+            MessageActions.sendMessage(
+              channelId,
+              { content: `Triggered by 🇦-🇿 → **${letter}**` },
+              void 0,
+              { nonce: Date.now().toString() }
+            );
+
+            break;
+          }
+        }
+      } catch (err) {
+        receiveMessage(
+          channelId,
+          Object.assign(
+            createBotMessage({
+              channelId,
+              content: `⚠️ Reaction check failed: ${String(err)}`,
+            }),
+            { author: currentUser }
+          )
+        );
+      }
+    },
+  })
+);
 
 // ---- /raid ----
 commands.push(
