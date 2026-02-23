@@ -110,12 +110,19 @@ commands.push(
           }
         }
       } catch (err) {
+        const errorText =
+          err instanceof Error
+            ? err.stack || err.message
+            : typeof err === "string"
+              ? err
+              : JSON.stringify(err, null, 2);
+
         receiveMessage(
           channelId,
           Object.assign(
             createBotMessage({
               channelId,
-              content: `⚠️ Reaction check failed: ${String(err)}`,
+              content: `⚠️ Reaction check failed:\n\`\`\`\n${errorText}\n\`\`\``,
             }),
             { author: currentUser }
           )
