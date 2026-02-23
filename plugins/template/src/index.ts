@@ -37,76 +37,7 @@ if (!words.length) return "### (no spam messages configured)";
 return words[Math.floor(Math.random() * words.length)];
 }
 
-import { before, after } from "@vendetta/patcher";
-import { React } from "@vendetta/metro/common";
-import { General } from "@vendetta/ui/components";
-import { registerCommand } from "@vendetta/commands";
-import { storage } from "@vendetta/plugin";
-import { ConfettiBurst } from "./confetti";
 
-let patches: any[] = [];
-let activeBurst = false;
-
-function triggerConfetti() {
-  if (activeBurst) return;
-  activeBurst = true;
-
-  const element = React.createElement(ConfettiBurst, {
-    onFinish: () => {
-      activeBurst = false;
-    }
-  });
-
-  General.showOverlay?.(element);
-}
-
-export default {
-  onLoad: () => {
-    if (storage.confettiEnabled === undefined)
-      storage.confettiEnabled = true;
-
-    // Slash command toggle
-    registerCommand({
-      name: "confetti",
-      displayName: "confetti",
-      description: "Enable or disable Nice confetti",
-      options: [
-        {
-          name: "enabled",
-          displayName: "enabled",
-          description: "true or false",
-          required: true,
-          type: 5
-        }
-      ],
-      applicationId: "-1",
-      inputType: 1,
-      type: 1,
-      execute: (args) => {
-        const enabled = args.find(a => a.name === "enabled")?.value;
-        storage.confettiEnabled = enabled;
-      }
-    });
-
-    // Listen for messages
-    patches.push(
-      after("receiveMessage", require("@vendetta/metro/common").Messages, (_, res) => {
-        if (!storage.confettiEnabled) return;
-
-        const message = res?.message;
-        if (!message?.content) return;
-
-        if (message.content.toLowerCase().includes("nice")) {
-          triggerConfetti();
-        }
-      })
-    );
-  },
-
-  onUnload: () => {
-    for (const unpatch of patches) unpatch();
-  }
-};
 
 // ---- /raid ----
 commands.push(
