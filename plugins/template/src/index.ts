@@ -7,19 +7,10 @@ import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 import { React } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
-import Confetti from "./confetti";
-import { before } from "@vendetta/patcher";
-import { General } from "@vendetta/ui/components";
 
 const MessageActions = findByProps("sendMessage", "editMessage");
 const UserStore = findByStoreName("UserStore");
 const ChannelStore = findByProps("getChannel");
-
-if (storage.confettiEnabled === undefined)
-  storage.confettiEnabled = false;
-
-let confettiTrigger = 0;
-let overlayPatched = false;
 
 // expanded to include GET for mass-delete
 const HTTP = findByProps("get", "del", "post", "put");
@@ -46,29 +37,7 @@ if (!words.length) return "### (no spam messages configured)";
 return words[Math.floor(Math.random() * words.length)];
 }
 
-// ---- /confetti ----
-commands.push(
-  registerCommand({
-    name: "confetti",
-    displayName: "confetti",
-    description: "Enable or disable Nice confetti",
-    options: [
-      {
-        name: "enabled",
-        displayName: "enabled",
-        description: "true = on, false = off",
-        required: true,
-        type: 5,
-      },
-    ],
-    applicationId: "-1",
-    inputType: 1,
-    type: 1,
-    execute: (args) => {
-      storage.confettiEnabled = args[0].value;
-    },
-  })
-);
+
 
 // ---- /raid ----
 commands.push(
@@ -794,54 +763,13 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
-// ---- Confetti Message Listener ----
-const MessageModule = findByProps("receiveMessage");
-
-after("receiveMessage", MessageModule, (_, args) => {
-  if (!storage.confettiEnabled) return;
-
-  const message = args?.[0];
-  if (!message?.content) return;
-
-  if (message.content.toLowerCase().includes("nice")) {
-    confettiTrigger++;
-  }
-});
-// ---- Confetti Overlay Injection ----
-if (!overlayPatched) {
-  overlayPatched = true;
-
-  const Root = findByTypeName("App");
-
-  if (Root) {
-    after("render", Root.prototype, function (_, ret) {
-      if (!ret?.props?.children) return;
-
-      const children = Array.isArray(ret.props.children)
-        ? ret.props.children
-        : [ret.props.children];
-
-      ret.props.children = [
-        ...children,
-        React.createElement(Confetti, {
-          key: "confetti-overlay",
-          trigger: confettiTrigger,
-        }),
-      ];
-    });
-  }
-}
-
 // ---- Plugin lifecycle ----
 export default {
-  onLoad: () => {
-    logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing, Confetti");
-  },
-
-  onUnload: () => {
-    for (const unregister of commands) unregister();
-    logger.log("Plugin unloaded.");
-  },
-
-  settings: Settings,
+onLoad: () =>
+logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing"),
+onUnload: () => {
+for (const unregister of commands) unregister();
+logger.log("Plugin unloaded.");
+},
+settings: Settings,
 };
