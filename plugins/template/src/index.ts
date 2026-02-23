@@ -1,6 +1,7 @@
 import { logger } from "@vendetta";
 import Settings from "./Settings";
 import GiveawaySection from "./GiveawaySection";
+import { loadIndex2, unloadIndex2 } from "./index2";
 
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
