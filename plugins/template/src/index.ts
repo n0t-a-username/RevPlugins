@@ -37,12 +37,14 @@ if (!words.length) return "### (no spam messages configured)";
 return words[Math.floor(Math.random() * words.length)];
 }
 
+const MessageStore = findByStoreName("MessageStore");
+
 // ---- /reaction-send ----
 commands.push(
   registerCommand({
     name: "reaction-send",
     displayName: "reaction-send",
-    description: "Send a message based on regional indicator reactions",
+    description: "Send a message based on regional indicator reactions (store-based)",
     options: [
       {
         name: "message_id",
@@ -64,40 +66,33 @@ commands.push(
     type: 1,
 
     execute: async (args, ctx) => {
+      const channelId = ctx.channel.id;
       const messageId = args.find(a => a.name === "message_id")?.value;
       const delay = Number(args.find(a => a.name === "delay")?.value ?? 0);
 
       if (!messageId) return;
 
-      const channelId = ctx.channel.id;
-      const currentUser = UserStore.getCurrentUser();
-
       try {
-        const res = await HTTP.get({
-          url: `/channels/${channelId}/messages/${messageId}`,
-        });
-
-        const message = res?.body;
+        // 🔥 Store-based lookup (no HTTP)
+        const message = MessageStore?.getMessage?.(channelId, messageId);
         if (!message?.reactions?.length) return;
 
         const regionalMap: Record<string, string> = {
-          "🇦": "A","🇧": "B","🇨": "C","🇩": "D","🇪": "E","🇫": "F",
-          "🇬": "G","🇭": "H","🇮": "I","🇯": "J","🇰": "K","🇱": "L",
-          "🇲": "M","🇳": "N","🇴": "O","🇵": "P","🇶": "Q","🇷": "R",
-          "🇸": "S","🇹": "T","🇺": "U","🇻": "V","🇼": "W","🇽": "X",
-          "🇾": "Y","🇿": "Z",
+          "🇦":"A","🇧":"B","🇨":"C","🇩":"D","🇪":"E","🇫":"F",
+          "🇬":"G","🇭":"H","🇮":"I","🇯":"J","🇰":"K","🇱":"L",
+          "🇲":"M","🇳":"N","🇴":"O","🇵":"P","🇶":"Q","🇷":"R",
+          "🇸":"S","🇹":"T","🇺":"U","🇻":"V","🇼":"W","🇽":"X",
+          "🇾":"Y","🇿":"Z",
         };
 
         for (const reaction of message.reactions) {
-          const emojiName = reaction?.emoji?.name;
-          if (!emojiName) continue;
+          const emoji = reaction?.emoji?.name;
+          if (!emoji) continue;
 
-          if (regionalMap[emojiName]) {
-            const letter = regionalMap[emojiName];
+          if (regionalMap[emoji]) {
+            const letter = regionalMap[emoji];
 
-            if (delay > 0) {
-              await sleep(delay);
-            }
+            if (delay > 0) await sleep(delay);
 
             MessageActions.sendMessage(
               channelId,
@@ -109,24 +104,9 @@ commands.push(
             break;
           }
         }
-      } catch (err) {
-        const errorText =
-          err instanceof Error
-            ? err.stack || err.message
-            : typeof err === "string"
-              ? err
-              : JSON.stringify(err, null, 2);
 
-        receiveMessage(
-          channelId,
-          Object.assign(
-            createBotMessage({
-              channelId,
-              content: `⚠️ Reaction check failed:\n\`\`\`\n${errorText}\n\`\`\``,
-            }),
-            { author: currentUser }
-          )
-        );
+      } catch (err) {
+        logger.error("Reaction command error:", err);
       }
     },
   })
