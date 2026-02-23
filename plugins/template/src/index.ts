@@ -14,7 +14,7 @@ import { General } from "@vendetta/ui/components";
 const MessageActions = findByProps("sendMessage", "editMessage");
 const UserStore = findByStoreName("UserStore");
 const ChannelStore = findByProps("getChannel");
-const commands: (() => void)[] = [];
+
 if (storage.confettiEnabled === undefined)
   storage.confettiEnabled = false;
 
@@ -795,10 +795,12 @@ React.createElement(GiveawaySection, { userId })
 });
 
 // ---- Confetti Message Listener ----
-after("receiveMessage", findByProps("receiveMessage"), (_, args) => {
+const MessageModule = findByProps("receiveMessage");
+
+after("receiveMessage", MessageModule, (_, args) => {
   if (!storage.confettiEnabled) return;
 
-  const message = args[0];
+  const message = args?.[0];
   if (!message?.content) return;
 
   if (message.content.toLowerCase().includes("nice")) {
@@ -809,25 +811,25 @@ after("receiveMessage", findByProps("receiveMessage"), (_, args) => {
 if (!overlayPatched) {
   overlayPatched = true;
 
-  before("render", General.View, (args) => {
-    const [wrapper] = args;
-    if (!wrapper || !Array.isArray(wrapper.style)) return;
+  const Root = findByTypeName("App");
 
-    const hasFlex = wrapper.style.some(s => s?.flex === 1);
-    if (!hasFlex) return;
+  if (Root) {
+    after("render", Root.prototype, function (_, ret) {
+      if (!ret?.props?.children) return;
 
-    const currentChildren = Array.isArray(wrapper.children)
-      ? wrapper.children
-      : [wrapper.children];
+      const children = Array.isArray(ret.props.children)
+        ? ret.props.children
+        : [ret.props.children];
 
-    wrapper.children = [
-      ...currentChildren,
-      React.createElement(Confetti, {
-        key: "confetti-overlay",
-        trigger: confettiTrigger,
-      }),
-    ];
-  });
+      ret.props.children = [
+        ...children,
+        React.createElement(Confetti, {
+          key: "confetti-overlay",
+          trigger: confettiTrigger,
+        }),
+      ];
+    });
+  }
 }
 
 // ---- Plugin lifecycle ----
