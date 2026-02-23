@@ -766,8 +766,10 @@ React.createElement(GiveawaySection, { userId })
 
 // ---- Plugin lifecycle ----
 export default {
-onLoad: () =>
-logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing"),
+onLoad: () => {
+  loadIndex2();
+  logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing");
+},
 onUnload: () => {
 for (const unregister of commands) unregister();
 logger.log("Plugin unloaded.");
