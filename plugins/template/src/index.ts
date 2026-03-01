@@ -54,14 +54,22 @@ registerCommand({
     const currentUser = UserStore.getCurrentUser();
 
     try {
-      const guildRes = await HTTP.get({ url: `/guilds/${guildId}` });
+      // IMPORTANT: with_counts=true fixes large guild member count
+      const guildRes = await HTTP.get({ 
+        url: `/guilds/${guildId}?with_counts=true` 
+      });
+
       const guild = guildRes?.body;
       if (!guild) return;
 
-      const channelsRes = await HTTP.get({ url: `/guilds/${guildId}/channels` });
+      const channelsRes = await HTTP.get({ 
+        url: `/guilds/${guildId}/channels` 
+      });
       const channels = channelsRes?.body ?? [];
 
-      const rolesRes = await HTTP.get({ url: `/guilds/${guildId}/roles` });
+      const rolesRes = await HTTP.get({ 
+        url: `/guilds/${guildId}/roles` 
+      });
       const roles = rolesRes?.body ?? [];
 
       // Snowflake → Date
@@ -75,7 +83,6 @@ registerCommand({
         year: "numeric",
       });
 
-      // Human-readable verification levels
       const verificationMap: Record<number, string> = {
         0: "None",
         1: "Low",
@@ -84,7 +91,6 @@ registerCommand({
         4: "Very High"
       };
 
-      // Human-readable content filter levels
       const filterMap: Record<number, string> = {
         0: "Disabled",
         1: "Members without roles",
@@ -96,20 +102,20 @@ registerCommand({
         : null;
 
       const content =
-`📌 **Server Info**
+`# 📌 Server Info
 
-**Name**: ${guild.name}
-**ID**: ${guild.id}
-**Owner ID**: <@${guild.owner_id}>
-**Members**: ${guild.approximate_member_count ?? guild.member_count ?? "Unknown"}
-**Channels**: ${Array.isArray(channels) ? channels.length : "Unknown"}
-**Roles**: ${Array.isArray(roles) ? roles.length : "Unknown"}
-**Boost Tier**: ${guild.premium_tier ?? 0}
-**Boost Count**: ${guild.premium_subscription_count ?? 0}
-**Verification Level**: ${verificationMap[guild.verification_level] ?? "Unknown"}
-**Content Filter**: ${filterMap[guild.explicit_content_filter] ?? "Unknown"}
-**Created**: ${formattedDate}
-${iconUrl ? `**Icon**: [icon](${iconUrl})` : ""}`;
+> **Name**: ${guild.name}
+> **ID**: ${guild.id}
+> **Owner ID**: <@${guild.owner_id}>
+> **Members**: ${guild.approximate_member_count ?? guild.member_count ?? 0}
+> **Channels**: ${Array.isArray(channels) ? channels.length : 0}
+> **Roles**: ${Array.isArray(roles) ? roles.length : 0}
+> **Boost Tier**: ${guild.premium_tier ?? 0}
+> **Boost Count**: ${guild.premium_subscription_count ?? 0}
+> **Verification Level**: ${verificationMap[guild.verification_level] ?? "Unknown"}
+> **Content Filter**: ${filterMap[guild.explicit_content_filter] ?? "Unknown"}
+> **Created**: ${formattedDate}
+${iconUrl ? `> **Icon**: [icon](${iconUrl})` : ""}`;
 
       receiveMessage(
         ctx.channel.id,
