@@ -37,6 +37,107 @@ if (!words.length) return "### (no spam messages configured)";
 return words[Math.floor(Math.random() * words.length)];
 }
 
+// ---- /server-info ----
+commands.push(
+registerCommand({
+  name: "server-info",
+  displayName: "server-info",
+  description: "Displays information about the current server",
+  options: [],
+  applicationId: "-1",
+  inputType: 1,
+  type: 1,
+  execute: async (args, ctx) => {
+    const guildId = ctx.channel.guild_id;
+    if (!guildId) return;
+
+    const currentUser = UserStore.getCurrentUser();
+
+    try {
+      const guildRes = await HTTP.get({ url: `/guilds/${guildId}` });
+      const guild = guildRes?.body;
+      if (!guild) return;
+
+      const channelsRes = await HTTP.get({ url: `/guilds/${guildId}/channels` });
+      const channels = channelsRes?.body ?? [];
+
+      const rolesRes = await HTTP.get({ url: `/guilds/${guildId}/roles` });
+      const roles = rolesRes?.body ?? [];
+
+      // Snowflake → Date
+      const createdTimestamp =
+        Number((BigInt(guildId) >> 22n) + 1420070400000n);
+
+      const createdDate = new Date(createdTimestamp);
+      const formattedDate = createdDate.toLocaleDateString(undefined, {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      });
+
+      // Human-readable verification levels
+      const verificationMap: Record<number, string> = {
+        0: "None",
+        1: "Low",
+        2: "Medium",
+        3: "High",
+        4: "Very High"
+      };
+
+      // Human-readable content filter levels
+      const filterMap: Record<number, string> = {
+        0: "Disabled",
+        1: "Members without roles",
+        2: "All members"
+      };
+
+      const iconUrl = guild.icon
+        ? `https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=512`
+        : null;
+
+      const content =
+`📌 **Server Info**
+
+**Name**: ${guild.name}
+**ID**: ${guild.id}
+**Owner ID**: <@${guild.owner_id}>
+**Members**: ${guild.approximate_member_count ?? guild.member_count ?? "Unknown"}
+**Channels**: ${Array.isArray(channels) ? channels.length : "Unknown"}
+**Roles**: ${Array.isArray(roles) ? roles.length : "Unknown"}
+**Boost Tier**: ${guild.premium_tier ?? 0}
+**Boost Count**: ${guild.premium_subscription_count ?? 0}
+**Verification Level**: ${verificationMap[guild.verification_level] ?? "Unknown"}
+**Content Filter**: ${filterMap[guild.explicit_content_filter] ?? "Unknown"}
+**Created**: ${formattedDate}
+${iconUrl ? `**Icon**: [icon](${iconUrl})` : ""}`;
+
+      receiveMessage(
+        ctx.channel.id,
+        Object.assign(
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content
+          }),
+          { author: currentUser }
+        )
+      );
+
+    } catch (err) {
+      receiveMessage(
+        ctx.channel.id,
+        Object.assign(
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content: `⚠️ Failed to fetch server info: ${String(err)}`
+          }),
+          { author: currentUser }
+        )
+      );
+    }
+  },
+})
+);
+
 commands.push(
   registerCommand({
     name: "react",
