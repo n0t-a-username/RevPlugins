@@ -54,23 +54,43 @@ registerCommand({
     const currentUser = UserStore.getCurrentUser();
 
     try {
-      // IMPORTANT: with_counts=true fixes large guild member count
-      const guildRes = await HTTP.get({ 
-        url: `/guilds/${guildId}?with_counts=true` 
+      // Fetch guild with counts (fixes large member count issue)
+      const guildRes = await HTTP.get({
+        url: `/guilds/${guildId}?with_counts=true`
       });
 
       const guild = guildRes?.body;
       if (!guild) return;
 
-      const channelsRes = await HTTP.get({ 
-        url: `/guilds/${guildId}/channels` 
+      // Fetch channels
+      const channelsRes = await HTTP.get({
+        url: `/guilds/${guildId}/channels`
       });
       const channels = channelsRes?.body ?? [];
 
-      const rolesRes = await HTTP.get({ 
-        url: `/guilds/${guildId}/roles` 
+      // Fetch roles
+      const rolesRes = await HTTP.get({
+        url: `/guilds/${guildId}/roles`
       });
       const roles = rolesRes?.body ?? [];
+
+      // Fetch owner user (prevents "Unknown User")
+      let ownerDisplay = `<@${guild.owner_id}>`;
+
+      try {
+        const ownerRes = await HTTP.get({
+          url: `/users/${guild.owner_id}`
+        });
+
+        const owner = ownerRes?.body;
+
+        if (owner?.username) {
+          // Modern Discord usernames may not use discriminator
+          ownerDisplay = owner.discriminator && owner.discriminator !== "0"
+            ? `${owner.username}#${owner.discriminator} (<@${guild.owner_id}>)`
+            : `${owner.username} (<@${guild.owner_id}>)`;
+        }
+      } catch { }
 
       // Snowflake → Date
       const createdTimestamp =
@@ -106,7 +126,7 @@ registerCommand({
 
 > **Name**: ${guild.name}
 > **ID**: ${guild.id}
-> **Owner ID**: <@${guild.owner_id}>
+> **Owner**: ${ownerDisplay}
 > **Members**: ${guild.approximate_member_count ?? guild.member_count ?? 0}
 > **Channels**: ${Array.isArray(channels) ? channels.length : 0}
 > **Roles**: ${Array.isArray(roles) ? roles.length : 0}
