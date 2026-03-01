@@ -39,9 +39,9 @@ return words[Math.floor(Math.random() * words.length)];
 
 commands.push(
   registerCommand({
-    name: "add-reactions",
-    displayName: "add-reactions",
-    description: "Adds regional indicator reactions to a message with delay",
+    name: "react",
+    displayName: "react",
+    description: "Adds regional indicator reactions to spell a desired word",
     options: [
       {
         name: "message_id",
@@ -306,14 +306,21 @@ registerCommand({
     const delay = Number(args.find(a => a.name === "delay")?.value ?? 100);
 
     try {
-      // Fetch last 100 messages
       const res = await HTTP.get({ url: `/channels/${channelId}/messages?limit=100` });
       const messages = res?.body;
       if (!Array.isArray(messages)) return;
 
-      // Filter messages
-      let toDelete = messages.slice(0, amount);
-      if (selfOnly) toDelete = toDelete.filter((m: any) => m.author.id === myId);
+      let toDelete: any[];
+
+      if (selfOnly) {
+        // Filter FIRST, then slice
+        toDelete = messages
+          .filter((m: any) => m.author?.id === myId)
+          .slice(0, amount);
+      } else {
+        // Normal behavior
+        toDelete = messages.slice(0, amount);
+      }
 
       let deletedCount = 0;
 
