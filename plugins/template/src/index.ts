@@ -930,68 +930,29 @@ const guildId = ctx.channel.guild_id;
 
 
 
-/* ========================================================= */
-/* ================= PROFILE PATCH ========================= */
-/* ========================================================= */
+// ---- Patch User Profiles ----
+let UserProfile = findByTypeName("UserProfile");
+if (!UserProfile) UserProfile = findByTypeName("UserProfileContent");
 
-let unpatchUserProfile: (() => void) | undefined;
+after("type", UserProfile, (args, ret) => {
+const profileSections = ret?.props?.children;
+if (!profileSections) return;
 
-function patchUserProfile() {
-  const UserProfile =
-    findByTypeName("UserProfile") ??
-    findByTypeName("UserProfileContent");
+const userId = args[0]?.userId ?? args[0]?.user?.id;
+if (!userId) return;
 
-  if (!UserProfile) {
-    logger.log("UserProfile component not found.");
-    return;
-  }
+profileSections.push(
+React.createElement(GiveawaySection, { userId })
+);
+});
 
-  unpatchUserProfile = after("type", UserProfile, (args, ret) => {
-    const profileSections = ret?.props?.children;
-    if (!profileSections) return;
-
-    const userId = args[0]?.userId ?? args[0]?.user?.id;
-    if (!userId) return;
-
-    // Prevent duplicate injection
-    if (
-      profileSections.some(
-        (x: any) => x?.props?.userId === userId
-      )
-    ) {
-      return;
-    }
-
-    profileSections.push(
-      React.createElement(GiveawaySection, { userId })
-    );
-  });
-}
-
-/* ========================================================= */
-/* ================= PLUGIN LIFECYCLE ====================== */
-/* ========================================================= */
-
+// ---- Plugin lifecycle ----
 export default {
-  onLoad: () => {
-    logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing");
-
-    // Apply profile patch
-    patchUserProfile();
-  },
-
-  onUnload: () => {
-    // Unregister slash commands
-    for (const unregister of commands) unregister();
-
-    // Remove profile patch
-    if (unpatchUserProfile) {
-      unpatchUserProfile();
-      unpatchUserProfile = undefined;
-    }
-
-    logger.log("Plugin unloaded.");
-  },
-
-  settings: Settings,
+onLoad: () =>
+logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing"),
+onUnload: () => {
+for (const unregister of commands) unregister();
+logger.log("Plugin unloaded.");
+},
+settings: Settings,
 };
