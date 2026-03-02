@@ -6,61 +6,67 @@ import { React } from "@vendetta/metro/common";
 import { Forms } from "@vendetta/ui/components";
 import { clipboard } from "@vendetta/metro/common";
 import { showToast } from "@vendetta/ui/toasts";
+import { logger } from "@vendetta";
 
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 
-const unpatch = before(
-  "openLazy",
-  LazyActionSheet,
-  ([component, key, msg]) => {
-    const message = msg?.message;
-    if (key !== "MessageLongPressActionSheet" || !message) return;
+const unpatch = before("openLazy", LazyActionSheet, (args) => {
+  const [component, key, msg] = args;
 
-    component.then((instance) => {
-      const target = instance.default ?? instance;
+  logger.log("ActionSheet opened with key:", key);
 
-      const unpatchInner = before("default", target, (_, res) => {
-        React.useEffect(() => () => unpatchInner(), []);
+  const message = msg?.message;
+  if (!message) return;
 
-        const actionSheetContainer = findInReactTree(
-          res,
-          (x) =>
-            Array.isArray(x) &&
-            x.some?.((c: any) => c?.type?.name === "ActionSheetRowGroup"),
-        );
+  component.then((instance) => {
+    const target = instance.default ?? instance;
 
-        if (!actionSheetContainer || !actionSheetContainer[1]) return;
+    const unpatchInner = before("default", target, (_, res) => {
+      React.useEffect(() => () => unpatchInner(), []);
 
-        const group = actionSheetContainer[1];
+      const actionSheetContainer = findInReactTree(
+        res,
+        (x) =>
+          Array.isArray(x) &&
+          x.some?.((c: any) => c?.type?.name === "ActionSheetRowGroup"),
+      );
 
-        if (!group?.props?.children) return;
+      if (!actionSheetContainer) {
+        logger.log("No ActionSheetRowGroup found");
+        return;
+      }
 
-        const copyRow = (
-          <FormRow
-            key="copy-message-id"
-            label="Copy Message ID"
-            leading={
-              <FormIcon
-                style={{ opacity: 1 }}
-                source={getAssetIDByName("ic_copy_24px")}
-              />
-            }
-            onPress={() => {
-              clipboard.setString(String(message.id));
-              showToast(
-                "Copied Message ID",
-                getAssetIDByName("toast_copy_link"),
-              );
-              LazyActionSheet.hideActionSheet();
-            }}
-          />
-        );
+      const group = actionSheetContainer[1];
+      if (!group?.props?.children) {
+        logger.log("Group found but no children");
+        return;
+      }
 
-        group.props.children.push(copyRow);
-      });
+      logger.log("Injecting Copy Message ID button");
+
+      group.props.children.push(
+        <FormRow
+          key="copy-message-id"
+          label="Copy Message ID"
+          leading={
+            <FormIcon
+              style={{ opacity: 1 }}
+              source={getAssetIDByName("ic_copy_24px")}
+            />
+          }
+          onPress={() => {
+            clipboard.setString(String(message.id));
+            showToast(
+              "Copied Message ID",
+              getAssetIDByName("toast_copy_link"),
+            );
+            LazyActionSheet.hideActionSheet();
+          }}
+        />,
+      );
     });
-  },
-);
+  });
+});
 
 export const onUnload = () => unpatch();
