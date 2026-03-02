@@ -1,7 +1,7 @@
 import { logger } from "@vendetta";
 import Settings from "./Settings";
 import GiveawaySection from "./GiveawaySection";
-import * as CopyMessageID from "./CopyMessageID";
+
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
@@ -930,38 +930,121 @@ const guildId = ctx.channel.guild_id;
 
 
 
-// ---- Patch User Profiles ----
+/* ===================== PATCH TRACKERS ===================== */
+
+let unpatchUserProfile: (() => void) | undefined;
+let unpatchCopyMessageId: (() => void) | undefined;
+
+/* ===================== COPY MESSAGE ID INIT ===================== */
+
+function initCopyMessageId() {
+  const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
+  if (!LazyActionSheet) return;
+
+  unpatchCopyMessageId = before(
+    "openLazy",
+    LazyActionSheet,
+    ([component, key, data]) => {
+      if (key !== "MessageLongPressActionSheet") return;
+
+      const message = data?.message;
+      if (!message?.id) return;
+
+      component.then((instance: any) => {
+        const cleanup = after("default", instance, (_, tree) => {
+          React.useEffect(() => () => cleanup(), []);
+
+          const groups = findInReactTree(
+            tree,
+            x =>
+              Array.isArray(x) &&
+              x[0]?.type?.name === "ActionSheetRowGroup"
+          );
+
+          if (!groups?.length) return;
+
+          const targetGroup = groups[1] ?? groups[0];
+          if (!targetGroup?.length) return;
+
+          const ActionSheetRow = targetGroup[0].type;
+
+          if (
+            targetGroup.some(
+              (r: any) => r?.key === "copy-message-id"
+            )
+          )
+            return;
+
+          targetGroup.push(
+            <ActionSheetRow
+              key="copy-message-id"
+              label="Copy Message ID"
+              icon={{
+                $$typeof: targetGroup[0].props.icon.$$typeof,
+                type: targetGroup[0].props.icon.type,
+                key: null,
+                ref: null,
+                props: {
+                  IconComponent: () => (
+                    <ReactNative.Image
+                      source={{
+                        uri: getAssetIDByName("ic_copy_24px"),
+                      }}
+                      style={{ width: 24, height: 24 }}
+                    />
+                  ),
+                },
+              }}
+              onPress={async () => {
+                await clipboard.setStringAsync(message.id);
+                showToast("Message ID copied", getAssetIDByName("toast_copy_link"));
+                LazyActionSheet.hideActionSheet();
+              }}
+            />
+          );
+        });
+      });
+    }
+  );
+}
+
+/* ===================== PROFILE PATCH ===================== */
+
 let UserProfile = findByTypeName("UserProfile");
 if (!UserProfile) UserProfile = findByTypeName("UserProfileContent");
 
-after("type", UserProfile, (args, ret) => {
-const profileSections = ret?.props?.children;
-if (!profileSections) return;
+if (UserProfile) {
+  unpatchUserProfile = after("type", UserProfile, (args, ret) => {
+    const profileSections = ret?.props?.children;
+    if (!profileSections) return;
 
-const userId = args[0]?.userId ?? args[0]?.user?.id;
-if (!userId) return;
+    const userId = args[0]?.userId ?? args[0]?.user?.id;
+    if (!userId) return;
 
-profileSections.push(
-React.createElement(GiveawaySection, { userId })
-);
-});
+    profileSections.push(
+      React.createElement(GiveawaySection, { userId })
+    );
+  });
+}
 
-
+/* ===================== PLUGIN LIFECYCLE ===================== */
 
 export default {
   onLoad: () => {
-    logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing");
+    logger.log("Plugin loaded.");
 
-    // Initialize Copy Message ID patch
-    CopyMessageID.onLoad?.();
+    initCopyMessageId();
   },
 
   onUnload: () => {
-    // Unregister slash commands
+    // Unregister commands
     for (const unregister of commands) unregister();
 
-    // Unload Copy Message ID patch
-    CopyMessageID.onUnload?.();
+    // Unpatch profile injection
+    if (unpatchUserProfile) unpatchUserProfile();
+
+    // Unpatch copy message id
+    if (unpatchCopyMessageId) unpatchCopyMessageId();
 
     logger.log("Plugin unloaded.");
   },
