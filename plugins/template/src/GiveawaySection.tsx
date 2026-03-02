@@ -5,15 +5,21 @@ import { findInReactTree } from "@vendetta/utils";
 import { storage } from "@vendetta/plugin";
 import { showToast } from "@vendetta/ui/toasts";
 import { logger } from "@vendetta";
+import { Forms } from "@vendetta/ui/components";
+import { getAssetIDByName } from "@vendetta/ui/assets";
+import * as Clipboard from "expo-clipboard";
 import Settings from "./Settings";
 
 const { View, Text, TouchableOpacity } = RN;
+const { FormRow, FormIcon } = Forms;
 
 /* ========================================================= */
 /* ===================== GIVEAWAY SECTION ================== */
 /* ========================================================= */
 
-const UserProfileCard = findByName("UserProfileCard");
+const UserProfileCardModule = findByName("UserProfileCard");
+const UserProfileCard =
+  UserProfileCardModule?.default ?? UserProfileCardModule;
 
 interface Props {
   userId: string;
@@ -75,7 +81,7 @@ export default {
 
     /* ---------- Profile Injection ---------- */
 
-    let UserProfile =
+    const UserProfile =
       findByTypeName("UserProfile") ??
       findByTypeName("UserProfileContent");
 
@@ -96,68 +102,51 @@ export default {
     /* ---------- Copy Message ID Injection ---------- */
 
     const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
+    if (!LazyActionSheet) return;
 
     unpatchActionSheet = before(
       "openLazy",
       LazyActionSheet,
       ([component, key, data]) => {
-        if (key !== "MessageLongPressActionSheet") return;
-
         const message = data?.message;
-        if (!message?.id) return;
+        if (key !== "MessageLongPressActionSheet" || !message?.id) return;
 
         component.then((instance: any) => {
-          const cleanup = after("default", instance, (_, res) => {
+          const cleanup = after("default", instance, (_, tree) => {
             React.useEffect(() => () => cleanup(), []);
 
-            const groups = findInReactTree(
-              res,
-              x =>
-                Array.isArray(x) &&
-                x[0]?.type?.name === "ActionSheetRowGroup"
+            const buttonRows = findInReactTree(
+              tree,
+              (x) => x?.[0]?.type?.name === "ButtonRow"
             );
 
-            if (!groups?.length) return;
-
-            // Find group containing "Edit"
-            let targetGroup = groups.find(group =>
-              group?.some?.(
-                (row: any) =>
-                  typeof row?.props?.label === "string" &&
-                  row.props.label.toLowerCase().includes("edit")
-              )
-            );
-
-            // Fallback to last group
-            if (!targetGroup)
-              targetGroup = groups[groups.length - 1];
-
-            if (!targetGroup?.length) return;
-
-            const ActionSheetRow = targetGroup[0].type;
+            if (!buttonRows) return;
 
             // Prevent duplicates
             if (
-              targetGroup.some(
-                (r: any) => r?.key === "copy-message-id"
+              buttonRows.some(
+                (btn: any) => btn?.key === "copy-message-id"
               )
             )
               return;
 
-            const copyButton = (
-              <ActionSheetRow
+            buttonRows.push(
+              <FormRow
+                key="copy-message-id"
                 label="Copy Message ID"
-                icon={targetGroup[0].props.icon}
-                onPress={() => {
-                  RN.Clipboard.setString(message.id);
+                leading={
+                  <FormIcon
+                    style={{ opacity: 1 }}
+                    source={getAssetIDByName("ic_copy_24px")}
+                  />
+                }
+                onPress={async () => {
+                  await Clipboard.setStringAsync(message.id);
                   showToast("Message ID copied to clipboard");
                   LazyActionSheet.hideActionSheet();
                 }}
-                key="copy-message-id"
               />
             );
-
-            targetGroup.push(copyButton);
           });
         });
       }
@@ -167,7 +156,6 @@ export default {
   onUnload: () => {
     if (unpatchProfile) unpatchProfile();
     if (unpatchActionSheet) unpatchActionSheet();
-
     logger.log("Plugin unloaded.");
   },
 
