@@ -1,70 +1,101 @@
-import { before } from "@vendetta/patcher";
+import { before, after } from "@vendetta/patcher";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { findInReactTree } from "@vendetta/utils";
-import { findByProps } from "@vendetta/metro";
+import { findByName, findByProps } from "@vendetta/metro";
 import { React } from "@vendetta/metro/common";
 import { Forms } from "@vendetta/ui/components";
 import { clipboard } from "@vendetta/metro/common";
 import { showToast } from "@vendetta/ui/toasts";
-import { logger } from "@vendetta";
 
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 
-const unpatch = before("openLazy", LazyActionSheet, (args) => {
-  const [component, key, msg] = args;
-
-  logger.log("ActionSheet opened with key:", key);
-
+const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
-  if (!message) return;
+
+  // Keep the same guard style as your reference
+  if (key !== "MessageLongPressActionSheet" || !message) return;
 
   component.then((instance) => {
-    const target = instance.default ?? instance;
-
-    const unpatchInner = before("default", target, (_, res) => {
-      React.useEffect(() => () => unpatchInner(), []);
+    const unpatchInner = after("default", instance, (_, component) => {
+      React.useEffect(
+        () => () => {
+          unpatchInner();
+        },
+        [],
+      );
 
       const actionSheetContainer = findInReactTree(
-        res,
-        (x) =>
-          Array.isArray(x) &&
-          x.some?.((c: any) => c?.type?.name === "ActionSheetRowGroup"),
+        component,
+        (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup",
       );
 
-      if (!actionSheetContainer) {
-        logger.log("No ActionSheetRowGroup found");
-        return;
-      }
-
-      const group = actionSheetContainer[1];
-      if (!group?.props?.children) {
-        logger.log("Group found but no children");
-        return;
-      }
-
-      logger.log("Injecting Copy Message ID button");
-
-      group.props.children.push(
-        <FormRow
-          key="copy-message-id"
-          label="Copy Message ID"
-          leading={
-            <FormIcon
-              style={{ opacity: 1 }}
-              source={getAssetIDByName("ic_copy_24px")}
-            />
-          }
-          onPress={() => {
-            clipboard.setString(String(message.id));
-            showToast(
-              "Copied Message ID",
-              getAssetIDByName("toast_copy_link"),
-            );
-            LazyActionSheet.hideActionSheet();
-          }}
-        />,
+      const buttons = findInReactTree(
+        component,
+        (x) => x?.[0]?.type?.name === "ButtonRow",
       );
+
+      // 🔹 If ButtonRow exists, use it (like your example)
+      if (buttons) {
+        buttons.push(
+          <FormRow
+            label="Copy Message ID"
+            leading={
+              <FormIcon
+                style={{ opacity: 1 }}
+                source={getAssetIDByName("ic_copy_24px")}
+              />
+            }
+            onPress={() => {
+              clipboard.setString(String(message.id));
+              showToast(
+                "Copied Message ID",
+                getAssetIDByName("toast_copy_link"),
+              );
+              LazyActionSheet.hideActionSheet();
+            }}
+          />,
+        );
+      }
+      // 🔹 Fallback to ActionSheetRowGroup (same pattern as your example)
+      else if (actionSheetContainer && actionSheetContainer[1]) {
+        const middleGroup = actionSheetContainer[1];
+
+        const ActionSheetRow = middleGroup.props.children[0].type;
+
+        const copyButton = (
+          <ActionSheetRow
+            label="Copy Message ID"
+            icon={{
+              $$typeof: middleGroup.props.children[0].props.icon.$$typeof,
+              type: middleGroup.props.children[0].props.icon.type,
+              key: null,
+              ref: null,
+              props: {
+                IconComponent: () => (
+                  <FormIcon
+                    style={{ opacity: 1 }}
+                    source={getAssetIDByName("ic_copy_32px")}
+                  />
+                ),
+              },
+            }}
+            onPress={() => {
+              clipboard.setString(String(message.id));
+              showToast(
+                "Copied Message ID",
+                getAssetIDByName("toast_copy_link"),
+              );
+              LazyActionSheet.hideActionSheet();
+            }}
+            key="copy-message-id"
+          />
+        );
+
+        middleGroup.props.children.push(copyButton);
+      } else {
+        console.log("[CopyMessageID] Error: Could not find ActionSheet");
+      }
     });
   });
 });
