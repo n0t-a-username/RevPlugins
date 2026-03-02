@@ -12,8 +12,6 @@ const { FormRow, FormIcon } = Forms;
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
-
-  // Keep the same guard style as your reference
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
   component.then((instance) => {
@@ -35,29 +33,32 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         (x) => x?.[0]?.type?.name === "ButtonRow",
       );
 
-      // 🔹 If ButtonRow exists, use it (like your example)
+      const createCopyRow = () => (
+        <FormRow
+          key="copy-message-id"
+          label="Copy Message ID"
+          leading={
+            <FormIcon
+              style={{ opacity: 1 }}
+              source={getAssetIDByName("IdIcon")}
+            />
+          }
+          onPress={() => {
+            clipboard.setString(String(message.id));
+            showToast(
+              "Copied Message ID",
+              getAssetIDByName("toast_copy_link"),
+            );
+            LazyActionSheet.hideActionSheet();
+          }}
+        />
+      );
+
+      // Preferred path (ButtonRow)
       if (buttons) {
-        buttons.push(
-          <FormRow
-            label="Copy Message ID"
-            leading={
-              <FormIcon
-                style={{ opacity: 1 }}
-                source={getAssetIDByName("ic_copy_24px")}
-              />
-            }
-            onPress={() => {
-              clipboard.setString(String(message.id));
-              showToast(
-                "Copied Message ID",
-                getAssetIDByName("toast_copy_link"),
-              );
-              LazyActionSheet.hideActionSheet();
-            }}
-          />,
-        );
+        buttons.push(createCopyRow());
       }
-      // 🔹 Fallback to ActionSheetRowGroup (same pattern as your example)
+      // Fallback path (ActionSheetRowGroup)
       else if (actionSheetContainer && actionSheetContainer[1]) {
         const middleGroup = actionSheetContainer[1];
 
@@ -72,12 +73,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
               key: null,
               ref: null,
               props: {
-                IconComponent: () => (
-                  <FormIcon
-                    style={{ opacity: 1 }}
-                    source={getAssetIDByName("ic_copy_32px")}
-                  />
-                ),
+                source: getAssetIDByName("IdIcon"),
               },
             }}
             onPress={() => {
