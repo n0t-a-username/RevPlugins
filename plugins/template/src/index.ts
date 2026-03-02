@@ -2,6 +2,7 @@ import { logger } from "@vendetta";
 import Settings from "./Settings";
 import GiveawaySection from "./GiveawaySection";
 import * as CopyMessageID from "./CopyMessageID";
+
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
@@ -946,10 +947,9 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
-// ---- Plugin lifecycle ----
 export default {
   onLoad: () => {
-    logger.log("Plugin loaded.");
+    logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing");
 
     CopyMessageID.onLoad?.();
   },
