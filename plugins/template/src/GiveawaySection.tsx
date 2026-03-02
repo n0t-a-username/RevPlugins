@@ -1,98 +1,25 @@
 import { React, ReactNative as RN } from "@vendetta/metro/common";
-import { findByName, findByProps } from "@vendetta/metro";
+import { findByName, findByProps, findByTypeName } from "@vendetta/metro";
 import { before, after } from "@vendetta/patcher";
 import { findInReactTree } from "@vendetta/utils";
-import { getAssetIDByName } from "@vendetta/ui/assets";
 import { storage } from "@vendetta/plugin";
 import { showToast } from "@vendetta/ui/toasts";
+import { logger } from "@vendetta";
+import Settings from "./Settings";
 
-const { View, Text, TouchableOpacity, Clipboard } = RN;
+const { View, Text, TouchableOpacity } = RN;
+
+/* ========================================================= */
+/* ===================== GIVEAWAY SECTION ================== */
+/* ========================================================= */
 
 const UserProfileCard = findByName("UserProfileCard");
-const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
-
-let unpatchActionSheet: (() => void) | undefined;
-
-/* ----------------------------- */
-/*  COPY MESSAGE ID PATCH       */
-/* ----------------------------- */
-
-export function onLoad() {
-  unpatchActionSheet = before(
-    "openLazy",
-    LazyActionSheet,
-    ([component, key, data]) => {
-      if (key !== "MessageLongPressActionSheet") return;
-
-      const message = data?.message;
-      if (!message?.id) return;
-
-      component.then((instance: any) => {
-        const cleanup = after("default", instance, (_, res) => {
-          React.useEffect(() => () => cleanup(), []);
-
-          const actionSheetGroups = findInReactTree(
-            res,
-            (x) =>
-              Array.isArray(x) &&
-              x[0]?.type?.name === "ActionSheetRowGroup"
-          );
-
-          if (!actionSheetGroups) return;
-
-          const middleGroup = actionSheetGroups[1];
-          if (!middleGroup?.props?.children?.length) return;
-
-          const ActionSheetRow =
-            middleGroup.props.children[0].type;
-
-          const copyButton = (
-            <ActionSheetRow
-              label="Copy Message ID"
-              icon={{
-                type: middleGroup.props.children[0].props.icon.type,
-                key: null,
-                ref: null,
-                props: {
-                  IconComponent: () => (
-                    <RN.Image
-                      source={{
-                        uri: getAssetIDByName("ic_copy_24px"),
-                      }}
-                      style={{ width: 24, height: 24 }}
-                    />
-                  ),
-                },
-              }}
-              onPress={() => {
-                Clipboard.setString(message.id);
-                showToast("Message ID copied to clipboard");
-                LazyActionSheet.hideActionSheet();
-              }}
-              key="copy-message-id"
-            />
-          );
-
-          middleGroup.props.children.push(copyButton);
-        });
-      });
-    }
-  );
-}
-
-export function onUnload() {
-  if (unpatchActionSheet) unpatchActionSheet();
-}
-
-/* ----------------------------- */
-/*  YOUR EXISTING COMPONENT     */
-/* ----------------------------- */
 
 interface Props {
   userId: string;
 }
 
-export default function GiveawaySection({ userId }: Props) {
+function GiveawaySection({ userId }: Props) {
   if (!UserProfileCard) return null;
 
   const handlePress = () => {
@@ -130,3 +57,119 @@ export default function GiveawaySection({ userId }: Props) {
     </View>
   );
 }
+
+/* ========================================================= */
+/* ===================== PATCH TRACKERS ==================== */
+/* ========================================================= */
+
+let unpatchProfile: (() => void) | undefined;
+let unpatchActionSheet: (() => void) | undefined;
+
+/* ========================================================= */
+/* ===================== PLUGIN LIFECYCLE ================== */
+/* ========================================================= */
+
+export default {
+  onLoad: () => {
+    logger.log("Plugin loaded.");
+
+    /* ---------- Profile Injection ---------- */
+
+    let UserProfile =
+      findByTypeName("UserProfile") ??
+      findByTypeName("UserProfileContent");
+
+    if (UserProfile) {
+      unpatchProfile = after("type", UserProfile, (args, ret) => {
+        const sections = ret?.props?.children;
+        if (!sections) return;
+
+        const userId = args[0]?.userId ?? args[0]?.user?.id;
+        if (!userId) return;
+
+        sections.push(
+          React.createElement(GiveawaySection, { userId })
+        );
+      });
+    }
+
+    /* ---------- Copy Message ID Injection ---------- */
+
+    const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
+
+    unpatchActionSheet = before(
+      "openLazy",
+      LazyActionSheet,
+      ([component, key, data]) => {
+        if (key !== "MessageLongPressActionSheet") return;
+
+        const message = data?.message;
+        if (!message?.id) return;
+
+        component.then((instance: any) => {
+          const cleanup = after("default", instance, (_, res) => {
+            React.useEffect(() => () => cleanup(), []);
+
+            const groups = findInReactTree(
+              res,
+              x =>
+                Array.isArray(x) &&
+                x[0]?.type?.name === "ActionSheetRowGroup"
+            );
+
+            if (!groups?.length) return;
+
+            // Find group containing "Edit"
+            let targetGroup = groups.find(group =>
+              group?.some?.(
+                (row: any) =>
+                  typeof row?.props?.label === "string" &&
+                  row.props.label.toLowerCase().includes("edit")
+              )
+            );
+
+            // Fallback to last group
+            if (!targetGroup)
+              targetGroup = groups[groups.length - 1];
+
+            if (!targetGroup?.length) return;
+
+            const ActionSheetRow = targetGroup[0].type;
+
+            // Prevent duplicates
+            if (
+              targetGroup.some(
+                (r: any) => r?.key === "copy-message-id"
+              )
+            )
+              return;
+
+            const copyButton = (
+              <ActionSheetRow
+                label="Copy Message ID"
+                icon={targetGroup[0].props.icon}
+                onPress={() => {
+                  RN.Clipboard.setString(message.id);
+                  showToast("Message ID copied to clipboard");
+                  LazyActionSheet.hideActionSheet();
+                }}
+                key="copy-message-id"
+              />
+            );
+
+            targetGroup.push(copyButton);
+          });
+        });
+      }
+    );
+  },
+
+  onUnload: () => {
+    if (unpatchProfile) unpatchProfile();
+    if (unpatchActionSheet) unpatchActionSheet();
+
+    logger.log("Plugin unloaded.");
+  },
+
+  settings: Settings,
+};
