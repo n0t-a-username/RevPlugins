@@ -1,64 +1,68 @@
-import { before, after } from "@vendetta/patcher";
-import { findByProps } from "@vendetta/metro";
-import { React } from "@vendetta/metro/common";
-import { findInReactTree } from "@vendetta/utils";
-import { showToast } from "@vendetta/ui/toasts";
+import { before } from "@vendetta/patcher";
 import { getAssetIDByName } from "@vendetta/ui/assets";
-import * as clipboard from "expo-clipboard";
+import { findInReactTree } from "@vendetta/utils";
+import { findByName, findByProps } from "@vendetta/metro";
+import { clipboard } from "@vendetta/metro/common";
+import { showToast } from "@vendetta/ui/toasts";
+import { React } from "@vendetta/metro/common";
+import { Forms } from "@vendetta/ui/components";
 
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
+const { FormRow, FormIcon } = Forms;
 
-let unpatch: (() => void) | undefined;
-
-export function onLoad() {
-  unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
+const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
     const message = msg?.message;
-    if (key !== "MessageLongPressActionSheet" || !message?.id) return;
+    if (key !== "MessageLongPressActionSheet" || !message) return;
 
     component.then((instance) => {
-      const innerUnpatch = after("default", instance, (_, tree) => {
-        React.useEffect(() => () => innerUnpatch(), []);
+        const unpatchInstance = instance.default
+            ? instance.default
+            : instance;
 
-        const groups = findInReactTree(
-          tree,
-          (x) =>
-            Array.isArray(x) &&
-            x[0]?.type?.name === "ActionSheetRowGroup"
-        );
+        const patch = before("default", unpatchInstance, (_, res) => {
+            React.useEffect(() => () => patch(), []);
 
-        if (!groups?.length) return;
+            const actionSheetContainer = findInReactTree(
+                res,
+                (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup",
+            );
 
-        const group = groups[1] ?? groups[0];
-        if (!group?.props?.children) return;
+            const buttons = findInReactTree(
+                res,
+                (x) => x?.[0]?.type?.name === "ButtonRow",
+            );
 
-        if (
-          group.props.children.some(
-            (c: any) => c?.key === "copy-message-id"
-          )
-        )
-          return;
+            const copyAction = () => {
+                clipboard.setString(String(message.id));
+                showToast(
+                    "Copied Message ID",
+                    getAssetIDByName("toast_copy_link"),
+                );
+                LazyActionSheet.hideActionSheet();
+            };
 
-        const ActionSheetRow = group.props.children[0].type;
+            const copyRow = (
+                <FormRow
+                    label="Copy Message ID"
+                    leading={
+                        <FormIcon
+                            style={{ opacity: 1 }}
+                            source={getAssetIDByName("ic_copy_24px")}
+                        />
+                    }
+                    onPress={copyAction}
+                />
+            );
 
-        group.props.children.push(
-          <ActionSheetRow
-            key="copy-message-id"
-            label="Copy Message ID"
-            onPress={async () => {
-              await clipboard.setStringAsync(message.id);
-              showToast(
-                "Message ID copied",
-                getAssetIDByName("toast_copy_link")
-              );
-              LazyActionSheet.hideActionSheet();
-            }}
-          />
-        );
-      });
+            if (buttons) {
+                buttons.push(copyRow);
+            } else if (actionSheetContainer && actionSheetContainer[1]) {
+                actionSheetContainer[1].props.children.push(copyRow);
+            } else {
+                console.log("[CopyMessageID] Could not find ActionSheet");
+            }
+        });
     });
-  });
-}
+});
 
-export function onUnload() {
-  unpatch?.();
-}
+export const onUnload = () => unpatch();
