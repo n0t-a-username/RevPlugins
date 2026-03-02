@@ -950,29 +950,51 @@ const guildId = ctx.channel.guild_id;
 
 
 
-// ---- Patch User Profiles ----
+// Track profile patch
+let unpatchUserProfile: (() => void) | undefined;
+
 let UserProfile = findByTypeName("UserProfile");
 if (!UserProfile) UserProfile = findByTypeName("UserProfileContent");
 
-after("type", UserProfile, (args, ret) => {
-const profileSections = ret?.props?.children;
-if (!profileSections) return;
+if (UserProfile) {
+  unpatchUserProfile = after("type", UserProfile, (args, ret) => {
+    const profileSections = ret?.props?.children;
+    if (!profileSections) return;
 
-const userId = args[0]?.userId ?? args[0]?.user?.id;
-if (!userId) return;
+    const userId = args[0]?.userId ?? args[0]?.user?.id;
+    if (!userId) return;
 
-profileSections.push(
-React.createElement(GiveawaySection, { userId })
-);
-});
+    profileSections.push(
+      React.createElement(GiveawaySection, { userId })
+    );
+  });
+}
 
 // ---- Plugin lifecycle ----
 export default {
-onLoad: () =>
-logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing"),
-onUnload: () => {
-for (const unregister of commands) unregister();
-logger.log("Plugin unloaded.");
-},
-settings: Settings,
+  onLoad: () => {
+    logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing");
+
+    // If your copy-message-id patch has an onLoad, call it here
+    if (typeof onLoad === "function") {
+      onLoad();
+    }
+  },
+
+  onUnload: () => {
+    // Unregister slash commands
+    for (const unregister of commands) unregister();
+
+    // Unpatch profile injection
+    if (unpatchUserProfile) unpatchUserProfile();
+
+    // Unpatch action sheet
+    if (typeof onUnload === "function") {
+      onUnload();
+    }
+
+    logger.log("Plugin unloaded.");
+  },
+
+  settings: Settings,
 };
