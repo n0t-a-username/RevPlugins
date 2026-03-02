@@ -1,7 +1,7 @@
 import { logger } from "@vendetta";
 import Settings from "./Settings";
 import GiveawaySection from "./GiveawaySection";
-
+import * as CopyMessageID from "./CopyMessageID";
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
@@ -948,11 +948,19 @@ React.createElement(GiveawaySection, { userId })
 
 // ---- Plugin lifecycle ----
 export default {
-onLoad: () =>
-logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing"),
-onUnload: () => {
-for (const unregister of commands) unregister();
-logger.log("Plugin unloaded.");
-},
-settings: Settings,
+  onLoad: () =>
+    logger.log(
+      "All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing, CopyMessageID"
+    ),
+
+  onUnload: () => {
+    for (const unregister of commands) unregister();
+
+    // Unload CopyMessageID patch
+    CopyMessageID.onUnload?.();
+
+    logger.log("Plugin unloaded.");
+  },
+
+  settings: Settings,
 };
