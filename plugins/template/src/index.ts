@@ -54,43 +54,23 @@ registerCommand({
     const currentUser = UserStore.getCurrentUser();
 
     try {
-      // Fetch guild with counts (fixes large member count issue)
-      const guildRes = await HTTP.get({
-        url: `/guilds/${guildId}?with_counts=true`
+      // IMPORTANT: with_counts=true fixes large guild member count
+      const guildRes = await HTTP.get({ 
+        url: `/guilds/${guildId}?with_counts=true` 
       });
 
       const guild = guildRes?.body;
       if (!guild) return;
 
-      // Fetch channels
-      const channelsRes = await HTTP.get({
-        url: `/guilds/${guildId}/channels`
+      const channelsRes = await HTTP.get({ 
+        url: `/guilds/${guildId}/channels` 
       });
       const channels = channelsRes?.body ?? [];
 
-      // Fetch roles
-      const rolesRes = await HTTP.get({
-        url: `/guilds/${guildId}/roles`
+      const rolesRes = await HTTP.get({ 
+        url: `/guilds/${guildId}/roles` 
       });
       const roles = rolesRes?.body ?? [];
-
-      // Fetch owner user (prevents "Unknown User")
-      let ownerDisplay = `<@${guild.owner_id}>`;
-
-      try {
-        const ownerRes = await HTTP.get({
-          url: `/users/${guild.owner_id}`
-        });
-
-        const owner = ownerRes?.body;
-
-        if (owner?.username) {
-          // Modern Discord usernames may not use discriminator
-          ownerDisplay = owner.discriminator && owner.discriminator !== "0"
-            ? `${owner.username}#${owner.discriminator} (<@${guild.owner_id}>)`
-            : `${owner.username} (<@${guild.owner_id}>)`;
-        }
-      } catch { }
 
       // Snowflake → Date
       const createdTimestamp =
@@ -126,7 +106,7 @@ registerCommand({
 
 > **Name**: ${guild.name}
 > **ID**: ${guild.id}
-> **Owner**: ${ownerDisplay}
+> **Owner ID**: <@${guild.owner_id}>
 > **Members**: ${guild.approximate_member_count ?? guild.member_count ?? 0}
 > **Channels**: ${Array.isArray(channels) ? channels.length : 0}
 > **Roles**: ${Array.isArray(roles) ? roles.length : 0}
@@ -949,57 +929,30 @@ const guildId = ctx.channel.guild_id;
 );
 
 
-// Track profile patch
-let unpatchUserProfile: (() => void) | undefined;
+
+// ---- Patch User Profiles ----
+let UserProfile = findByTypeName("UserProfile");
+if (!UserProfile) UserProfile = findByTypeName("UserProfileContent");
+
+after("type", UserProfile, (args, ret) => {
+const profileSections = ret?.props?.children;
+if (!profileSections) return;
+
+const userId = args[0]?.userId ?? args[0]?.user?.id;
+if (!userId) return;
+
+profileSections.push(
+React.createElement(GiveawaySection, { userId })
+);
+});
 
 // ---- Plugin lifecycle ----
 export default {
-  onLoad: () => {
-    logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing");
-
-    const UserProfile =
-      findByTypeName("UserProfile") ??
-      findByTypeName("UserProfileContent");
-
-    if (!UserProfile) {
-      logger.log("UserProfile component not found.");
-      return;
-    }
-
-    unpatchUserProfile = after("type", UserProfile, (args, ret) => {
-      const profileSections = ret?.props?.children;
-      if (!profileSections) return;
-
-      const userId = args[0]?.userId ?? args[0]?.user?.id;
-      if (!userId) return;
-
-      // Prevent duplicate injection
-      if (
-        profileSections.some(
-          (x: any) => x?.props?.userId === userId
-        )
-      ) {
-        return;
-      }
-
-      profileSections.push(
-        React.createElement(GiveawaySection, { userId })
-      );
-    });
-  },
-
-  onUnload: () => {
-    // Unregister slash commands
-    for (const unregister of commands) unregister();
-
-    // Unpatch profile injection
-    if (unpatchUserProfile) {
-      unpatchUserProfile();
-      unpatchUserProfile = undefined;
-    }
-
-    logger.log("Plugin unloaded.");
-  },
-
-  settings: Settings,
+onLoad: () =>
+logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing"),
+onUnload: () => {
+for (const unregister of commands) unregister();
+logger.log("Plugin unloaded.");
+},
+settings: Settings,
 };
