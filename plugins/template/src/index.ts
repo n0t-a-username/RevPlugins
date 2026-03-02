@@ -1,7 +1,7 @@
 import { logger } from "@vendetta";
 import Settings from "./Settings";
 import GiveawaySection from "./GiveawaySection";
-import CopyMessageID from "./CopyMessageID";
+import * as CopyMessageID from "./CopyMessageID";
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
@@ -947,7 +947,6 @@ React.createElement(GiveawaySection, { userId })
 });
 
 
-import * as CopyMessageID from "./CopyMessageID";
 
 export default {
   onLoad: () => {
