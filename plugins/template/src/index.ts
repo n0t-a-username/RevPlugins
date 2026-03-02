@@ -949,36 +949,43 @@ const guildId = ctx.channel.guild_id;
 );
 
 
-
 // Track profile patch
 let unpatchUserProfile: (() => void) | undefined;
-
-let UserProfile = findByTypeName("UserProfile");
-if (!UserProfile) UserProfile = findByTypeName("UserProfileContent");
-
-if (UserProfile) {
-  unpatchUserProfile = after("type", UserProfile, (args, ret) => {
-    const profileSections = ret?.props?.children;
-    if (!profileSections) return;
-
-    const userId = args[0]?.userId ?? args[0]?.user?.id;
-    if (!userId) return;
-
-    profileSections.push(
-      React.createElement(GiveawaySection, { userId })
-    );
-  });
-}
 
 // ---- Plugin lifecycle ----
 export default {
   onLoad: () => {
     logger.log("All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing");
 
-    // If your copy-message-id patch has an onLoad, call it here
-    if (typeof onLoad === "function") {
-      onLoad();
+    const UserProfile =
+      findByTypeName("UserProfile") ??
+      findByTypeName("UserProfileContent");
+
+    if (!UserProfile) {
+      logger.log("UserProfile component not found.");
+      return;
     }
+
+    unpatchUserProfile = after("type", UserProfile, (args, ret) => {
+      const profileSections = ret?.props?.children;
+      if (!profileSections) return;
+
+      const userId = args[0]?.userId ?? args[0]?.user?.id;
+      if (!userId) return;
+
+      // Prevent duplicate injection
+      if (
+        profileSections.some(
+          (x: any) => x?.props?.userId === userId
+        )
+      ) {
+        return;
+      }
+
+      profileSections.push(
+        React.createElement(GiveawaySection, { userId })
+      );
+    });
   },
 
   onUnload: () => {
@@ -986,11 +993,9 @@ export default {
     for (const unregister of commands) unregister();
 
     // Unpatch profile injection
-    if (unpatchUserProfile) unpatchUserProfile();
-
-    // Unpatch action sheet
-    if (typeof onUnload === "function") {
-      onUnload();
+    if (unpatchUserProfile) {
+      unpatchUserProfile();
+      unpatchUserProfile = undefined;
     }
 
     logger.log("Plugin unloaded.");
