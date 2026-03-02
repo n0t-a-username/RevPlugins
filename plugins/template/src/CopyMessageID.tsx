@@ -19,60 +19,41 @@ export function onLoad() {
       const innerUnpatch = after("default", instance, (_, tree) => {
         React.useEffect(() => () => innerUnpatch(), []);
 
-        const actionSheetContainer = findInReactTree(
+        const groups = findInReactTree(
           tree,
-          (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup"
+          (x) =>
+            Array.isArray(x) &&
+            x[0]?.type?.name === "ActionSheetRowGroup"
         );
 
-        const buttons = findInReactTree(
-          tree,
-          (x) => x?.[0]?.type?.name === "ButtonRow"
+        if (!groups?.length) return;
+
+        const group = groups[1] ?? groups[0];
+        if (!group?.props?.children) return;
+
+        if (
+          group.props.children.some(
+            (c: any) => c?.key === "copy-message-id"
+          )
+        )
+          return;
+
+        const ActionSheetRow = group.props.children[0].type;
+
+        group.props.children.push(
+          <ActionSheetRow
+            key="copy-message-id"
+            label="Copy Message ID"
+            onPress={async () => {
+              await clipboard.setStringAsync(message.id);
+              showToast(
+                "Message ID copied",
+                getAssetIDByName("toast_copy_link")
+              );
+              LazyActionSheet.hideActionSheet();
+            }}
+          />
         );
-
-        const copyAction = {
-          onPress: async () => {
-            await clipboard.setStringAsync(message.id);
-            showToast(
-              "Message ID copied",
-              getAssetIDByName("toast_copy_link")
-            );
-            LazyActionSheet.hideActionSheet();
-          },
-        };
-
-        // Button layout
-        if (buttons) {
-          if (!buttons.some((b: any) => b?.key === "copy-message-id")) {
-            const FormRow = buttons[0].type;
-            buttons.push(
-              <FormRow
-                key="copy-message-id"
-                label="Copy Message ID"
-                onPress={copyAction.onPress}
-              />
-            );
-          }
-        }
-
-        // ActionSheetRowGroup layout
-        else if (actionSheetContainer?.[1]) {
-          const group = actionSheetContainer[1];
-          const ActionSheetRow = group.props.children[0].type;
-
-          if (
-            !group.props.children.some(
-              (r: any) => r?.key === "copy-message-id"
-            )
-          ) {
-            group.props.children.push(
-              <ActionSheetRow
-                key="copy-message-id"
-                label="Copy Message ID"
-                onPress={copyAction.onPress}
-              />
-            );
-          }
-        }
       });
     });
   });
