@@ -14,7 +14,7 @@ const baseActivity = {
   type: 1, // STREAMING
   url: "https://twitch.tv/bemmo", // 🔥 Purple streaming badge
   details: "Bemmo",
-  state: "Discord Utility Tool",
+  state: "A discord utility tool.",
   assets: {
     large_image: IMAGE_URL,
   },
