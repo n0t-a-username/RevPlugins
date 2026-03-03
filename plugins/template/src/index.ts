@@ -951,18 +951,51 @@ React.createElement(GiveawaySection, { userId })
     
 /* =========================
    STABLE MESSAGE LOGGER
+   + AUTO LIMIT SHUTDOWN
+   + TOAST NOTIFICATION
 ========================= */
+
+import { findByProps } from "@vendetta/metro";
+import { after } from "@vendetta/patcher";
+
+const { showToast } = findByProps("showToast");
 
 storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
 
+const LOG_LIMIT = 500;
+let limitTriggered = false; // prevents duplicate toasts
+
 function addLogEntry(entry: string) {
   const currentLogs = storage.messageLogs ?? [];
   const updated = [...currentLogs, entry];
 
-  if (updated.length > 500) updated.shift();
+  if (updated.length >= LOG_LIMIT && !limitTriggered) {
+    limitTriggered = true;
+
+    const time = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    updated.push(
+      `[${time}] ⚠️ Log limit of ${LOG_LIMIT} reached. Logging automatically stopped.\n`
+    );
+
+    storage.messageLogs = updated.slice(-LOG_LIMIT);
+
+    // Visible toast notification
+    showToast?.(
+      `Log limit of ${LOG_LIMIT} reached`,
+      undefined
+    );
+
+    stopLogger(true);
+    return;
+  }
 
   storage.messageLogs = updated;
 }
@@ -973,13 +1006,15 @@ function startLogger(channelId?: string) {
   const MessageEvents = findByProps("receiveMessage", "sendMessage");
   if (!MessageEvents?.receiveMessage) return;
 
+  storage.logging.enabled = true;
+  limitTriggered = false;
+
   const startTime = new Date().toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
   });
 
-  // Start message (with spacing after)
   addLogEntry(
     `[${startTime}] 🟢 Started logging in channel ID: ${channelId ?? "Unknown"}\n`
   );
@@ -988,8 +1023,6 @@ function startLogger(channelId?: string) {
     if (!storage.logging?.enabled) return;
 
     const message = args?.[1];
-
-    // Validation & echo filter
     if (!message) return;
     if (message.author?.bot) return;
     if (message.state === "SENDING") return;
@@ -1008,7 +1041,6 @@ function startLogger(channelId?: string) {
 
     let logEntry = `[${timestamp}] ${username}: ${cleanContent}`;
 
-    // Attachments on separate line (directly below message)
     if (Array.isArray(message.attachments) && message.attachments.length) {
       const urls = message.attachments
         .map((a: any) => a.url)
@@ -1020,25 +1052,27 @@ function startLogger(channelId?: string) {
       }
     }
 
-    // Add ONE blank line after each full entry
     addLogEntry(logEntry + "\n");
   });
 }
 
-function stopLogger() {
+function stopLogger(internal = false) {
   if (!unpatchLogger) return;
 
   unpatchLogger();
   unpatchLogger = null;
 
-  const stopTime = new Date().toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
+  storage.logging.enabled = false;
 
-  // End message with spacing
-  addLogEntry(`[${stopTime}] 🔴 Logging ended\n`);
+  if (!internal) {
+    const stopTime = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+
+    addLogEntry(`[${stopTime}] 🔴 Logging ended\n`);
+  }
 }
 
 /* =========================
