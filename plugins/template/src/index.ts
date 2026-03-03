@@ -947,14 +947,120 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
-// ---- Plugin lifecycle ----
+/* =========================
+   LOGGING SYSTEM
+========================= */
+
+storage.logging ??= { enabled: false };
+storage.messageLogs ??= [];
+
+let unpatchLogger: (() => void) | null = null;
+
+function startLogger() {
+  if (unpatchLogger) return;
+
+  unpatchLogger = after("receiveMessage", MessageActions, (_, args) => {
+    if (!storage.logging?.enabled) return;
+
+    const message = args?.[1];
+    if (!message?.content) return;
+
+    if (message.author?.bot) return;
+
+    const timestamp = new Date().toLocaleString();
+    const author = message.author?.username ?? "Unknown";
+    const channelId = message.channel_id ?? "Unknown";
+
+    const logEntry = `[${timestamp}] (${channelId}) ${author}: ${message.content}`;
+
+    storage.messageLogs.push(logEntry);
+
+    if (storage.messageLogs.length > 1000) {
+      storage.messageLogs.shift();
+    }
+  });
+}
+
+function stopLogger() {
+  if (unpatchLogger) {
+    unpatchLogger();
+    unpatchLogger = null;
+  }
+}
+
+/* =========================
+   /log COMMAND
+========================= */
+
+commands.push(
+  registerCommand({
+    name: "log",
+    displayName: "log",
+    description: "Enable or disable message logging",
+    options: [
+      {
+        name: "enabled",
+        displayName: "enabled",
+        description: "true = enable logging, false = disable",
+        required: true,
+        type: 5,
+      },
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: (args, ctx) => {
+      const enabled =
+        args.find(a => a.name === "enabled")?.value ?? false;
+
+      storage.logging.enabled = enabled;
+
+      if (enabled) startLogger();
+      else stopLogger();
+
+      const currentUser = UserStore.getCurrentUser();
+
+      receiveMessage(
+        ctx.channel.id,
+        Object.assign(
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content: enabled
+              ? "📝 Message logging enabled."
+              : "🛑 Message logging disabled.",
+          }),
+          { author: currentUser }
+        )
+      );
+    },
+  })
+);
+
+/* =========================
+   EXISTING COMMANDS
+   (UNCHANGED — YOUR ORIGINAL CODE CONTINUES HERE)
+========================= */
+
+/* 
+   Keep all your existing commands exactly as-is below this line.
+   Nothing else was modified.
+*/
+
+/* =========================
+   PLUGIN LIFECYCLE
+========================= */
+
 export default {
   onLoad: () => {
     logger.log(
-      "All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing, CopyMessageID"
+      "All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing, CopyMessageID, Log"
     );
 
     RichPresence.startRichPresence();
+
+    if (storage.logging?.enabled) {
+      startLogger();
+    }
   },
 
   onUnload: () => {
@@ -962,6 +1068,8 @@ export default {
 
     CopyMessageID.onUnload?.();
     RichPresence.stopRichPresence();
+
+    stopLogger();
 
     logger.log("Plugin unloaded.");
   },
