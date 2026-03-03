@@ -948,35 +948,29 @@ React.createElement(GiveawaySection, { userId })
 });
 
  
-  /* =========================
-   SIMPLE MESSAGE LOGGER (DEDUPED)
+ /* =========================
+   SIMPLE MESSAGE LOGGER (SINGLE PATCH GUARANTEE)
 ========================= */
 
 storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
-let seenMessages = new Set<string>();
 
 function startLogger() {
-  if (unpatchLogger) return;
+  // 🔒 Force-remove any previous patch first
+  if (unpatchLogger) {
+    unpatchLogger();
+    unpatchLogger = null;
+  }
 
-  unpatchLogger = after("receiveMessage", MessageActions, (args) => {
+  unpatchLogger = after("receiveMessage", MessageActions, (_, args) => {
     if (!storage.logging?.enabled) return;
 
     const message = args?.[1];
     if (!message) return;
     if (!message.content) return;
     if (message.author?.bot) return;
-
-    // Prevent duplicate logging
-    if (seenMessages.has(message.id)) return;
-    seenMessages.add(message.id);
-
-    // Keep dedupe memory bounded
-    if (seenMessages.size > 2000) {
-      seenMessages.clear();
-    }
 
     const username = message.author?.username ?? "Unknown";
     const timestamp = new Date().toLocaleTimeString();
@@ -996,7 +990,6 @@ function stopLogger() {
     unpatchLogger();
     unpatchLogger = null;
   }
-  seenMessages.clear();
 }
 
 /* =========================
