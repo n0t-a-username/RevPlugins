@@ -973,15 +973,15 @@ function startLogger(channelId?: string) {
   const MessageEvents = findByProps("receiveMessage", "sendMessage");
   if (!MessageEvents?.receiveMessage) return;
 
-  // Log start entry
   const startTime = new Date().toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
   });
 
+  // Start message (with spacing after)
   addLogEntry(
-    `[${startTime}] 🟢 Started logging in channel ID: ${channelId ?? "Unknown"}`
+    `[${startTime}] 🟢 Started logging in channel ID: ${channelId ?? "Unknown"}\n`
   );
 
   unpatchLogger = after("receiveMessage", MessageEvents, (args) => {
@@ -1002,14 +1002,13 @@ function startLogger(channelId?: string) {
 
     const username = message.author?.username ?? "Unknown";
 
-    // Clean content
     const cleanContent = message.content
       ? message.content.replace(/\n/g, " ")
       : "";
 
     let logEntry = `[${timestamp}] ${username}: ${cleanContent}`;
 
-    // Attachment logging (URL only)
+    // Attachments on separate line (directly below message)
     if (Array.isArray(message.attachments) && message.attachments.length) {
       const urls = message.attachments
         .map((a: any) => a.url)
@@ -1017,11 +1016,12 @@ function startLogger(channelId?: string) {
         .join(" ");
 
       if (urls.length) {
-        logEntry += ` [Attachment: ${urls}]`;
+        logEntry += `\n[Attachments]: ${urls}`;
       }
     }
 
-    addLogEntry(logEntry);
+    // Add ONE blank line after each full entry
+    addLogEntry(logEntry + "\n");
   });
 }
 
@@ -1037,7 +1037,8 @@ function stopLogger() {
     second: "2-digit",
   });
 
-  addLogEntry(`[${stopTime}] 🔴 Logging ended`);
+  // End message with spacing
+  addLogEntry(`[${stopTime}] 🔴 Logging ended\n`);
 }
 
 /* =========================
