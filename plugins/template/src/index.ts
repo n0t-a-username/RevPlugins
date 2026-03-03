@@ -950,7 +950,7 @@ React.createElement(GiveawaySection, { userId })
 
  
  /* =========================
-   SIMPLE MESSAGE LOGGER (CORRECT MODULE PATCH)
+   SIMPLE MESSAGE LOGGER (DEDUPED)
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -958,21 +958,34 @@ storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
 
+// Prevent duplicate logs from multiple dispatcher emissions
+const processedMessageIds = new Set<string>();
+
 function startLogger() {
   if (unpatchLogger) {
     unpatchLogger();
     unpatchLogger = null;
   }
 
- 
+  const MessageDispatcher = findByProps("receiveMessage");
 
   unpatchLogger = after("receiveMessage", MessageDispatcher, (args) => {
     if (!storage.logging?.enabled) return;
 
-    const message = args?.[1];
+    const message = args?.[0]?.message ?? args?.[1];
     if (!message) return;
+    if (!message.id) return;
     if (!message.content) return;
     if (message.author?.bot) return;
+
+    // 🔒 Deduplication
+    if (processedMessageIds.has(message.id)) return;
+    processedMessageIds.add(message.id);
+
+    // Prevent unbounded memory growth
+    if (processedMessageIds.size > 500) {
+      processedMessageIds.clear();
+    }
 
     const username = message.author?.username ?? "Unknown";
     const timestamp = new Date().toLocaleTimeString();
@@ -992,6 +1005,8 @@ function stopLogger() {
     unpatchLogger();
     unpatchLogger = null;
   }
+
+  processedMessageIds.clear();
 }
 
 /* =========================
