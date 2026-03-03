@@ -950,7 +950,7 @@ React.createElement(GiveawaySection, { userId })
 
  
  /* =========================
-   SIMPLE MESSAGE LOGGER (PROPER STORE PATCH)
+   SIMPLE MESSAGE LOGGER (STABLE)
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -965,30 +965,37 @@ function startLogger() {
   }
 
   const MessageStore = findByStoreName("MessageStore");
+  if (!MessageStore) return;
 
-  if (!MessageStore?.prototype?.receiveMessage) return;
+  // Find the actual insert function dynamically
+  const proto = MessageStore.prototype;
 
-  unpatchLogger = after(
-    "receiveMessage",
-    MessageStore.prototype,
-    (args) => {
-      if (!storage.logging?.enabled) return;
+  const targetKey =
+    Object.keys(proto).find(
+      k =>
+        typeof proto[k] === "function" &&
+        k.toLowerCase().includes("message")
+    );
 
-      const message = args?.[0];
-      if (!message?.content) return;
-      if (message.author?.bot) return;
+  if (!targetKey) return;
 
-      const username = message.author?.username ?? "Unknown";
-      const timestamp = new Date().toLocaleTimeString();
+  unpatchLogger = after(targetKey, proto, (args) => {
+    if (!storage.logging?.enabled) return;
 
-      const logEntry = `[${timestamp}] ${username}: ${message.content}`;
+    const message = args?.[0];
+    if (!message?.content) return;
+    if (message.author?.bot) return;
 
-      const updated = [...(storage.messageLogs ?? []), logEntry];
-      if (updated.length > 1000) updated.shift();
+    const username = message.author?.username ?? "Unknown";
+    const timestamp = new Date().toLocaleTimeString();
 
-      storage.messageLogs = updated;
-    }
-  );
+    const logEntry = `[${timestamp}] ${username}: ${message.content}`;
+
+    const updated = [...(storage.messageLogs ?? []), logEntry];
+    if (updated.length > 1000) updated.shift();
+
+    storage.messageLogs = updated;
+  });
 }
 
 function stopLogger() {
