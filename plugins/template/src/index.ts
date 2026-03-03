@@ -948,7 +948,7 @@ React.createElement(GiveawaySection, { userId })
 });
 
 /* =========================
-   MESSAGE LOGGER (SINGLE PATCH)
+   SAFE MESSAGE LOGGER
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -960,14 +960,12 @@ after("receiveMessage", MessageActions, (args) => {
   const message = args?.[1];
   if (!message?.id) return;
   if (!message.content) return;
-  if (message.author?.bot) return;
 
-  // Hard dedupe by message ID
-  if (storage.logging.lastId === message.id) return;
-  storage.logging.lastId = message.id;
+  // Ignore plugin-generated messages
+  if (message.__fromPlugin) return;
 
   storage.messageLogs.push(
-    `[${new Date().toISOString()}] ${message.author.username}: ${message.content}`
+    `[${new Date().toISOString()}] ${message.author?.username ?? "Unknown"}: ${message.content}`
   );
 
   if (storage.messageLogs.length > 1000) {
@@ -1025,7 +1023,6 @@ commands.push(
     },
   })
 );
-
 /* =========================
    PLUGIN LIFECYCLE
 ========================= */
