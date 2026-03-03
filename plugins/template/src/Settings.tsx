@@ -148,11 +148,12 @@ export default function Settings() {
           </>
         )}
       </BetterTableRowGroup>
+      <View style={{ height: 40 }} />
     </>
   );
 
   /* =========================
-     RAID PAGE
+     RAID PAGE (PADDING ADDED)
   ========================= */
 
   const renderRaidMessagesPage = () => (
@@ -181,11 +182,13 @@ export default function Settings() {
           onPress={() => setSelectedPage("main")}
         />
       )}
+      {/* PADDING FOR ANDROID UI OVERLAY */}
+      <View style={{ height: 80 }} />
     </>
   );
 
   /* =========================
-     MESSAGE LOGS PAGE
+     MESSAGE LOGS PAGE (PADDING ADDED)
   ========================= */
 
   const renderMessageLogsPage = () => (
@@ -196,7 +199,6 @@ export default function Settings() {
           Captured messages will appear below.
         </Text>
 
-        {/* PERFORMANCE FIX: Only render TextInput when active to prevent animation lag */}
         {selectedPage === "messageLogs" ? (
           <TextInput
             multiline
@@ -227,12 +229,10 @@ export default function Settings() {
           onPress={() => setSelectedPage("main")}
         />
       )}
+      {/* PADDING FOR ANDROID UI OVERLAY */}
+      <View style={{ height: 80 }} />
     </>
   );
-
-  /* =========================
-     ANIMATED CONTAINER (OPTIMIZED)
-  ========================= */
 
   return (
     <View style={{ flex: 1 }} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
