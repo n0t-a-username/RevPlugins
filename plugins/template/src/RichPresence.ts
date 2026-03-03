@@ -5,12 +5,14 @@ import { storage } from "@vendetta/plugin";
 const APPLICATION_ID = "1054951789318909972";
 const assetManager = findByProps("getAssetIds");
 
-const IMAGE_URL = "https://raw.githubusercontent.com/n0t-a-username/RevPlugins/refs/heads/master/plugins/template/src/components/Bemmo.png";
+const IMAGE_URL =
+  "https://raw.githubusercontent.com/n0t-a-username/RevPlugins/refs/heads/master/plugins/template/src/components/Bemmo.png";
 
 const baseActivity = {
   name: "Streaming",
   application_id: APPLICATION_ID,
   type: 1, // STREAMING
+  url: "https://twitch.tv/bemmo", // 🔥 Purple streaming badge
   details: "Bemmo",
   state: "Discord Utility Tool",
   assets: {
@@ -41,7 +43,8 @@ async function resolveAsset(activity: any) {
       assetIds = await assetManager.fetchAssetIds(...args);
     }
 
-    activity.assets.large_image = assetIds[0] ?? activity.assets.large_image;
+    activity.assets.large_image =
+      assetIds[0] ?? activity.assets.large_image;
   } catch (e) {
     console.error("[RichPresence] Asset resolution failed:", e);
   }
@@ -68,10 +71,19 @@ async function checkState() {
 }
 
 export function startRichPresence() {
-  lastState = Boolean(storage.hiddenSettings?.enabled);
-  if (lastState) {
-    resolveAsset({ ...baseActivity }).then((act) => setActivity(act));
+  const shouldRun = Boolean(
+    storage.hiddenSettings?.enabled &&
+    storage.hiddenSettings?.visible
+  );
+
+  lastState = shouldRun;
+
+  if (shouldRun) {
+    resolveAsset({ ...baseActivity }).then((act) =>
+      setActivity(act)
+    );
   }
+
   interval = setInterval(checkState, 1000);
 }
 
@@ -80,5 +92,6 @@ export function stopRichPresence() {
     clearInterval(interval);
     interval = null;
   }
+
   setActivity(null);
 }
