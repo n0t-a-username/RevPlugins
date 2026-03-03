@@ -948,19 +948,19 @@ React.createElement(GiveawaySection, { userId })
 });
 
  
-    /* =========================
-   SIMPLE MESSAGE LOGGER (RELIABLE)
+  /* =========================
+   SIMPLE MESSAGE LOGGER (DEDUPED)
 ========================= */
 
 storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
+let seenMessages = new Set<string>();
 
 function startLogger() {
   if (unpatchLogger) return;
 
-  // Patch the MessageActions module itself
   unpatchLogger = after("receiveMessage", MessageActions, (args) => {
     if (!storage.logging?.enabled) return;
 
@@ -969,6 +969,15 @@ function startLogger() {
     if (!message.content) return;
     if (message.author?.bot) return;
 
+    // Prevent duplicate logging
+    if (seenMessages.has(message.id)) return;
+    seenMessages.add(message.id);
+
+    // Keep dedupe memory bounded
+    if (seenMessages.size > 2000) {
+      seenMessages.clear();
+    }
+
     const username = message.author?.username ?? "Unknown";
     const timestamp = new Date().toLocaleTimeString();
     const text = message.content;
@@ -976,8 +985,6 @@ function startLogger() {
     const logEntry = `[${timestamp}] ${username}: ${text}`;
 
     const updated = [...(storage.messageLogs ?? []), logEntry];
-
-    // cap at 1000 entries
     if (updated.length > 1000) updated.shift();
 
     storage.messageLogs = updated;
@@ -989,6 +996,7 @@ function stopLogger() {
     unpatchLogger();
     unpatchLogger = null;
   }
+  seenMessages.clear();
 }
 
 /* =========================
