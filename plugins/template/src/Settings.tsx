@@ -79,6 +79,95 @@ export default function Settings() {
         })
       : 0;
 
+  const renderMainPage = () => (
+    <>
+      <Header />
+
+      <BetterTableRowGroup title="Information" icon={messageHeaderIcon} padding>
+        <Text style={{ color: "#aaa" }}>
+          Command list: /mcs, /msp, /nuke, /raid, /purge, /react, /userid,
+          /lockdown, /server-info, /fetchprofile, /dupe-channel, /delete-channel
+        </Text>
+      </BetterTableRowGroup>
+
+      <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
+        <Text style={{ color: "#aaa", marginBottom: 8 }}>
+          Press the "Mass Selective Ping" button on user profiles.
+        </Text>
+        <TextInput
+          multiline
+          value={storage.eventGiveawayPing}
+          onChangeText={(v) => (storage.eventGiveawayPing = v)}
+          style={{ ...inputStyle, minHeight: 120 }}
+        />
+      </BetterTableRowGroup>
+
+      <BetterTableRowGroup title="Tools/Misc" icon={getAssetIDByName("FolderIcon")}>
+        {FormRow && (
+          <>
+            <FormRow
+              label="Edit Raid Messages"
+              subLabel="Customize the 10 raid message slots"
+              trailing={<FormRow.Arrow />}
+              onPress={() => setSelectedPage("raidMessages")}
+            />
+
+            <FormRow
+              label="Message Logs"
+              subLabel="View captured message logs"
+              trailing={<FormRow.Arrow />}
+              onPress={() => setSelectedPage("messageLogs")}
+            />
+          </>
+        )}
+      </BetterTableRowGroup>
+    </>
+  );
+
+  const renderRaidMessagesPage = () => (
+    <>
+      <Header />
+
+      <BetterTableRowGroup title="Raid Messages" icon={raidHeaderIcon} padding>
+        {[...Array(10).keys()].map((i) => (
+          <View key={i} style={{ marginBottom: 12 }}>
+            <Text style={{ color: "#fff", marginBottom: 6 }}>
+              Message {i + 1}
+            </Text>
+            <TextInput
+              style={inputStyle}
+              value={storage.words[i]}
+              onChangeText={(v) => (storage.words[i] = v)}
+            />
+          </View>
+        ))}
+      </BetterTableRowGroup>
+
+      <View style={{ height: 20 }} />
+
+      {FormRow && (
+        <FormRow
+          label="Back"
+          trailing={
+            arrowBackIcon && (
+              <Image
+                source={arrowBackIcon}
+                style={{
+                  width: 24,
+                  height: 24,
+                  tintColor: semanticColors.TEXT_MUTED,
+                }}
+              />
+            )
+          }
+          onPress={() => setSelectedPage("main")}
+        />
+      )}
+
+      <View style={{ height: 60 }} />
+    </>
+  );
+
   const renderMessageLogsPage = () => (
     <>
       <Header />
@@ -96,18 +185,15 @@ export default function Settings() {
         />
 
         <View style={{ flexDirection: "row", marginTop: 12 }}>
-          {/* Copy */}
           <View style={{ flex: 1, marginRight: 6 }}>
             <Text
               onPress={() => {
                 const content = [...storage.messageLogs].join("\n");
-
                 try {
                   const clipboard = require("@vendetta/metro/common");
                   clipboard.setString?.(content);
                 } catch {}
-
-                showToast("Log copied to clipboard.");
+                showToast("Log copied.");
               }}
               style={{
                 backgroundColor: "#2ecc71",
@@ -122,7 +208,6 @@ export default function Settings() {
             </Text>
           </View>
 
-          {/* Clear */}
           <View style={{ flex: 1, marginLeft: 6 }}>
             <Text
               onPress={() => {
@@ -183,31 +268,11 @@ export default function Settings() {
           }}
         >
           <View style={{ width: containerWidth || "100%" }}>
-            <Header />
+            {renderMainPage()}
           </View>
 
           <View style={{ width: containerWidth || "100%" }}>
-            {selectedPage === "raidMessages" && (
-              <BetterTableRowGroup
-                title="Raid Messages"
-                icon={raidHeaderIcon}
-                padding
-              >
-                {[...Array(10).keys()].map((i) => (
-                  <View key={i} style={{ marginBottom: 12 }}>
-                    <Text style={{ color: "#fff", marginBottom: 6 }}>
-                      Message {i + 1}
-                    </Text>
-                    <TextInput
-                      style={inputStyle}
-                      value={storage.words[i]}
-                      onChangeText={(v) => (storage.words[i] = v)}
-                    />
-                  </View>
-                ))}
-              </BetterTableRowGroup>
-            )}
-
+            {selectedPage === "raidMessages" && renderRaidMessagesPage()}
             {selectedPage === "messageLogs" && renderMessageLogsPage()}
           </View>
         </Animated.View>
