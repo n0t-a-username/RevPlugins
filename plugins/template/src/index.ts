@@ -970,29 +970,38 @@ function startLogger() {
     const message = args?.[1];
 
     // 1. VALIDATION & ECHO FILTER
-    // state === "SENDING" is the local echo. We skip it to avoid duplicates.
-    if (!message?.id || !message.content || message.author?.bot) return;
-    if (message.state === "SENDING") return; 
+    if (!message?.content) return;
+    if (message.author?.bot) return;
+    if (message.state === "SENDING") return;
 
-    // 2. PERSISTENT DUPLICATE CHECK (By ID)
-    const currentLogs = storage.messageLogs ?? [];
-    if (currentLogs.some(log => log.includes(`ID: ${message.id}`))) return;
-
-    // 3. LOGGING
+    // 2. LOGGING
     const username = message.author?.username ?? "Unknown";
-    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    
-    // Clean the content of newlines so it stays on one line in your Settings text area
-    const cleanContent = message.content.replace(/\n/g, " ");
-    const logEntry = `[${timestamp}] ${username}: ${cleanContent} | ID: ${message.id}`;
+    const timestamp = new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
 
-    // 4. UPDATE STORAGE
+    // Keep logs single-line
+    const cleanContent = message.content.replace(/\n/g, " ");
+    const logEntry = `[${timestamp}] ${username}: ${cleanContent}`;
+
+    // 3. UPDATE STORAGE
+    const currentLogs = storage.messageLogs ?? [];
     const updated = [...currentLogs, logEntry];
+
     if (updated.length > 500) updated.shift();
+
     storage.messageLogs = updated;
   });
 }
 
+function stopLogger() {
+  if (unpatchLogger) {
+    unpatchLogger();
+    unpatchLogger = null;
+  }
+}
 
 /* =========================
    /log COMMAND
@@ -1010,36 +1019,28 @@ commands.push(
         description: "true = enable, false = disable",
         required: true,
         type: 5,
-      },
-      {
-        name: "clear",
-        displayName: "clear",
-        description: "Clear logs from storage",
-        required: false,
-        type: 5,
       }
     ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: (args, ctx) => {
-      const enabled = args.find(a => a.name === "enabled")?.value ?? storage.logging.enabled;
-      const clear = args.find(a => a.name === "clear")?.value ?? false;
-
-      if (clear) {
-        storage.messageLogs = [];
-      }
+      const enabled =
+        args.find(a => a.name === "enabled")?.value ?? storage.logging.enabled;
 
       storage.logging.enabled = enabled;
-      if (enabled) startLogger(); else stopLogger();
+
+      if (enabled) startLogger();
+      else stopLogger();
 
       const currentUser = UserStore.getCurrentUser();
+
       receiveMessage(
         ctx.channel.id,
         Object.assign(
           createBotMessage({
             channelId: ctx.channel.id,
-            content: `📝 Logging: **${enabled ? "ON" : "OFF"}**${clear ? " (Logs Cleared)" : ""}`
+            content: `📝 Logging: **${enabled ? "ON" : "OFF"}**`,
           }),
           { author: currentUser }
         )
@@ -1047,7 +1048,6 @@ commands.push(
     },
   })
 );
-
 
 
 /* =========================
