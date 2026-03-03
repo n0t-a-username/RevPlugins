@@ -952,13 +952,11 @@ React.createElement(GiveawaySection, { userId })
 /* =========================
    STABLE MESSAGE LOGGER
    + AUTO LIMIT SHUTDOWN
-   + TOAST NOTIFICATION
+   + SAFE TOAST
 ========================= */
 
 import { findByProps } from "@vendetta/metro";
 import { after } from "@vendetta/patcher";
-
-const { showToast } = findByProps("showToast");
 
 storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
@@ -966,7 +964,12 @@ storage.messageLogs ??= [];
 let unpatchLogger: (() => void) | null = null;
 
 const LOG_LIMIT = 500;
-let limitTriggered = false; // prevents duplicate toasts
+let limitTriggered = false;
+
+function showLimitToast(message: string) {
+  const ToastModule = findByProps("showToast");
+  ToastModule?.showToast?.(message);
+}
 
 function addLogEntry(entry: string) {
   const currentLogs = storage.messageLogs ?? [];
@@ -987,10 +990,8 @@ function addLogEntry(entry: string) {
 
     storage.messageLogs = updated.slice(-LOG_LIMIT);
 
-    // Visible toast notification
-    showToast?.(
-      `Log limit of ${LOG_LIMIT} reached`,
-      undefined
+    showLimitToast(
+      `Log limit of ${LOG_LIMIT} reached. Logging stopped.`
     );
 
     stopLogger(true);
