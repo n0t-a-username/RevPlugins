@@ -958,42 +958,27 @@ storage.messageLogs ??= [];
 let unpatchLogger: (() => void) | null = null;
 
 function startLogger() {
-  if (unpatchLogger) {
-    unpatchLogger();
-    unpatchLogger = null;
-  }
+  if (unpatchLogger) return;
 
   const MessageStore = findByStoreName("MessageStore");
-  if (!MessageStore) return;
+  if (!MessageStore) {
+    logger.error("MessageStore not found");
+    return;
+  }
 
-  unpatchLogger = after(
-    "getMessages",
-    MessageStore,
-    (args, res) => {
-      if (!storage.logging?.enabled) return;
-      if (!Array.isArray(res)) return;
+  unpatchLogger = after("addMessage", MessageStore.prototype, ([message]) => {
+    if (!storage.logging?.enabled) return;
+    if (!message?.content) return;
+    if (message.author?.bot) return;
 
-      // Only process newly returned messages
-      const messages = res.slice(0, 20); // limit processing
+    const entry = `[${new Date().toLocaleTimeString()}] ${message.author?.username ?? "Unknown"}: ${message.content}`;
 
-      for (const message of messages) {
-        if (!message?.content) continue;
-        if (message.author?.bot) continue;
+    storage.messageLogs ??= [];
+    storage.messageLogs.push(entry);
 
-        const username = message.author?.username ?? "Unknown";
-        const timestamp = new Date().toLocaleTimeString();
-
-        const logEntry = `[${timestamp}] ${username}: ${message.content}`;
-
-        const logs = storage.messageLogs ?? [];
-        logs.push(logEntry);
-
-        if (logs.length > 1000) logs.shift();
-
-        storage.messageLogs = logs;
-      }
-    }
-  );
+    if (storage.messageLogs.length > 1000)
+      storage.messageLogs.shift();
+  });
 }
 
 function stopLogger() {
