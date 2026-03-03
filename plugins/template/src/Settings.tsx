@@ -190,7 +190,7 @@ export default function Settings() {
         <TextInput
           multiline
           editable={false}
-          value={storage.messageLogs.join("\n")}
+          value={[...storage.messageLogs].join("\n")}
           style={{ ...inputStyle, minHeight: 260 }}
         />
       </BetterTableRowGroup>
