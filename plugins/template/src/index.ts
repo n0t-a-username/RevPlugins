@@ -947,6 +947,10 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
+/* =========================
+   MESSAGE LOGGER (SINGLE PATCH)
+========================= */
+
 storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
 
@@ -958,6 +962,10 @@ after("receiveMessage", MessageActions, (args) => {
   if (!message.content) return;
   if (message.author?.bot) return;
 
+  // Hard dedupe by message ID
+  if (storage.logging.lastId === message.id) return;
+  storage.logging.lastId = message.id;
+
   storage.messageLogs.push(
     `[${new Date().toISOString()}] ${message.author.username}: ${message.content}`
   );
@@ -966,11 +974,6 @@ after("receiveMessage", MessageActions, (args) => {
     storage.messageLogs.shift();
   }
 });
-
-/* =========================
-   /log COMMAND
-========================= */
-
 commands.push(
   registerCommand({
     name: "log",
@@ -980,8 +983,9 @@ commands.push(
       {
         name: "enabled",
         displayName: "enabled",
+        description: "true = enable logging, false = disable logging",
         required: true,
-        type: 5,
+        type: 5, // boolean
       },
     ],
     applicationId: "-1",
@@ -989,11 +993,19 @@ commands.push(
     type: 1,
 
     execute: (args, ctx) => {
+      storage.logging ??= { enabled: false };
+
       const enabled =
         args.find(a => a.name === "enabled")?.value === true;
 
-      storage.logging ??= { enabled: false };
+      // Prevent redundant state toggles
+      if (storage.logging.enabled === enabled) return;
+
       storage.logging.enabled = enabled;
+
+      if (!enabled) {
+        storage.logging.lastId = null; // reset dedupe when turning off
+      }
 
       const currentUser = UserStore.getCurrentUser();
 
@@ -1003,8 +1015,8 @@ commands.push(
           createBotMessage({
             channelId: ctx.channel.id,
             content: enabled
-              ? "🟢 Logging enabled."
-              : "🔴 Logging disabled.",
+              ? "🟢 Message logging enabled."
+              : "🔴 Message logging disabled.",
           }),
           { author: currentUser }
         )
