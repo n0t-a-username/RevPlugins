@@ -95,14 +95,14 @@ export default function Settings() {
         />
       </BetterTableRowGroup>
 
-      <BetterTableRowGroup title="Raid Settings" icon={raidHeaderIcon}>
+      <BetterTableRowGroup
+  title="Tools/Misc"
+  icon={getAssetIDByName("FolderIcon")}
+>
   {FormRow && (
     <FormRow
       label="Edit Raid Messages"
       subLabel="Customize the 10 raid message slots"
-      leading={
-        <FormRow.Icon source={raidHeaderIcon} />
-      }
       trailing={<FormRow.Arrow />}
       onPress={() => setSelectedPage("raidMessages")}
     />
