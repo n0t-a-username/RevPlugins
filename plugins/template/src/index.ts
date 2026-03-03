@@ -951,55 +951,52 @@ React.createElement(GiveawaySection, { userId })
    MESSAGE LOGGER (FIXED)
 ========================= */
 
-storage.logging ??= { enabled: false };
-storage.messageLogs ??= [];
-
 let unpatchLogger: (() => void) | null = null;
 let lastLoggedId: string | null = null;
 
 function startLogger() {
   if (unpatchLogger) return;
 
-  const MessageStore = findByStoreName("MessageStore");
-  if (!MessageStore?.addChangeListener) {
-    logger.error("Logger failed: MessageStore not found");
+  const Dispatcher = findByProps("_dispatch", "subscribe");
+  if (!Dispatcher?.subscribe) {
+    logger.error("Dispatcher not found");
     return;
   }
 
-  const handler = () => {
+  const callback = (event: any) => {
     if (!storage.logging?.enabled) return;
+    if (event?.type !== "MESSAGE_CREATE") return;
 
     const channelId = storage.logging.channelId;
     if (!channelId) return;
 
-    const messages = MessageStore.getMessages?.(channelId);
-    if (!Array.isArray(messages) || messages.length === 0) return;
+    const message = event.message;
+    if (!message) return;
+    if (message.channel_id !== channelId) return;
 
-    const latest = messages[messages.length - 1];
-    if (!latest) return;
+    if (message.id === lastLoggedId) return;
+    lastLoggedId = message.id;
 
-    if (latest.id === lastLoggedId) return;
-    lastLoggedId = latest.id;
-
-    if (latest.author?.bot) return;
-    if (!latest.content) return;
+    if (message.author?.bot) return;
+    if (!message.content) return;
 
     const timestamp = new Date().toLocaleString();
-    const username = latest.author?.username ?? "Unknown";
+    const username = message.author?.username ?? "Unknown";
 
-    const logEntry = `[${timestamp}] ${username}: ${latest.content}`;
+    const entry = `[${timestamp}] ${username}: ${message.content}`;
 
-    const updated = [...(storage.messageLogs ?? []), logEntry];
+    storage.messageLogs ??= [];
+    storage.messageLogs.push(entry);
 
-    if (updated.length > 1000) updated.shift();
-
-    storage.messageLogs = updated;
+    if (storage.messageLogs.length > 1000) {
+      storage.messageLogs.shift();
+    }
   };
 
-  MessageStore.addChangeListener(handler);
-  unpatchLogger = () => MessageStore.removeChangeListener(handler);
+  Dispatcher.subscribe(callback);
+  unpatchLogger = () => Dispatcher.unsubscribe(callback);
 
-  logger.log("Logger attached successfully.");
+  logger.log("Logger attached via dispatcher.");
 }
 
 function stopLogger() {
@@ -1022,9 +1019,9 @@ commands.push(
       {
         name: "enabled",
         displayName: "enabled",
-        description: "true = enable logging, false = disable logging",
+        description: "true = enable, false = disable",
         required: true,
-        type: 5, // BOOLEAN
+        type: 5,
       },
     ],
     applicationId: "-1",
@@ -1032,23 +1029,20 @@ commands.push(
     type: 1,
 
     execute: (args, ctx) => {
-      // Ensure storage structure exists
       storage.logging ??= { enabled: false, channelId: null };
       storage.messageLogs ??= [];
 
-      // Get boolean safely (handles string or boolean)
       let enabled = args.find(a => a.name === "enabled")?.value;
 
-      if (enabled === "true") enabled = true;
-      if (enabled === "false") enabled = false;
+      if (typeof enabled === "string") {
+        enabled = enabled === "true";
+      }
 
       if (typeof enabled !== "boolean") return;
 
-      // Update state
       storage.logging.enabled = enabled;
 
       if (enabled) {
-        // Lock logging to this channel
         storage.logging.channelId = ctx.channel.id;
         startLogger();
       } else {
@@ -1058,7 +1052,6 @@ commands.push(
 
       const currentUser = UserStore.getCurrentUser();
 
-      // Confirmation message
       receiveMessage(
         ctx.channel.id,
         Object.assign(
