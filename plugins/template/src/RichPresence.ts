@@ -50,11 +50,15 @@ async function resolveAsset(activity: any) {
 }
 
 async function checkState() {
-  const enabled = Boolean(storage.hiddenSettings?.enabled);
-  if (enabled !== lastState) {
-    lastState = enabled;
+  const shouldRun = Boolean(
+    storage.hiddenSettings?.enabled &&
+    storage.hiddenSettings?.visible
+  );
 
-    if (enabled) {
+  if (shouldRun !== lastState) {
+    lastState = shouldRun;
+
+    if (shouldRun) {
       const activity = await resolveAsset({ ...baseActivity });
       setActivity(activity);
     } else {
