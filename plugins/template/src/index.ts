@@ -969,37 +969,30 @@ function startLogger() {
 
     const message = args?.[1];
 
-    // 1. Basic Validation
+    // 1. VALIDATION & ECHO FILTER
+    // state === "SENDING" is the local echo. We skip it to avoid duplicates.
     if (!message?.id || !message.content || message.author?.bot) return;
+    if (message.state === "SENDING") return; 
 
-    // 2. Persistent Duplicate Check
-    // We check the actual storage array to see if this message ID was just logged.
-    // This survives reloads and prevents double-fires from embeds.
+    // 2. PERSISTENT DUPLICATE CHECK (By ID)
     const currentLogs = storage.messageLogs ?? [];
-    const isDuplicate = currentLogs.some(log => log.includes(`| ID: ${message.id}`));
-    if (isDuplicate) return;
+    if (currentLogs.some(log => log.includes(`ID: ${message.id}`))) return;
 
+    // 3. LOGGING
     const username = message.author?.username ?? "Unknown";
     const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const text = message.content;
+    
+    // Clean the content of newlines so it stays on one line in your Settings text area
+    const cleanContent = message.content.replace(/\n/g, " ");
+    const logEntry = `[${timestamp}] ${username}: ${cleanContent} | ID: ${message.id}`;
 
-    // We embed the ID into the log string invisibly or at the end to track it
-    const logEntry = `[${timestamp}] ${username}: ${text} | ID: ${message.id}`;
-
-    // 3. Update Storage
+    // 4. UPDATE STORAGE
     const updated = [...currentLogs, logEntry];
-    if (updated.length > 500) updated.shift(); // Keep it lean for the UI
-
+    if (updated.length > 500) updated.shift();
     storage.messageLogs = updated;
   });
 }
 
-function stopLogger() {
-  if (unpatchLogger) {
-    unpatchLogger();
-    unpatchLogger = null;
-  }
-}
 
 /* =========================
    /log COMMAND
