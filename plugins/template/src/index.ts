@@ -974,6 +974,7 @@ after("receiveMessage", MessageActions, (args) => {
     storage.messageLogs.shift();
   }
 });
+
 commands.push(
   registerCommand({
     name: "log",
