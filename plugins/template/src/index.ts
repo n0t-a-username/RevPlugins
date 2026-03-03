@@ -948,24 +948,24 @@ React.createElement(GiveawaySection, { userId })
 });
 
 /* =========================
-   SAFE MESSAGE LOGGER
+   PROPER MESSAGE LOGGER
 ========================= */
 
 storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
 
-after("receiveMessage", MessageActions, (args) => {
+const MessageStore = findByStoreName("MessageStore");
+
+after("receiveMessage", MessageStore, (args) => {
   if (!storage.logging?.enabled) return;
 
-  const message = args?.[1];
+  const message = args?.[0];
   if (!message?.id) return;
   if (!message.content) return;
-
-  // Ignore plugin-generated messages
-  if (message.__fromPlugin) return;
+  if (message.author?.bot) return;
 
   storage.messageLogs.push(
-    `[${new Date().toISOString()}] ${message.author?.username ?? "Unknown"}: ${message.content}`
+    `[${new Date().toISOString()}] ${message.author.username}: ${message.content}`
   );
 
   if (storage.messageLogs.length > 1000) {
@@ -982,30 +982,23 @@ commands.push(
       {
         name: "enabled",
         displayName: "enabled",
-        description: "true = enable logging, false = disable logging",
+        description: "True to enable, false to disable",
+        type: 5, // BOOLEAN
         required: true,
-        type: 5, // boolean
       },
     ],
-    applicationId: "-1",
-    inputType: 1,
-    type: 1,
 
     execute: (args, ctx) => {
+      // Ensure storage exists
       storage.logging ??= { enabled: false };
 
       const enabled =
         args.find(a => a.name === "enabled")?.value === true;
 
-      // Prevent redundant state toggles
-      if (storage.logging.enabled === enabled) return;
-
+      // Update state
       storage.logging.enabled = enabled;
 
-      if (!enabled) {
-        storage.logging.lastId = null; // reset dedupe when turning off
-      }
-
+      // Send confirmation message
       const currentUser = UserStore.getCurrentUser();
 
       receiveMessage(
@@ -1023,6 +1016,7 @@ commands.push(
     },
   })
 );
+
 /* =========================
    PLUGIN LIFECYCLE
 ========================= */
