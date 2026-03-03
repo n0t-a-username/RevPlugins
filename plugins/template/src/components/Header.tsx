@@ -55,7 +55,7 @@ export default function Header() {
     if (storage.hiddenSettings?.enabled) {
       storage.hiddenSettings.visible = !storage.hiddenSettings.visible;
       showToast(
-        `Hidden settings ${storage.hiddenSettings.visible ? "visible" : "hidden"}`,
+        `Bemmo RPC ${storage.hiddenSettings.visible ? "Enabled" : "Disabled"}`,
         null
       );
       const refresh = (globalThis as any).__animalCommandsRefreshSettings;
