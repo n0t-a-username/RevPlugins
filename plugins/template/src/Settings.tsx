@@ -95,21 +95,19 @@ export default function Settings() {
         />
       </BetterTableRowGroup>
 
-      {/* Edit Raid Messages Button */}
-      {FormRow && (
-        <FormRow
-          label="Edit Raid Messages"
-          trailing={
-            arrowForwardIcon && (
-              <Image
-                source={arrowForwardIcon}
-                style={{ width: 24, height: 24, tintColor: semanticColors.TEXT_MUTED }}
-              />
-            )
-          }
-          onPress={() => setSelectedPage("raidMessages")}
-        />
-      )}
+      <BetterTableRowGroup title="Raid Settings" icon={raidHeaderIcon}>
+  {FormRow && (
+    <FormRow
+      label="Edit Raid Messages"
+      subLabel="Customize the 10 raid message slots"
+      leading={
+        <FormRow.Icon source={raidHeaderIcon} />
+      }
+      trailing={<FormRow.Arrow />}
+      onPress={() => setSelectedPage("raidMessages")}
+    />
+  )}
+</BetterTableRowGroup>
     </>
   );
 
