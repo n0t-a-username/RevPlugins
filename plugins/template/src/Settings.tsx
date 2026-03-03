@@ -84,9 +84,9 @@ export default function Settings() {
         })
       : 0;
 
-  /* -----------------------------
-     PERFORMANCE FIX FOR LOGS
-  ----------------------------- */
+  /* =========================
+     LOG PERFORMANCE FIX
+  ========================= */
 
   const logsText = React.useMemo(
     () => storage.messageLogs.join("\n"),
@@ -103,9 +103,9 @@ export default function Settings() {
     ToastAndroid.show("Logs cleared.", ToastAndroid.SHORT);
   };
 
-  /* -----------------------------
+  /* =========================
      MAIN PAGE
-  ----------------------------- */
+  ========================= */
 
   const renderMainPage = () => (
     <>
@@ -120,7 +120,7 @@ export default function Settings() {
 
       <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
         <Text style={{ color: "#aaa", marginBottom: 8 }}>
-          Press the "Mass Selective Ping" button on user profiles to collect mentions.
+          Press the "Mass Selective Ping" button on user profiles.
         </Text>
         <TextInput
           multiline
@@ -152,9 +152,9 @@ export default function Settings() {
     </>
   );
 
-  /* -----------------------------
-     RAID PAGE (UNCHANGED STRUCTURE)
-  ----------------------------- */
+  /* =========================
+     RAID PAGE (BACK RESTORED)
+  ========================= */
 
   const renderRaidMessagesPage = () => (
     <>
@@ -174,12 +174,30 @@ export default function Settings() {
           </View>
         ))}
       </BetterTableRowGroup>
+
+      <View style={{ height: 20 }} />
+
+      {FormRow && (
+        <FormRow
+          label="Back"
+          subLabel="Return to main menu"
+          trailing={
+            arrowBackIcon && (
+              <Image
+                source={arrowBackIcon}
+                style={{ width: 24, height: 24 }}
+              />
+            )
+          }
+          onPress={() => setSelectedPage("main")}
+        />
+      )}
     </>
   );
 
-  /* -----------------------------
+  /* =========================
      MESSAGE LOGS PAGE
-  ----------------------------- */
+  ========================= */
 
   const renderMessageLogsPage = () => (
     <>
@@ -229,12 +247,30 @@ export default function Settings() {
           </TouchableOpacity>
         </View>
       </BetterTableRowGroup>
+
+      <View style={{ height: 20 }} />
+
+      {FormRow && (
+        <FormRow
+          label="Back"
+          subLabel="Return to main menu"
+          trailing={
+            arrowBackIcon && (
+              <Image
+                source={arrowBackIcon}
+                style={{ width: 24, height: 24 }}
+              />
+            )
+          }
+          onPress={() => setSelectedPage("main")}
+        />
+      )}
     </>
   );
 
-  /* -----------------------------
-     ANIMATED CONTAINER (ORIGINAL STRUCTURE)
-  ----------------------------- */
+  /* =========================
+     ANIMATED CONTAINER (UNCHANGED STRUCTURE)
+  ========================= */
 
   return (
     <View
