@@ -948,7 +948,7 @@ React.createElement(GiveawaySection, { userId })
 });
 
 /* =========================
-   MESSAGE LOGGER (HARD DEDUPE)
+   SAFE MESSAGE LOGGER
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -956,27 +956,25 @@ storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
 
-let lastMessageId: string | null = null;
-
 function startLogger() {
   if (unpatchLogger) return;
 
-  unpatchLogger = after("receiveMessage", MessageActions, (args) => {
+  const MessageStore = findByStoreName("MessageStore");
+  if (!MessageStore?.getMessages) {
+    logger.error("MessageStore not found");
+    return;
+  }
+
+  unpatchLogger = after("getMessages", MessageStore, (_, messages) => {
     if (!storage.logging?.enabled) return;
+    if (!Array.isArray(messages)) return;
 
-    const message = args?.[1];
-    if (!message?.id) return;
-    if (!message.content) return;
-    if (message.author?.bot) return;
+    const last = messages[messages.length - 1];
+    if (!last) return;
+    if (!last.content) return;
+    if (last.author?.bot) return;
 
-    // 🚫 HARD DEDUPLICATION
-    if (message.id === lastMessageId) return;
-    lastMessageId = message.id;
-
-    const username = message.author?.username ?? "Unknown";
-    const timestamp = new Date().toLocaleTimeString();
-
-    const entry = `[${timestamp}] ${username}: ${message.content}`;
+    const entry = `[${new Date().toLocaleTimeString()}] ${last.author?.username ?? "Unknown"}: ${last.content}`;
 
     storage.messageLogs.push(entry);
 
@@ -985,7 +983,7 @@ function startLogger() {
     }
   });
 
-  logger.log("Logger attached.");
+  logger.log("Safe logger attached.");
 }
 
 function stopLogger() {
@@ -993,9 +991,8 @@ function stopLogger() {
 
   unpatchLogger();
   unpatchLogger = null;
-  lastMessageId = null;
 
-  logger.log("Logger detached.");
+  logger.log("Safe logger detached.");
 }
 
 /* =========================
