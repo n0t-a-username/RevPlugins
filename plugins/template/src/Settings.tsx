@@ -1,6 +1,7 @@
 import { ReactNative } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
+import { showToast } from "@vendetta/ui/toasts";
 import Header from "./components/Header";
 import BetterTableRowGroup from "./components/BetterTableRowGroup";
 import { Forms as UiForms } from "@vendetta/ui/components";
@@ -11,17 +12,14 @@ const { ScrollView, View, Text, TextInput, Animated, Easing, Image } = ReactNati
 const Forms = UiForms || {};
 const { FormRow } = Forms as any;
 
-// Ensure exactly 10 raid messages
 if (!Array.isArray(storage.words) || storage.words.length !== 10) {
   storage.words = Array(10).fill("");
 }
 
-// Initialize giveaway storage
 if (typeof storage.eventGiveawayPing !== "string") {
   storage.eventGiveawayPing = "";
 }
 
-// Initialize logs storage
 if (!Array.isArray(storage.messageLogs)) {
   storage.messageLogs = [];
 }
@@ -37,11 +35,9 @@ const inputStyle = {
   borderColor: "#333",
 };
 
-// Discord asset IDs
 const messageHeaderIcon = getAssetIDByName("ic_information_24px");
 const raidHeaderIcon = getAssetIDByName("SlashBoxIcon");
 const massPingHeaderIcon = getAssetIDByName("SlashBoxIcon");
-const arrowForwardIcon = getAssetIDByName("ic_arrow_forward_24px");
 const arrowBackIcon = getAssetIDByName("ic_arrow_back_24px");
 
 export default function Settings() {
@@ -67,7 +63,7 @@ export default function Settings() {
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  }, [selectedPage, slideAnim]);
+  }, [selectedPage]);
 
   React.useEffect(() => {
     try {
@@ -83,101 +79,6 @@ export default function Settings() {
         })
       : 0;
 
-  // ---- Main Page ----
-  const renderMainPage = () => (
-    <>
-      <Header />
-
-      <BetterTableRowGroup title="Information" icon={messageHeaderIcon} padding>
-        <Text style={{ color: "#aaa" }}>
-          Command list: /mcs, /msp, /nuke, /raid, /purge, /react, /userid,
-          /lockdown, /server-info, /fetchprofile, /dupe-channel, /delete-channel
-        </Text>
-      </BetterTableRowGroup>
-
-      <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
-        <Text style={{ color: "#aaa", marginBottom: 8 }}>
-          Press the "Mass Selective Ping" button on user profiles to collect mentions.
-        </Text>
-        <TextInput
-          multiline
-          value={storage.eventGiveawayPing}
-          onChangeText={(v) => (storage.eventGiveawayPing = v)}
-          style={{ ...inputStyle, minHeight: 120 }}
-        />
-      </BetterTableRowGroup>
-
-      <BetterTableRowGroup
-        title="Tools/Misc"
-        icon={getAssetIDByName("FolderIcon")}
-      >
-        {FormRow && (
-          <>
-            <FormRow
-              label="Edit Raid Messages"
-              subLabel="Customize the 10 raid message slots"
-              trailing={<FormRow.Arrow />}
-              onPress={() => setSelectedPage("raidMessages")}
-            />
-
-            <FormRow
-              label="Message Logs"
-              subLabel="View captured message logs"
-              trailing={<FormRow.Arrow />}
-              onPress={() => setSelectedPage("messageLogs")}
-            />
-          </>
-        )}
-      </BetterTableRowGroup>
-    </>
-  );
-
-  // ---- Raid Messages Page ----
-  const renderRaidMessagesPage = () => (
-    <>
-      <Header />
-
-      <BetterTableRowGroup title="Raid Messages" icon={raidHeaderIcon} padding>
-        {[...Array(10).keys()].map((i) => (
-          <View key={i} style={{ marginBottom: 12 }}>
-            <Text style={{ color: "#fff", marginBottom: 6 }}>
-              Message {i + 1}
-            </Text>
-            <TextInput
-              style={inputStyle}
-              value={storage.words[i]}
-              onChangeText={(v) => (storage.words[i] = v)}
-            />
-          </View>
-        ))}
-      </BetterTableRowGroup>
-
-      <View style={{ height: 20 }} />
-
-      {FormRow && (
-        <FormRow
-          label="Back"
-          trailing={
-            arrowBackIcon && (
-              <Image
-                source={arrowBackIcon}
-                style={{
-                  width: 24,
-                  height: 24,
-                  tintColor: semanticColors.TEXT_MUTED,
-                }}
-              />
-            )
-          }
-          onPress={() => setSelectedPage("main")}
-        />
-      )}
-
-      <View style={{ height: 60 }} />
-    </>
-  );
-
-  // ---- Message Logs Page ----
   const renderMessageLogsPage = () => (
     <>
       <Header />
@@ -193,6 +94,54 @@ export default function Settings() {
           value={[...storage.messageLogs].join("\n")}
           style={{ ...inputStyle, minHeight: 260 }}
         />
+
+        <View style={{ flexDirection: "row", marginTop: 12 }}>
+          {/* Copy */}
+          <View style={{ flex: 1, marginRight: 6 }}>
+            <Text
+              onPress={() => {
+                const content = [...storage.messageLogs].join("\n");
+
+                try {
+                  const clipboard = require("@vendetta/metro/common");
+                  clipboard.setString?.(content);
+                } catch {}
+
+                showToast("Log copied to clipboard.");
+              }}
+              style={{
+                backgroundColor: "#2ecc71",
+                color: "#fff",
+                textAlign: "center",
+                paddingVertical: 12,
+                borderRadius: 8,
+                fontWeight: "600",
+              }}
+            >
+              Copy Log
+            </Text>
+          </View>
+
+          {/* Clear */}
+          <View style={{ flex: 1, marginLeft: 6 }}>
+            <Text
+              onPress={() => {
+                storage.messageLogs = [];
+                showToast("Log cleared.");
+              }}
+              style={{
+                backgroundColor: "#e74c3c",
+                color: "#fff",
+                textAlign: "center",
+                paddingVertical: 12,
+                borderRadius: 8,
+                fontWeight: "600",
+              }}
+            >
+              Clear Log
+            </Text>
+          </View>
+        </View>
       </BetterTableRowGroup>
 
       <View style={{ height: 20 }} />
@@ -225,7 +174,7 @@ export default function Settings() {
       style={{ flex: 1 }}
       onLayout={(event) => setContainerWidth(event.nativeEvent.layout.width)}
     >
-      <ScrollView ref={scrollRef} style={{ flex: 1 }} scrollEnabled>
+      <ScrollView ref={scrollRef} style={{ flex: 1 }}>
         <Animated.View
           style={{
             flexDirection: "row",
@@ -233,25 +182,33 @@ export default function Settings() {
             transform: [{ translateX }],
           }}
         >
-          <View
-            style={{ width: containerWidth || "100%" }}
-            pointerEvents={selectedPage === "main" ? "auto" : "none"}
-          >
-            {renderMainPage()}
+          <View style={{ width: containerWidth || "100%" }}>
+            <Header />
           </View>
 
-          <View
-            style={{ width: containerWidth || "100%" }}
-            pointerEvents={selectedPage === "raidMessages" ? "auto" : "none"}
-          >
-            {renderRaidMessagesPage()}
-          </View>
+          <View style={{ width: containerWidth || "100%" }}>
+            {selectedPage === "raidMessages" && (
+              <BetterTableRowGroup
+                title="Raid Messages"
+                icon={raidHeaderIcon}
+                padding
+              >
+                {[...Array(10).keys()].map((i) => (
+                  <View key={i} style={{ marginBottom: 12 }}>
+                    <Text style={{ color: "#fff", marginBottom: 6 }}>
+                      Message {i + 1}
+                    </Text>
+                    <TextInput
+                      style={inputStyle}
+                      value={storage.words[i]}
+                      onChangeText={(v) => (storage.words[i] = v)}
+                    />
+                  </View>
+                ))}
+              </BetterTableRowGroup>
+            )}
 
-          <View
-            style={{ width: containerWidth || "100%" }}
-            pointerEvents={selectedPage === "messageLogs" ? "auto" : "none"}
-          >
-            {renderMessageLogsPage()}
+            {selectedPage === "messageLogs" && renderMessageLogsPage()}
           </View>
         </Animated.View>
       </ScrollView>
