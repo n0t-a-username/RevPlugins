@@ -947,7 +947,6 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
-
 /* =========================
    LOGGING SYSTEM (FIXED)
 ========================= */
@@ -957,7 +956,7 @@ storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
 
-const { receiveMessage } = findByProps("receiveMessage");
+// DO NOT redeclare receiveMessage here
 
 function startLogger() {
   if (unpatchLogger) return;
@@ -989,7 +988,6 @@ function stopLogger() {
     unpatchLogger = null;
   }
 }
-    
 
 /* =========================
    /log COMMAND
