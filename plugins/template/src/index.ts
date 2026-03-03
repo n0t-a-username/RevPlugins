@@ -950,7 +950,7 @@ React.createElement(GiveawaySection, { userId })
 
  
  /* =========================
-   SIMPLE MESSAGE LOGGER (DEDUPED)
+   SIMPLE MESSAGE LOGGER (PROPER STORE PATCH)
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -958,46 +958,37 @@ storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
 
-// Prevent duplicate logs from multiple dispatcher emissions
-const processedMessageIds = new Set<string>();
-
 function startLogger() {
   if (unpatchLogger) {
     unpatchLogger();
     unpatchLogger = null;
   }
 
-  const MessageDispatcher = findByProps("receiveMessage");
+  const MessageStore = findByStoreName("MessageStore");
 
-  unpatchLogger = after("receiveMessage", MessageDispatcher, (args) => {
-    if (!storage.logging?.enabled) return;
+  if (!MessageStore?.prototype?.receiveMessage) return;
 
-    const message = args?.[0]?.message ?? args?.[1];
-    if (!message) return;
-    if (!message.id) return;
-    if (!message.content) return;
-    if (message.author?.bot) return;
+  unpatchLogger = after(
+    "receiveMessage",
+    MessageStore.prototype,
+    (args) => {
+      if (!storage.logging?.enabled) return;
 
-    // 🔒 Deduplication
-    if (processedMessageIds.has(message.id)) return;
-    processedMessageIds.add(message.id);
+      const message = args?.[0];
+      if (!message?.content) return;
+      if (message.author?.bot) return;
 
-    // Prevent unbounded memory growth
-    if (processedMessageIds.size > 500) {
-      processedMessageIds.clear();
+      const username = message.author?.username ?? "Unknown";
+      const timestamp = new Date().toLocaleTimeString();
+
+      const logEntry = `[${timestamp}] ${username}: ${message.content}`;
+
+      const updated = [...(storage.messageLogs ?? []), logEntry];
+      if (updated.length > 1000) updated.shift();
+
+      storage.messageLogs = updated;
     }
-
-    const username = message.author?.username ?? "Unknown";
-    const timestamp = new Date().toLocaleTimeString();
-    const text = message.content;
-
-    const logEntry = `[${timestamp}] ${username}: ${text}`;
-
-    const updated = [...(storage.messageLogs ?? []), logEntry];
-    if (updated.length > 1000) updated.shift();
-
-    storage.messageLogs = updated;
-  });
+  );
 }
 
 function stopLogger() {
@@ -1005,8 +996,6 @@ function stopLogger() {
     unpatchLogger();
     unpatchLogger = null;
   }
-
-  processedMessageIds.clear();
 }
 
 /* =========================
