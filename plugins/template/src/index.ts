@@ -947,8 +947,9 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
+
 /* =========================
-   LOGGING SYSTEM
+   LOGGING SYSTEM (FIXED)
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -956,15 +957,16 @@ storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
 
+const { receiveMessage } = findByProps("receiveMessage");
+
 function startLogger() {
   if (unpatchLogger) return;
 
-  unpatchLogger = after("receiveMessage", MessageActions, (_, args) => {
+  unpatchLogger = after("receiveMessage", receiveMessage, (_, args) => {
     if (!storage.logging?.enabled) return;
 
     const message = args?.[1];
     if (!message?.content) return;
-
     if (message.author?.bot) return;
 
     const timestamp = new Date().toLocaleString();
@@ -987,6 +989,7 @@ function stopLogger() {
     unpatchLogger = null;
   }
 }
+    
 
 /* =========================
    /log COMMAND
