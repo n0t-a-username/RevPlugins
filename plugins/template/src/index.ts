@@ -949,7 +949,7 @@ React.createElement(GiveawaySection, { userId })
 
  
  /* =========================
-   SIMPLE MESSAGE LOGGER (STABLE + NO DUPLICATES)
+   SIMPLE MESSAGE LOGGER (FINAL STABLE)
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -960,17 +960,23 @@ let unpatchLogger: (() => void) | null = null;
 function startLogger() {
   if (unpatchLogger) return;
 
-  const MessageStore = findByStoreName("MessageStore");
-  if (!MessageStore?.prototype) {
-    logger.error("MessageStore not found");
+  const MessageModule = findByProps("receiveMessage");
+  if (!MessageModule?.receiveMessage) {
+    logger.error("receiveMessage not found");
     return;
   }
 
   unpatchLogger = after(
-    "add",
-    MessageStore.prototype,
-    ([message]) => {
+    "receiveMessage",
+    MessageModule,
+    (args) => {
       if (!storage.logging?.enabled) return;
+
+      const message = args?.[1]; 
+      // In most current builds:
+      // args[0] = channelId
+      // args[1] = message object
+
       if (!message?.content) return;
       if (!message?.id) return;
       if (message.author?.bot) return;
@@ -989,7 +995,7 @@ function startLogger() {
     }
   );
 
-  logger.log("Logger started (MessageStore.add)");
+  logger.log("Logger started (receiveMessage hook)");
 }
 
 function stopLogger() {
