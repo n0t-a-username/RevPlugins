@@ -949,7 +949,6 @@ React.createElement(GiveawaySection, { userId })
 
 // ---- Plugin lifecycle ----
 export default {
-  export default {
   onLoad: () => {
     logger.log(
       "All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing, CopyMessageID"
@@ -962,7 +961,6 @@ export default {
     for (const unregister of commands) unregister();
 
     CopyMessageID.onUnload?.();
-
     RichPresence.stopRichPresence();
 
     logger.log("Plugin unloaded.");
