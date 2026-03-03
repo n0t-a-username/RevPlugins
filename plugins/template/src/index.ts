@@ -957,11 +957,8 @@ storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
-// Use a Set to track IDs processed during the current session
-const loggedMessageIds = new Set<string>();
 
 function startLogger() {
-  // Prevent double-patching if already active
   if (unpatchLogger) return;
 
   const MessageEvents = findByProps("receiveMessage", "sendMessage");
@@ -972,26 +969,26 @@ function startLogger() {
 
     const message = args?.[1];
 
-    // Basic filters: check for ID, content, and ignore bots
+    // 1. Basic Validation
     if (!message?.id || !message.content || message.author?.bot) return;
 
-    // CRITICAL: Prevent duplicates from Discord dispatching multiple events 
-    // (like embed loads or gateway confirmations) for the same message ID.
-    if (loggedMessageIds.has(message.id)) return;
-    
-    // Add to session memory
-    loggedMessageIds.add(message.id);
+    // 2. Persistent Duplicate Check
+    // We check the actual storage array to see if this message ID was just logged.
+    // This survives reloads and prevents double-fires from embeds.
+    const currentLogs = storage.messageLogs ?? [];
+    const isDuplicate = currentLogs.some(log => log.includes(`| ID: ${message.id}`));
+    if (isDuplicate) return;
 
     const username = message.author?.username ?? "Unknown";
-    const timestamp = new Date().toLocaleTimeString();
+    const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const text = message.content;
 
-    const logEntry = `[${timestamp}] ${username}: ${text}`;
+    // We embed the ID into the log string invisibly or at the end to track it
+    const logEntry = `[${timestamp}] ${username}: ${text} | ID: ${message.id}`;
 
-    // Update storage while maintaining a 1000-message cap
-    const currentLogs = storage.messageLogs ?? [];
+    // 3. Update Storage
     const updated = [...currentLogs, logEntry];
-    if (updated.length > 1000) updated.shift();
+    if (updated.length > 500) updated.shift(); // Keep it lean for the UI
 
     storage.messageLogs = updated;
   });
@@ -1002,7 +999,6 @@ function stopLogger() {
     unpatchLogger();
     unpatchLogger = null;
   }
-  loggedMessageIds.clear();
 }
 
 /* =========================
@@ -1018,36 +1014,39 @@ commands.push(
       {
         name: "enabled",
         displayName: "enabled",
-        description: "true = enable logging, false = disable",
+        description: "true = enable, false = disable",
         required: true,
         type: 5,
       },
+      {
+        name: "clear",
+        displayName: "clear",
+        description: "Clear logs from storage",
+        required: false,
+        type: 5,
+      }
     ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: (args, ctx) => {
-      storage.logging ??= { enabled: false };
+      const enabled = args.find(a => a.name === "enabled")?.value ?? storage.logging.enabled;
+      const clear = args.find(a => a.name === "clear")?.value ?? false;
 
-      const enabled = args.find(a => a.name === "enabled")?.value ?? false;
-      storage.logging.enabled = enabled;
-
-      if (enabled) {
-        startLogger();
-      } else {
-        stopLogger();
+      if (clear) {
+        storage.messageLogs = [];
       }
 
-      const currentUser = UserStore.getCurrentUser();
+      storage.logging.enabled = enabled;
+      if (enabled) startLogger(); else stopLogger();
 
+      const currentUser = UserStore.getCurrentUser();
       receiveMessage(
         ctx.channel.id,
         Object.assign(
           createBotMessage({
             channelId: ctx.channel.id,
-            content: enabled
-              ? "📝 Message logging enabled."
-              : "🛑 Message logging disabled. Session cache cleared.",
+            content: `📝 Logging: **${enabled ? "ON" : "OFF"}**${clear ? " (Logs Cleared)" : ""}`
           }),
           { author: currentUser }
         )
@@ -1055,6 +1054,7 @@ commands.push(
     },
   })
 );
+
 
 
 /* =========================
