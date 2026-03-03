@@ -947,8 +947,9 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
- /* =========================
-   LOGGING SYSTEM
+ 
+    /* =========================
+   SIMPLE MESSAGE LOGGER
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -959,27 +960,33 @@ let unpatchLogger: (() => void) | null = null;
 function startLogger() {
   if (unpatchLogger) return;
 
+  const MessageUtils = findByProps("receiveMessage", "createBotMessage");
+  const receiveMessage = MessageUtils?.receiveMessage;
+
+  if (!receiveMessage) {
+    logger.error("Logger failed: receiveMessage not found");
+    return;
+  }
+
   unpatchLogger = after("receiveMessage", receiveMessage, (_, args) => {
     if (!storage.logging?.enabled) return;
 
     const message = args?.[1];
-    if (!message?.content) return;
+    if (!message) return;
     if (message.author?.bot) return;
+    if (!message.content) return;
 
     const timestamp = new Date().toLocaleString();
-    const author = message.author?.username ?? "Unknown";
-    const channelId = message.channel_id ?? "Unknown";
+    const username = message.author?.username ?? "Unknown";
+    const text = message.content;
 
-    const logEntry = `[${timestamp}] (${channelId}) ${author}: ${message.content}`;
+    const logEntry = `[${timestamp}] ${username}: ${text}`;
 
-    // 🔥 IMPORTANT: Replace array reference (reactive-safe)
-    const updatedLogs = [...(storage.messageLogs ?? []), logEntry];
+    const updated = [...(storage.messageLogs ?? []), logEntry];
 
-    if (updatedLogs.length > 1000) {
-      updatedLogs.shift();
-    }
+    if (updated.length > 1000) updated.shift();
 
-    storage.messageLogs = updatedLogs;
+    storage.messageLogs = updated;
   });
 }
 
@@ -1012,6 +1019,9 @@ commands.push(
     inputType: 1,
     type: 1,
     execute: (args, ctx) => {
+      // Ensure storage object exists
+      storage.logging ??= { enabled: false };
+
       const enabled =
         args.find(a => a.name === "enabled")?.value ?? false;
 
