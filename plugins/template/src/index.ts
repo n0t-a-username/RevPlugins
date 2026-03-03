@@ -947,27 +947,36 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
-/* =========================
-   SIMPLE MESSAGE LOGGER (FIXED — NO DUPES)
+
+    /* =========================
+   STABLE MESSAGE LOGGER
 ========================= */
 
 storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
+const loggedMessageIds = new Set<string>();
 
 function startLogger() {
   if (unpatchLogger) return;
 
-  const MessageStore = findByStoreName("MessageStore");
-  if (!MessageStore) return;
+  const MessageEvents = findByProps("receiveMessage", "sendMessage");
+  if (!MessageEvents?.receiveMessage) return;
 
-  unpatchLogger = after("receiveMessage", MessageStore, (args) => {
+  unpatchLogger = after("receiveMessage", MessageEvents, (args) => {
     if (!storage.logging?.enabled) return;
 
-    const message = args?.[0];
-    if (!message?.content) return;
+    const channelId = args?.[0];
+    const message = args?.[1];
+
+    if (!message?.id) return;
+    if (!message.content) return;
     if (message.author?.bot) return;
+
+    // Prevent duplicates
+    if (loggedMessageIds.has(message.id)) return;
+    loggedMessageIds.add(message.id);
 
     const username = message.author?.username ?? "Unknown";
     const timestamp = new Date().toLocaleTimeString();
@@ -976,8 +985,6 @@ function startLogger() {
     const logEntry = `[${timestamp}] ${username}: ${text}`;
 
     const updated = [...(storage.messageLogs ?? []), logEntry];
-
-    // cap at 1000 entries
     if (updated.length > 1000) updated.shift();
 
     storage.messageLogs = updated;
@@ -989,6 +996,7 @@ function stopLogger() {
     unpatchLogger();
     unpatchLogger = null;
   }
+  loggedMessageIds.clear();
 }
 
 /* =========================
