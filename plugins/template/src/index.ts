@@ -949,7 +949,7 @@ React.createElement(GiveawaySection, { userId })
 
  
  /* =========================
-   SIMPLE MESSAGE LOGGER (WORKING VERSION)
+   SIMPLE MESSAGE LOGGER (STABLE)
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -964,39 +964,36 @@ function startLogger() {
   }
 
   const MessageStore = findByStoreName("MessageStore");
-  if (!MessageStore?.prototype) return;
+  if (!MessageStore) return;
 
-  // In most builds this is the correct method
-  const proto = MessageStore.prototype;
+  unpatchLogger = after(
+    "getMessages",
+    MessageStore,
+    (args, res) => {
+      if (!storage.logging?.enabled) return;
+      if (!Array.isArray(res)) return;
 
-  const method =
-    Object.getOwnPropertyNames(proto).find(
-      (k) =>
-        typeof proto[k] === "function" &&
-        k.toLowerCase().includes("add")
-    );
+      // Only process newly returned messages
+      const messages = res.slice(0, 20); // limit processing
 
-  if (!method) return;
+      for (const message of messages) {
+        if (!message?.content) continue;
+        if (message.author?.bot) continue;
 
-  unpatchLogger = after(method, proto, (args) => {
-    if (!storage.logging?.enabled) return;
+        const username = message.author?.username ?? "Unknown";
+        const timestamp = new Date().toLocaleTimeString();
 
-    const message = args?.[0];
-    if (!message?.content) return;
-    if (message.author?.bot) return;
+        const logEntry = `[${timestamp}] ${username}: ${message.content}`;
 
-    const username = message.author?.username ?? "Unknown";
-    const timestamp = new Date().toLocaleTimeString();
+        const logs = storage.messageLogs ?? [];
+        logs.push(logEntry);
 
-    const entry = `[${timestamp}] ${username}: ${message.content}`;
+        if (logs.length > 1000) logs.shift();
 
-    const logs = storage.messageLogs ?? [];
-    logs.push(entry);
-
-    if (logs.length > 1000) logs.shift();
-
-    storage.messageLogs = logs;
-  });
+        storage.messageLogs = logs;
+      }
+    }
+  );
 }
 
 function stopLogger() {
@@ -1015,9 +1012,9 @@ commands.push(
       {
         name: "enabled",
         displayName: "enabled",
-        description: "true or false",
+        description: "true = enable, false = disable",
         required: true,
-        type: 5,
+        type: 5, // BOOLEAN
       },
     ],
     applicationId: "-1",
@@ -1027,7 +1024,10 @@ commands.push(
       storage.logging ??= { enabled: false };
 
       const enabled =
-        args.find(a => a.name === "enabled")?.value === true;
+        args.find(a => a.name === "enabled")?.value;
+
+      // Ensure strict boolean handling
+      if (typeof enabled !== "boolean") return;
 
       storage.logging.enabled = enabled;
 
@@ -1042,8 +1042,8 @@ commands.push(
           createBotMessage({
             channelId: ctx.channel.id,
             content: enabled
-              ? "📝 Logging enabled."
-              : "🛑 Logging disabled.",
+              ? "📝 Message logging enabled."
+              : "🛑 Message logging disabled.",
           }),
           { author: currentUser }
         )
@@ -1051,16 +1051,6 @@ commands.push(
     },
   })
 );
-
-/* =========================
-   EXISTING COMMANDS
-   (UNCHANGED — YOUR ORIGINAL CODE CONTINUES HERE)
-========================= */
-
-/* 
-   Keep all your existing commands exactly as-is below this line.
-   Nothing else was modified.
-*/
 
 /* =========================
    PLUGIN LIFECYCLE
