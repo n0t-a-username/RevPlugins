@@ -952,12 +952,11 @@ React.createElement(GiveawaySection, { userId })
 ========================= */
 
 let unpatchLogger: (() => void) | null = null;
-let lastLoggedId: string | null = null;
 
 function startLogger() {
   if (unpatchLogger) return;
 
-  const Dispatcher = findByProps("_dispatch", "subscribe");
+  const Dispatcher = findByProps("dispatch", "subscribe");
   if (!Dispatcher?.subscribe) {
     logger.error("Dispatcher not found");
     return;
@@ -973,19 +972,14 @@ function startLogger() {
     const message = event.message;
     if (!message) return;
     if (message.channel_id !== channelId) return;
-
-    if (message.id === lastLoggedId) return;
-    lastLoggedId = message.id;
-
     if (message.author?.bot) return;
     if (!message.content) return;
 
-    const timestamp = new Date().toLocaleString();
-    const username = message.author?.username ?? "Unknown";
-
-    const entry = `[${timestamp}] ${username}: ${message.content}`;
-
     storage.messageLogs ??= [];
+
+    const timestamp = new Date().toLocaleString();
+    const entry = `[${timestamp}] ${message.author.username}: ${message.content}`;
+
     storage.messageLogs.push(entry);
 
     if (storage.messageLogs.length > 1000) {
@@ -996,19 +990,16 @@ function startLogger() {
   Dispatcher.subscribe(callback);
   unpatchLogger = () => Dispatcher.unsubscribe(callback);
 
-  logger.log("Logger attached via dispatcher.");
+  logger.log("Logger started.");
 }
 
 function stopLogger() {
   if (unpatchLogger) {
     unpatchLogger();
     unpatchLogger = null;
+    logger.log("Logger stopped.");
   }
 }
-
-/* =========================
-   /log COMMAND
-========================= */
 
 commands.push(
   registerCommand({
@@ -1032,11 +1023,7 @@ commands.push(
       storage.logging ??= { enabled: false, channelId: null };
       storage.messageLogs ??= [];
 
-      let enabled = args.find(a => a.name === "enabled")?.value;
-
-      if (typeof enabled === "string") {
-        enabled = enabled === "true";
-      }
+      const enabled = args.find(a => a.name === "enabled")?.value;
 
       if (typeof enabled !== "boolean") return;
 
@@ -1058,8 +1045,8 @@ commands.push(
           createBotMessage({
             channelId: ctx.channel.id,
             content: enabled
-              ? "📝 Logging ENABLED for this channel."
-              : "🛑 Logging DISABLED.",
+              ? "🟢 Logging ENABLED for this channel."
+              : "🔴 Logging DISABLED.",
           }),
           { author: currentUser }
         )
