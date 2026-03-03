@@ -949,7 +949,7 @@ React.createElement(GiveawaySection, { userId })
 
  
  /* =========================
-   SIMPLE MESSAGE LOGGER (SINGLE PATCH GUARANTEE)
+   SIMPLE MESSAGE LOGGER (FINAL FIX)
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -958,13 +958,13 @@ storage.messageLogs ??= [];
 let unpatchLogger: (() => void) | null = null;
 
 function startLogger() {
-  // 🔒 Force-remove any previous patch first
+  // Always remove any existing patch first
   if (unpatchLogger) {
     unpatchLogger();
     unpatchLogger = null;
   }
 
-  unpatchLogger = after("receiveMessage", MessageActions, (_, args) => {
+  unpatchLogger = after("receiveMessage", MessageActions, (args) => {
     if (!storage.logging?.enabled) return;
 
     const message = args?.[1];
