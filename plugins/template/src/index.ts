@@ -947,31 +947,53 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
-/* =========================
-   PROPER MESSAGE LOGGER
+ 
+    /* =========================
+   SIMPLE MESSAGE LOGGER (RELIABLE)
 ========================= */
 
 storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
 
-const MessageStore = findByStoreName("MessageStore");
+let unpatchLogger: (() => void) | null = null;
 
-after("receiveMessage", MessageStore, (args) => {
-  if (!storage.logging?.enabled) return;
+function startLogger() {
+  if (unpatchLogger) return;
 
-  const message = args?.[0];
-  if (!message?.id) return;
-  if (!message.content) return;
-  if (message.author?.bot) return;
+  // Patch the MessageActions module itself
+  unpatchLogger = after("receiveMessage", MessageActions, (args) => {
+    if (!storage.logging?.enabled) return;
 
-  storage.messageLogs.push(
-    `[${new Date().toISOString()}] ${message.author.username}: ${message.content}`
-  );
+    const message = args?.[1];
+    if (!message) return;
+    if (!message.content) return;
+    if (message.author?.bot) return;
 
-  if (storage.messageLogs.length > 1000) {
-    storage.messageLogs.shift();
+    const username = message.author?.username ?? "Unknown";
+    const timestamp = new Date().toLocaleTimeString();
+    const text = message.content;
+
+    const logEntry = `[${timestamp}] ${username}: ${text}`;
+
+    const updated = [...(storage.messageLogs ?? []), logEntry];
+
+    // cap at 1000 entries
+    if (updated.length > 1000) updated.shift();
+
+    storage.messageLogs = updated;
+  });
+}
+
+function stopLogger() {
+  if (unpatchLogger) {
+    unpatchLogger();
+    unpatchLogger = null;
   }
-});
+}
+
+/* =========================
+   /log COMMAND
+========================= */
 
 commands.push(
   registerCommand({
@@ -982,23 +1004,26 @@ commands.push(
       {
         name: "enabled",
         displayName: "enabled",
-        description: "True to enable, false to disable",
-        type: 5, // BOOLEAN
+        description: "true = enable logging, false = disable",
         required: true,
+        type: 5,
       },
     ],
-
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
     execute: (args, ctx) => {
-      // Ensure storage exists
+      // Ensure storage object exists
       storage.logging ??= { enabled: false };
 
       const enabled =
-        args.find(a => a.name === "enabled")?.value === true;
+        args.find(a => a.name === "enabled")?.value ?? false;
 
-      // Update state
       storage.logging.enabled = enabled;
 
-      // Send confirmation message
+      if (enabled) startLogger();
+      else stopLogger();
+
       const currentUser = UserStore.getCurrentUser();
 
       receiveMessage(
@@ -1007,8 +1032,8 @@ commands.push(
           createBotMessage({
             channelId: ctx.channel.id,
             content: enabled
-              ? "🟢 Message logging enabled."
-              : "🔴 Message logging disabled.",
+              ? "📝 Message logging enabled."
+              : "🛑 Message logging disabled.",
           }),
           { author: currentUser }
         )
@@ -1016,6 +1041,16 @@ commands.push(
     },
   })
 );
+
+/* =========================
+   EXISTING COMMANDS
+   (UNCHANGED — YOUR ORIGINAL CODE CONTINUES HERE)
+========================= */
+
+/* 
+   Keep all your existing commands exactly as-is below this line.
+   Nothing else was modified.
+*/
 
 /* =========================
    PLUGIN LIFECYCLE
