@@ -84,9 +84,17 @@ export default function Settings() {
         })
       : 0;
 
+  /* -----------------------------
+     PERFORMANCE FIX FOR LOGS
+  ----------------------------- */
+
+  const logsText = React.useMemo(
+    () => storage.messageLogs.join("\n"),
+    [storage.messageLogs.length]
+  );
+
   const copyLogs = async () => {
-    const text = storage.messageLogs.join("\n");
-    await Clipboard.setString(text);
+    await Clipboard.setString(logsText);
     ToastAndroid.show("Logs copied.", ToastAndroid.SHORT);
   };
 
@@ -94,6 +102,10 @@ export default function Settings() {
     storage.messageLogs = [];
     ToastAndroid.show("Logs cleared.", ToastAndroid.SHORT);
   };
+
+  /* -----------------------------
+     MAIN PAGE
+  ----------------------------- */
 
   const renderMainPage = () => (
     <>
@@ -107,6 +119,9 @@ export default function Settings() {
       </BetterTableRowGroup>
 
       <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
+        <Text style={{ color: "#aaa", marginBottom: 8 }}>
+          Press the "Mass Selective Ping" button on user profiles to collect mentions.
+        </Text>
         <TextInput
           multiline
           value={storage.eventGiveawayPing}
@@ -115,16 +130,19 @@ export default function Settings() {
         />
       </BetterTableRowGroup>
 
-      <BetterTableRowGroup title="Tools">
+      <BetterTableRowGroup title="Tools/Misc">
         {FormRow && (
           <>
             <FormRow
               label="Edit Raid Messages"
+              subLabel="Customize the 10 raid message slots"
               trailing={<FormRow.Arrow />}
               onPress={() => setSelectedPage("raidMessages")}
             />
+
             <FormRow
               label="Message Logs"
+              subLabel="View captured message logs"
               trailing={<FormRow.Arrow />}
               onPress={() => setSelectedPage("messageLogs")}
             />
@@ -133,6 +151,10 @@ export default function Settings() {
       </BetterTableRowGroup>
     </>
   );
+
+  /* -----------------------------
+     RAID PAGE (UNCHANGED STRUCTURE)
+  ----------------------------- */
 
   const renderRaidMessagesPage = () => (
     <>
@@ -152,30 +174,29 @@ export default function Settings() {
           </View>
         ))}
       </BetterTableRowGroup>
-
-      {FormRow && (
-        <FormRow
-          label="Back"
-          trailing={<Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
-          onPress={() => setSelectedPage("main")}
-        />
-      )}
     </>
   );
+
+  /* -----------------------------
+     MESSAGE LOGS PAGE
+  ----------------------------- */
 
   const renderMessageLogsPage = () => (
     <>
       <Header />
 
       <BetterTableRowGroup title="Message Logs" icon={messageHeaderIcon} padding>
+        <Text style={{ color: "#aaa", marginBottom: 8 }}>
+          Captured messages will appear below.
+        </Text>
+
         <TextInput
           multiline
           editable={false}
-          value={[...storage.messageLogs].join("\n")}
+          value={logsText}
           style={{ ...inputStyle, minHeight: 260 }}
         />
 
-        {/* Twin Buttons */}
         <View style={{ flexDirection: "row", marginTop: 12, gap: 10 }}>
           <TouchableOpacity
             onPress={copyLogs}
@@ -208,16 +229,12 @@ export default function Settings() {
           </TouchableOpacity>
         </View>
       </BetterTableRowGroup>
-
-      {FormRow && (
-        <FormRow
-          label="Back"
-          trailing={<Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
-          onPress={() => setSelectedPage("main")}
-        />
-      )}
     </>
   );
+
+  /* -----------------------------
+     ANIMATED CONTAINER (ORIGINAL STRUCTURE)
+  ----------------------------- */
 
   return (
     <View
@@ -232,9 +249,17 @@ export default function Settings() {
             transform: [{ translateX }],
           }}
         >
-          <View style={{ width: containerWidth }}>{renderMainPage()}</View>
-          <View style={{ width: containerWidth }}>{renderRaidMessagesPage()}</View>
-          <View style={{ width: containerWidth }}>{renderMessageLogsPage()}</View>
+          <View style={{ width: containerWidth }}>
+            {renderMainPage()}
+          </View>
+
+          <View style={{ width: containerWidth }}>
+            {renderRaidMessagesPage()}
+          </View>
+
+          <View style={{ width: containerWidth }}>
+            {renderMessageLogsPage()}
+          </View>
         </Animated.View>
       </ScrollView>
     </View>
