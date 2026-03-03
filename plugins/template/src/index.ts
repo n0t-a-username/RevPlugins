@@ -18,7 +18,8 @@ const HTTP = findByProps("get", "del", "post", "put");
 
 const commands: (() => void)[] = [];
 
-const { receiveMessage } = findByProps("receiveMessage");
+const MessageDispatcher = findByProps("receiveMessage");
+const receiveMessage = MessageDispatcher.receiveMessage;
 const { createBotMessage } = findByProps("createBotMessage");
 
 const getRandomNumber = () => Math.floor(Math.random() * 100);
@@ -963,7 +964,7 @@ function startLogger() {
     unpatchLogger = null;
   }
 
-  const MessageDispatcher = findByProps("receiveMessage");
+ 
 
   unpatchLogger = after("receiveMessage", MessageDispatcher, (args) => {
     if (!storage.logging?.enabled) return;
