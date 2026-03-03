@@ -21,6 +21,11 @@ if (typeof storage.eventGiveawayPing !== "string") {
   storage.eventGiveawayPing = "";
 }
 
+// Initialize logs storage
+if (!Array.isArray(storage.messageLogs)) {
+  storage.messageLogs = [];
+}
+
 const inputStyle = {
   backgroundColor: "#222",
   color: "#fff",
@@ -42,14 +47,22 @@ const arrowBackIcon = getAssetIDByName("ic_arrow_back_24px");
 export default function Settings() {
   useProxy(storage);
 
-  const [selectedPage, setSelectedPage] = React.useState<"main" | "raidMessages">("main");
+  const [selectedPage, setSelectedPage] = React.useState<
+    "main" | "raidMessages" | "messageLogs"
+  >("main");
+
   const [containerWidth, setContainerWidth] = React.useState(0);
   const slideAnim = React.useRef(new Animated.Value(0)).current;
   const scrollRef = React.useRef<any>(null);
 
   React.useEffect(() => {
     Animated.timing(slideAnim, {
-      toValue: selectedPage === "raidMessages" ? 1 : 0,
+      toValue:
+        selectedPage === "main"
+          ? 0
+          : selectedPage === "raidMessages"
+          ? 1
+          : 2,
       duration: 220,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
@@ -65,8 +78,8 @@ export default function Settings() {
   const translateX =
     containerWidth > 0
       ? slideAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [0, -containerWidth],
+          inputRange: [0, 1, 2],
+          outputRange: [0, -containerWidth, -containerWidth * 2],
         })
       : 0;
 
@@ -75,14 +88,13 @@ export default function Settings() {
     <>
       <Header />
 
-      {/* Message Section */}
       <BetterTableRowGroup title="Information" icon={messageHeaderIcon} padding>
         <Text style={{ color: "#aaa" }}>
-          Command list: /mcs, /msp, /nuke, /raid, /purge, /react, /userid, /lockdown, /server-info, /fetchprofile, /dupe-channel, /delete-channel
+          Command list: /mcs, /msp, /nuke, /raid, /purge, /react, /userid,
+          /lockdown, /server-info, /fetchprofile, /dupe-channel, /delete-channel
         </Text>
       </BetterTableRowGroup>
 
-      {/* Mass Ping Section */}
       <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
         <Text style={{ color: "#aaa", marginBottom: 8 }}>
           Press the "Mass Selective Ping" button on user profiles to collect mentions.
@@ -96,18 +108,27 @@ export default function Settings() {
       </BetterTableRowGroup>
 
       <BetterTableRowGroup
-  title="Tools/Misc"
-  icon={getAssetIDByName("FolderIcon")}
->
-  {FormRow && (
-    <FormRow
-      label="Edit Raid Messages"
-      subLabel="Customize the 10 raid message slots"
-      trailing={<FormRow.Arrow />}
-      onPress={() => setSelectedPage("raidMessages")}
-    />
-  )}
-</BetterTableRowGroup>
+        title="Tools/Misc"
+        icon={getAssetIDByName("FolderIcon")}
+      >
+        {FormRow && (
+          <>
+            <FormRow
+              label="Edit Raid Messages"
+              subLabel="Customize the 10 raid message slots"
+              trailing={<FormRow.Arrow />}
+              onPress={() => setSelectedPage("raidMessages")}
+            />
+
+            <FormRow
+              label="Message Logs"
+              subLabel="View captured message logs"
+              trailing={<FormRow.Arrow />}
+              onPress={() => setSelectedPage("messageLogs")}
+            />
+          </>
+        )}
+      </BetterTableRowGroup>
     </>
   );
 
@@ -119,7 +140,9 @@ export default function Settings() {
       <BetterTableRowGroup title="Raid Messages" icon={raidHeaderIcon} padding>
         {[...Array(10).keys()].map((i) => (
           <View key={i} style={{ marginBottom: 12 }}>
-            <Text style={{ color: "#fff", marginBottom: 6 }}>Message {i + 1}</Text>
+            <Text style={{ color: "#fff", marginBottom: 6 }}>
+              Message {i + 1}
+            </Text>
             <TextInput
               style={inputStyle}
               value={storage.words[i]}
@@ -129,8 +152,8 @@ export default function Settings() {
         ))}
       </BetterTableRowGroup>
 
-      {/* Back Button outside padding view */}
       <View style={{ height: 20 }} />
+
       {FormRow && (
         <FormRow
           label="Back"
@@ -138,7 +161,11 @@ export default function Settings() {
             arrowBackIcon && (
               <Image
                 source={arrowBackIcon}
-                style={{ width: 24, height: 24, tintColor: semanticColors.TEXT_MUTED }}
+                style={{
+                  width: 24,
+                  height: 24,
+                  tintColor: semanticColors.TEXT_MUTED,
+                }}
               />
             )
           }
@@ -146,7 +173,49 @@ export default function Settings() {
         />
       )}
 
-      {/* Extra bottom padding to scroll back button into view */}
+      <View style={{ height: 60 }} />
+    </>
+  );
+
+  // ---- Message Logs Page ----
+  const renderMessageLogsPage = () => (
+    <>
+      <Header />
+
+      <BetterTableRowGroup title="Message Logs" icon={messageHeaderIcon} padding>
+        <Text style={{ color: "#aaa", marginBottom: 8 }}>
+          Captured messages will appear below.
+        </Text>
+
+        <TextInput
+          multiline
+          editable={false}
+          value={storage.messageLogs.join("\n")}
+          style={{ ...inputStyle, minHeight: 260 }}
+        />
+      </BetterTableRowGroup>
+
+      <View style={{ height: 20 }} />
+
+      {FormRow && (
+        <FormRow
+          label="Back"
+          trailing={
+            arrowBackIcon && (
+              <Image
+                source={arrowBackIcon}
+                style={{
+                  width: 24,
+                  height: 24,
+                  tintColor: semanticColors.TEXT_MUTED,
+                }}
+              />
+            )
+          }
+          onPress={() => setSelectedPage("main")}
+        />
+      )}
+
       <View style={{ height: 60 }} />
     </>
   );
@@ -160,7 +229,7 @@ export default function Settings() {
         <Animated.View
           style={{
             flexDirection: "row",
-            width: containerWidth > 0 ? containerWidth * 2 : "200%",
+            width: containerWidth > 0 ? containerWidth * 3 : "300%",
             transform: [{ translateX }],
           }}
         >
@@ -176,6 +245,13 @@ export default function Settings() {
             pointerEvents={selectedPage === "raidMessages" ? "auto" : "none"}
           >
             {renderRaidMessagesPage()}
+          </View>
+
+          <View
+            style={{ width: containerWidth || "100%" }}
+            pointerEvents={selectedPage === "messageLogs" ? "auto" : "none"}
+          >
+            {renderMessageLogsPage()}
           </View>
         </Animated.View>
       </ScrollView>
