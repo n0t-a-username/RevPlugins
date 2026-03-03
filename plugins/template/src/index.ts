@@ -948,7 +948,8 @@ React.createElement(GiveawaySection, { userId })
 });
 
 
-    /* =========================
+    
+/* =========================
    STABLE MESSAGE LOGGER
 ========================= */
 
@@ -956,9 +957,11 @@ storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
+// Use a Set to track IDs processed during the current session
 const loggedMessageIds = new Set<string>();
 
 function startLogger() {
+  // Prevent double-patching if already active
   if (unpatchLogger) return;
 
   const MessageEvents = findByProps("receiveMessage", "sendMessage");
@@ -967,15 +970,16 @@ function startLogger() {
   unpatchLogger = after("receiveMessage", MessageEvents, (args) => {
     if (!storage.logging?.enabled) return;
 
-    const channelId = args?.[0];
     const message = args?.[1];
 
-    if (!message?.id) return;
-    if (!message.content) return;
-    if (message.author?.bot) return;
+    // Basic filters: check for ID, content, and ignore bots
+    if (!message?.id || !message.content || message.author?.bot) return;
 
-    // Prevent duplicates
+    // CRITICAL: Prevent duplicates from Discord dispatching multiple events 
+    // (like embed loads or gateway confirmations) for the same message ID.
     if (loggedMessageIds.has(message.id)) return;
+    
+    // Add to session memory
     loggedMessageIds.add(message.id);
 
     const username = message.author?.username ?? "Unknown";
@@ -984,7 +988,9 @@ function startLogger() {
 
     const logEntry = `[${timestamp}] ${username}: ${text}`;
 
-    const updated = [...(storage.messageLogs ?? []), logEntry];
+    // Update storage while maintaining a 1000-message cap
+    const currentLogs = storage.messageLogs ?? [];
+    const updated = [...currentLogs, logEntry];
     if (updated.length > 1000) updated.shift();
 
     storage.messageLogs = updated;
@@ -1023,13 +1029,14 @@ commands.push(
     execute: (args, ctx) => {
       storage.logging ??= { enabled: false };
 
-      const enabled =
-        args.find(a => a.name === "enabled")?.value ?? false;
-
+      const enabled = args.find(a => a.name === "enabled")?.value ?? false;
       storage.logging.enabled = enabled;
 
-      if (enabled) startLogger();
-      else stopLogger();
+      if (enabled) {
+        startLogger();
+      } else {
+        stopLogger();
+      }
 
       const currentUser = UserStore.getCurrentUser();
 
@@ -1040,7 +1047,7 @@ commands.push(
             channelId: ctx.channel.id,
             content: enabled
               ? "📝 Message logging enabled."
-              : "🛑 Message logging disabled.",
+              : "🛑 Message logging disabled. Session cache cleared.",
           }),
           { author: currentUser }
         )
@@ -1048,6 +1055,7 @@ commands.push(
     },
   })
 );
+
 
 /* =========================
    PLUGIN LIFECYCLE
