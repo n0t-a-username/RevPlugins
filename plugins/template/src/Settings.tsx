@@ -1,14 +1,25 @@
 import { ReactNative } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
-import { showToast } from "@vendetta/ui/toasts";
 import Header from "./components/Header";
 import BetterTableRowGroup from "./components/BetterTableRowGroup";
 import { Forms as UiForms } from "@vendetta/ui/components";
 import { semanticColors } from "@vendetta/ui";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 
-const { ScrollView, View, Text, TextInput, Animated, Easing, Image } = ReactNative;
+const {
+  ScrollView,
+  View,
+  Text,
+  TextInput,
+  Animated,
+  Easing,
+  Image,
+  TouchableOpacity,
+  Clipboard,
+  ToastAndroid,
+} = ReactNative;
+
 const Forms = UiForms || {};
 const { FormRow } = Forms as any;
 
@@ -65,12 +76,6 @@ export default function Settings() {
     }).start();
   }, [selectedPage]);
 
-  React.useEffect(() => {
-    try {
-      scrollRef.current?.scrollTo?.({ y: 0, animated: false });
-    } catch {}
-  }, [selectedPage]);
-
   const translateX =
     containerWidth > 0
       ? slideAnim.interpolate({
@@ -78,6 +83,17 @@ export default function Settings() {
           outputRange: [0, -containerWidth, -containerWidth * 2],
         })
       : 0;
+
+  const copyLogs = async () => {
+    const text = storage.messageLogs.join("\n");
+    await Clipboard.setString(text);
+    ToastAndroid.show("Logs copied.", ToastAndroid.SHORT);
+  };
+
+  const clearLogs = () => {
+    storage.messageLogs = [];
+    ToastAndroid.show("Logs cleared.", ToastAndroid.SHORT);
+  };
 
   const renderMainPage = () => (
     <>
@@ -91,9 +107,6 @@ export default function Settings() {
       </BetterTableRowGroup>
 
       <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
-        <Text style={{ color: "#aaa", marginBottom: 8 }}>
-          Press the "Mass Selective Ping" button on user profiles.
-        </Text>
         <TextInput
           multiline
           value={storage.eventGiveawayPing}
@@ -102,19 +115,16 @@ export default function Settings() {
         />
       </BetterTableRowGroup>
 
-      <BetterTableRowGroup title="Tools/Misc" icon={getAssetIDByName("FolderIcon")}>
+      <BetterTableRowGroup title="Tools">
         {FormRow && (
           <>
             <FormRow
               label="Edit Raid Messages"
-              subLabel="Customize the 10 raid message slots"
               trailing={<FormRow.Arrow />}
               onPress={() => setSelectedPage("raidMessages")}
             />
-
             <FormRow
               label="Message Logs"
-              subLabel="View captured message logs"
               trailing={<FormRow.Arrow />}
               onPress={() => setSelectedPage("messageLogs")}
             />
@@ -143,28 +153,13 @@ export default function Settings() {
         ))}
       </BetterTableRowGroup>
 
-      <View style={{ height: 20 }} />
-
       {FormRow && (
         <FormRow
           label="Back"
-          trailing={
-            arrowBackIcon && (
-              <Image
-                source={arrowBackIcon}
-                style={{
-                  width: 24,
-                  height: 24,
-                  tintColor: semanticColors.TEXT_MUTED,
-                }}
-              />
-            )
-          }
+          trailing={<Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
           onPress={() => setSelectedPage("main")}
         />
       )}
-
-      <View style={{ height: 60 }} />
     </>
   );
 
@@ -173,10 +168,6 @@ export default function Settings() {
       <Header />
 
       <BetterTableRowGroup title="Message Logs" icon={messageHeaderIcon} padding>
-        <Text style={{ color: "#aaa", marginBottom: 8 }}>
-          Captured messages will appear below.
-        </Text>
-
         <TextInput
           multiline
           editable={false}
@@ -184,97 +175,66 @@ export default function Settings() {
           style={{ ...inputStyle, minHeight: 260 }}
         />
 
-        <View style={{ flexDirection: "row", marginTop: 12 }}>
-          <View style={{ flex: 1, marginRight: 6 }}>
-            <Text
-              onPress={() => {
-                const content = [...storage.messageLogs].join("\n");
-                try {
-                  const clipboard = require("@vendetta/metro/common");
-                  clipboard.setString?.(content);
-                } catch {}
-                showToast("Log copied.");
-              }}
-              style={{
-                backgroundColor: "#2ecc71",
-                color: "#fff",
-                textAlign: "center",
-                paddingVertical: 12,
-                borderRadius: 8,
-                fontWeight: "600",
-              }}
-            >
+        {/* Twin Buttons */}
+        <View style={{ flexDirection: "row", marginTop: 12, gap: 10 }}>
+          <TouchableOpacity
+            onPress={copyLogs}
+            style={{
+              flex: 1,
+              backgroundColor: "#2ecc71",
+              padding: 12,
+              borderRadius: 8,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "600" }}>
               Copy Log
             </Text>
-          </View>
+          </TouchableOpacity>
 
-          <View style={{ flex: 1, marginLeft: 6 }}>
-            <Text
-              onPress={() => {
-                storage.messageLogs = [];
-                showToast("Log cleared.");
-              }}
-              style={{
-                backgroundColor: "#e74c3c",
-                color: "#fff",
-                textAlign: "center",
-                paddingVertical: 12,
-                borderRadius: 8,
-                fontWeight: "600",
-              }}
-            >
+          <TouchableOpacity
+            onPress={clearLogs}
+            style={{
+              flex: 1,
+              backgroundColor: "#e74c3c",
+              padding: 12,
+              borderRadius: 8,
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "600" }}>
               Clear Log
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </BetterTableRowGroup>
-
-      <View style={{ height: 20 }} />
 
       {FormRow && (
         <FormRow
           label="Back"
-          trailing={
-            arrowBackIcon && (
-              <Image
-                source={arrowBackIcon}
-                style={{
-                  width: 24,
-                  height: 24,
-                  tintColor: semanticColors.TEXT_MUTED,
-                }}
-              />
-            )
-          }
+          trailing={<Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
           onPress={() => setSelectedPage("main")}
         />
       )}
-
-      <View style={{ height: 60 }} />
     </>
   );
 
   return (
     <View
       style={{ flex: 1 }}
-      onLayout={(event) => setContainerWidth(event.nativeEvent.layout.width)}
+      onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
     >
       <ScrollView ref={scrollRef} style={{ flex: 1 }}>
         <Animated.View
           style={{
             flexDirection: "row",
-            width: containerWidth > 0 ? containerWidth * 3 : "300%",
+            width: containerWidth * 3,
             transform: [{ translateX }],
           }}
         >
-          <View style={{ width: containerWidth || "100%" }}>
-            {renderMainPage()}
-          </View>
-
-          <View style={{ width: containerWidth || "100%" }}>
-            {selectedPage === "raidMessages" && renderRaidMessagesPage()}
-            {selectedPage === "messageLogs" && renderMessageLogsPage()}
-          </View>
+          <View style={{ width: containerWidth }}>{renderMainPage()}</View>
+          <View style={{ width: containerWidth }}>{renderRaidMessagesPage()}</View>
+          <View style={{ width: containerWidth }}>{renderMessageLogsPage()}</View>
         </Animated.View>
       </ScrollView>
     </View>
