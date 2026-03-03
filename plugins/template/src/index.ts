@@ -947,9 +947,8 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
- 
-    /* =========================
-   SIMPLE MESSAGE LOGGER (RELIABLE)
+/* =========================
+   MESSAGE LOGGER (NO DUPLICATES)
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -958,37 +957,41 @@ storage.messageLogs ??= [];
 let unpatchLogger: (() => void) | null = null;
 
 function startLogger() {
-  if (unpatchLogger) return;
+  if (unpatchLogger) return; // prevent double patch
 
-  // Patch the MessageActions module itself
   unpatchLogger = after("receiveMessage", MessageActions, (args) => {
     if (!storage.logging?.enabled) return;
 
     const message = args?.[1];
-    if (!message) return;
-    if (!message.content) return;
+    if (!message?.content) return;
     if (message.author?.bot) return;
 
     const username = message.author?.username ?? "Unknown";
     const timestamp = new Date().toLocaleTimeString();
-    const text = message.content;
 
-    const logEntry = `[${timestamp}] ${username}: ${text}`;
+    const entry = `[${timestamp}] ${username}: ${message.content}`;
 
-    const updated = [...(storage.messageLogs ?? []), logEntry];
+    // Prevent accidental duplicate entries
+    const last = storage.messageLogs[storage.messageLogs.length - 1];
+    if (last === entry) return;
 
-    // cap at 1000 entries
-    if (updated.length > 1000) updated.shift();
+    storage.messageLogs.push(entry);
 
-    storage.messageLogs = updated;
+    if (storage.messageLogs.length > 1000) {
+      storage.messageLogs.shift();
+    }
   });
+
+  logger.log("Logger attached.");
 }
 
 function stopLogger() {
-  if (unpatchLogger) {
-    unpatchLogger();
-    unpatchLogger = null;
-  }
+  if (!unpatchLogger) return;
+
+  unpatchLogger();
+  unpatchLogger = null;
+
+  logger.log("Logger detached.");
 }
 
 /* =========================
@@ -999,25 +1002,28 @@ commands.push(
   registerCommand({
     name: "log",
     displayName: "log",
-    description: "Enable or disable message logging",
+    description: "Enable or disable message logging in this plugin",
     options: [
       {
         name: "enabled",
         displayName: "enabled",
-        description: "true = enable logging, false = disable",
+        description: "true = enable logging, false = disable logging",
         required: true,
-        type: 5,
+        type: 5, // boolean
       },
     ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
+
     execute: (args, ctx) => {
-      // Ensure storage object exists
       storage.logging ??= { enabled: false };
 
       const enabled =
-        args.find(a => a.name === "enabled")?.value ?? false;
+        args.find(a => a.name === "enabled")?.value === true;
+
+      // Prevent re-running same state
+      if (storage.logging.enabled === enabled) return;
 
       storage.logging.enabled = enabled;
 
@@ -1032,8 +1038,8 @@ commands.push(
           createBotMessage({
             channelId: ctx.channel.id,
             content: enabled
-              ? "📝 Message logging enabled."
-              : "🛑 Message logging disabled.",
+              ? "🟢 Message logging enabled."
+              : "🔴 Message logging disabled.",
           }),
           { author: currentUser }
         )
@@ -1041,16 +1047,6 @@ commands.push(
     },
   })
 );
-
-/* =========================
-   EXISTING COMMANDS
-   (UNCHANGED — YOUR ORIGINAL CODE CONTINUES HERE)
-========================= */
-
-/* 
-   Keep all your existing commands exactly as-is below this line.
-   Nothing else was modified.
-*/
 
 /* =========================
    PLUGIN LIFECYCLE
