@@ -18,8 +18,7 @@ const HTTP = findByProps("get", "del", "post", "put");
 
 const commands: (() => void)[] = [];
 
-const MessageDispatcher = findByProps("receiveMessage");
-const receiveMessage = MessageDispatcher.receiveMessage;
+
 const { createBotMessage } = findByProps("createBotMessage");
 
 const getRandomNumber = () => Math.floor(Math.random() * 100);
@@ -950,7 +949,7 @@ React.createElement(GiveawaySection, { userId })
 
  
  /* =========================
-   SIMPLE MESSAGE LOGGER (STABLE)
+   SIMPLE MESSAGE LOGGER (WORKING VERSION)
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -965,21 +964,21 @@ function startLogger() {
   }
 
   const MessageStore = findByStoreName("MessageStore");
-  if (!MessageStore) return;
+  if (!MessageStore?.prototype) return;
 
-  // Find the actual insert function dynamically
+  // In most builds this is the correct method
   const proto = MessageStore.prototype;
 
-  const targetKey =
-    Object.keys(proto).find(
-      k =>
+  const method =
+    Object.getOwnPropertyNames(proto).find(
+      (k) =>
         typeof proto[k] === "function" &&
-        k.toLowerCase().includes("message")
+        k.toLowerCase().includes("add")
     );
 
-  if (!targetKey) return;
+  if (!method) return;
 
-  unpatchLogger = after(targetKey, proto, (args) => {
+  unpatchLogger = after(method, proto, (args) => {
     if (!storage.logging?.enabled) return;
 
     const message = args?.[0];
@@ -989,12 +988,14 @@ function startLogger() {
     const username = message.author?.username ?? "Unknown";
     const timestamp = new Date().toLocaleTimeString();
 
-    const logEntry = `[${timestamp}] ${username}: ${message.content}`;
+    const entry = `[${timestamp}] ${username}: ${message.content}`;
 
-    const updated = [...(storage.messageLogs ?? []), logEntry];
-    if (updated.length > 1000) updated.shift();
+    const logs = storage.messageLogs ?? [];
+    logs.push(entry);
 
-    storage.messageLogs = updated;
+    if (logs.length > 1000) logs.shift();
+
+    storage.messageLogs = logs;
   });
 }
 
@@ -1005,10 +1006,6 @@ function stopLogger() {
   }
 }
 
-/* =========================
-   /log COMMAND
-========================= */
-
 commands.push(
   registerCommand({
     name: "log",
@@ -1018,7 +1015,7 @@ commands.push(
       {
         name: "enabled",
         displayName: "enabled",
-        description: "true = enable logging, false = disable",
+        description: "true or false",
         required: true,
         type: 5,
       },
@@ -1027,11 +1024,10 @@ commands.push(
     inputType: 1,
     type: 1,
     execute: (args, ctx) => {
-      // Ensure storage object exists
       storage.logging ??= { enabled: false };
 
       const enabled =
-        args.find(a => a.name === "enabled")?.value ?? false;
+        args.find(a => a.name === "enabled")?.value === true;
 
       storage.logging.enabled = enabled;
 
@@ -1046,8 +1042,8 @@ commands.push(
           createBotMessage({
             channelId: ctx.channel.id,
             content: enabled
-              ? "📝 Message logging enabled."
-              : "🛑 Message logging disabled.",
+              ? "📝 Logging enabled."
+              : "🛑 Logging disabled.",
           }),
           { author: currentUser }
         )
