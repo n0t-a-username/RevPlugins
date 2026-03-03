@@ -88,10 +88,11 @@ export default function Settings() {
      LOG PERFORMANCE FIX
   ========================= */
 
-  const logsText = React.useMemo(
-    () => storage.messageLogs.join("\n"),
-    [storage.messageLogs.length]
-  );
+  const logsText = React.useMemo(() => {
+    return storage.messageLogs
+      .map((log: any) => (typeof log === "object" ? log.t : log))
+      .join("\n");
+  }, [storage.messageLogs.length, selectedPage]);
 
   const copyLogs = async () => {
     await Clipboard.setString(logsText);
@@ -110,7 +111,6 @@ export default function Settings() {
   const renderMainPage = () => (
     <>
       <Header />
-
       <BetterTableRowGroup title="Information" icon={messageHeaderIcon} padding>
         <Text style={{ color: "#aaa" }}>
           Command list: /mcs, /msp, /nuke, /raid, /purge, /react, /userid,
@@ -139,7 +139,6 @@ export default function Settings() {
               trailing={<FormRow.Arrow />}
               onPress={() => setSelectedPage("raidMessages")}
             />
-
             <FormRow
               label="Message Logs"
               subLabel="View captured message logs"
@@ -153,13 +152,12 @@ export default function Settings() {
   );
 
   /* =========================
-     RAID PAGE (BACK RESTORED)
+     RAID PAGE
   ========================= */
 
   const renderRaidMessagesPage = () => (
     <>
       <Header />
-
       <BetterTableRowGroup title="Raid Messages" icon={raidHeaderIcon} padding>
         {[...Array(10).keys()].map((i) => (
           <View key={i} style={{ marginBottom: 12 }}>
@@ -174,21 +172,12 @@ export default function Settings() {
           </View>
         ))}
       </BetterTableRowGroup>
-
       <View style={{ height: 20 }} />
-
       {FormRow && (
         <FormRow
           label="Back"
           subLabel="Return to main menu"
-          trailing={
-            arrowBackIcon && (
-              <Image
-                source={arrowBackIcon}
-                style={{ width: 24, height: 24 }}
-              />
-            )
-          }
+          trailing={arrowBackIcon && <Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
           onPress={() => setSelectedPage("main")}
         />
       )}
@@ -202,66 +191,39 @@ export default function Settings() {
   const renderMessageLogsPage = () => (
     <>
       <Header />
-
       <BetterTableRowGroup title="Message Logs" icon={messageHeaderIcon} padding>
         <Text style={{ color: "#aaa", marginBottom: 8 }}>
           Captured messages will appear below.
         </Text>
 
-        <TextInput
-          multiline
-          editable={false}
-          value={logsText}
-          style={{ ...inputStyle, minHeight: 260 }}
-        />
+        {/* PERFORMANCE FIX: Only render TextInput when active to prevent animation lag */}
+        {selectedPage === "messageLogs" ? (
+          <TextInput
+            multiline
+            editable={false}
+            value={logsText}
+            style={{ ...inputStyle, minHeight: 260 }}
+          />
+        ) : (
+          <View style={{ height: 260, backgroundColor: "#111", borderRadius: 8 }} />
+        )}
 
         <View style={{ flexDirection: "row", marginTop: 12, gap: 10 }}>
-          <TouchableOpacity
-            onPress={copyLogs}
-            style={{
-              flex: 1,
-              backgroundColor: "#2ecc71",
-              padding: 12,
-              borderRadius: 8,
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ color: "#fff", fontWeight: "600" }}>
-              Copy Log
-            </Text>
+          <TouchableOpacity onPress={copyLogs} style={{ flex: 1, backgroundColor: "#2ecc71", padding: 12, borderRadius: 8, alignItems: "center" }}>
+            <Text style={{ color: "#fff", fontWeight: "600" }}>Copy Log</Text>
           </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={clearLogs}
-            style={{
-              flex: 1,
-              backgroundColor: "#e74c3c",
-              padding: 12,
-              borderRadius: 8,
-              alignItems: "center",
-            }}
-          >
-            <Text style={{ color: "#fff", fontWeight: "600" }}>
-              Clear Log
-            </Text>
+          <TouchableOpacity onPress={clearLogs} style={{ flex: 1, backgroundColor: "#e74c3c", padding: 12, borderRadius: 8, alignItems: "center" }}>
+            <Text style={{ color: "#fff", fontWeight: "600" }}>Clear Log</Text>
           </TouchableOpacity>
         </View>
       </BetterTableRowGroup>
 
       <View style={{ height: 20 }} />
-
       {FormRow && (
         <FormRow
           label="Back"
           subLabel="Return to main menu"
-          trailing={
-            arrowBackIcon && (
-              <Image
-                source={arrowBackIcon}
-                style={{ width: 24, height: 24 }}
-              />
-            )
-          }
+          trailing={arrowBackIcon && <Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
           onPress={() => setSelectedPage("main")}
         />
       )}
@@ -269,31 +231,28 @@ export default function Settings() {
   );
 
   /* =========================
-     ANIMATED CONTAINER (UNCHANGED STRUCTURE)
+     ANIMATED CONTAINER (OPTIMIZED)
   ========================= */
 
   return (
-    <View
-      style={{ flex: 1 }}
-      onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}
-    >
+    <View style={{ flex: 1 }} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
       <ScrollView ref={scrollRef} style={{ flex: 1 }}>
         <Animated.View
           style={{
             flexDirection: "row",
-            width: containerWidth * 3,
+            width: containerWidth * 3 || "300%",
             transform: [{ translateX }],
           }}
         >
-          <View style={{ width: containerWidth }}>
+          <View style={{ width: containerWidth || "100%" }}>
             {renderMainPage()}
           </View>
 
-          <View style={{ width: containerWidth }}>
-            {renderRaidMessagesPage()}
+          <View style={{ width: containerWidth || "100%" }}>
+            {selectedPage === "raidMessages" ? renderRaidMessagesPage() : null}
           </View>
 
-          <View style={{ width: containerWidth }}>
+          <View style={{ width: containerWidth || "100%" }}>
             {renderMessageLogsPage()}
           </View>
         </Animated.View>
