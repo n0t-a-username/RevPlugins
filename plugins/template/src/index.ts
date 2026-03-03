@@ -948,11 +948,7 @@ React.createElement(GiveawaySection, { userId })
 });
 
  
- /* =========================
-   SIMPLE MESSAGE LOGGER (FINAL STABLE)
-========================= */
-
-storage.logging ??= { enabled: false };
+ storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
@@ -960,49 +956,54 @@ let unpatchLogger: (() => void) | null = null;
 function startLogger() {
   if (unpatchLogger) return;
 
-  const MessageModule = findByProps("receiveMessage");
-  if (!MessageModule?.receiveMessage) {
-    logger.error("receiveMessage not found");
+  const MessageStore = findByStoreName("MessageStore");
+  if (!MessageStore?.prototype) {
+    logger.error("MessageStore not found");
     return;
   }
 
-  unpatchLogger = after(
-    "receiveMessage",
-    MessageModule,
-    (args) => {
-      if (!storage.logging?.enabled) return;
+  // Find the correct insert function dynamically
+  const proto = MessageStore.prototype;
 
-      const message = args?.[1]; 
-      // In most current builds:
-      // args[0] = channelId
-      // args[1] = message object
-
-      if (!message?.content) return;
-      if (!message?.id) return;
-      if (message.author?.bot) return;
-
-      const username = message.author?.username ?? "Unknown";
-      const timestamp = new Date().toLocaleTimeString();
-
-      const logEntry = `[${timestamp}] ${username}: ${message.content}`;
-
-      const logs = storage.messageLogs ?? [];
-      logs.push(logEntry);
-
-      if (logs.length > 1000) logs.shift();
-
-      storage.messageLogs = logs;
-    }
+  const methodName = Object.keys(proto).find(
+    (k) =>
+      typeof proto[k] === "function" &&
+      proto[k].length >= 1
   );
 
-  logger.log("Logger started (receiveMessage hook)");
+  if (!methodName) {
+    logger.error("No suitable MessageStore method found");
+    return;
+  }
+
+  unpatchLogger = after(methodName, proto, (args) => {
+    if (!storage.logging?.enabled) return;
+
+    const message = args?.[0];
+    if (!message?.content) return;
+    if (!message?.id) return;
+    if (message.author?.bot) return;
+
+    const username = message.author?.username ?? "Unknown";
+    const timestamp = new Date().toLocaleTimeString();
+
+    const logEntry = `[${timestamp}] ${username}: ${message.content}`;
+
+    const logs = storage.messageLogs ?? [];
+    logs.push(logEntry);
+
+    if (logs.length > 1000) logs.shift();
+
+    storage.messageLogs = logs;
+  });
+
+  logger.log(`Logger attached to ${methodName}`);
 }
 
 function stopLogger() {
   if (unpatchLogger) {
     unpatchLogger();
     unpatchLogger = null;
-    logger.log("Logger stopped.");
   }
 }
 
@@ -1026,11 +1027,10 @@ commands.push(
     execute: (args, ctx) => {
       storage.logging ??= { enabled: false };
 
-      const enabled =
-        args.find(a => a.name === "enabled")?.value;
+      const enabled = args.find(a => a.name === "enabled")?.value;
 
-      // Ensure strict boolean handling
-      if (typeof enabled !== "boolean") return;
+      // Strict boolean check
+      if (enabled !== true && enabled !== false) return;
 
       storage.logging.enabled = enabled;
 
@@ -1045,8 +1045,8 @@ commands.push(
           createBotMessage({
             channelId: ctx.channel.id,
             content: enabled
-              ? "📝 Message logging enabled."
-              : "🛑 Message logging disabled.",
+              ? "📝 Logging is now ENABLED."
+              : "🛑 Logging is now DISABLED.",
           }),
           { author: currentUser }
         )
