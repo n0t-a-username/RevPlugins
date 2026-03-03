@@ -949,7 +949,7 @@ React.createElement(GiveawaySection, { userId })
 
  
     /* =========================
-   SIMPLE MESSAGE LOGGER
+   SIMPLE MESSAGE LOGGER (RELIABLE)
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -960,30 +960,24 @@ let unpatchLogger: (() => void) | null = null;
 function startLogger() {
   if (unpatchLogger) return;
 
-  const MessageUtils = findByProps("receiveMessage", "createBotMessage");
-  const receiveMessage = MessageUtils?.receiveMessage;
-
-  if (!receiveMessage) {
-    logger.error("Logger failed: receiveMessage not found");
-    return;
-  }
-
-  unpatchLogger = after("receiveMessage", receiveMessage, (_, args) => {
+  // Patch the MessageActions module itself
+  unpatchLogger = after("receiveMessage", MessageActions, (args) => {
     if (!storage.logging?.enabled) return;
 
     const message = args?.[1];
     if (!message) return;
-    if (message.author?.bot) return;
     if (!message.content) return;
+    if (message.author?.bot) return;
 
-    const timestamp = new Date().toLocaleString();
     const username = message.author?.username ?? "Unknown";
+    const timestamp = new Date().toLocaleTimeString();
     const text = message.content;
 
     const logEntry = `[${timestamp}] ${username}: ${text}`;
 
     const updated = [...(storage.messageLogs ?? []), logEntry];
 
+    // cap at 1000 entries
     if (updated.length > 1000) updated.shift();
 
     storage.messageLogs = updated;
