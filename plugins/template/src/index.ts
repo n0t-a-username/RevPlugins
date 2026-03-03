@@ -948,7 +948,7 @@ React.createElement(GiveawaySection, { userId })
 });
 
 /* =========================
-   MESSAGE LOGGER (NO DUPLICATES)
+   MESSAGE LOGGER (HARD DEDUPE)
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -956,24 +956,27 @@ storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
 
+let lastMessageId: string | null = null;
+
 function startLogger() {
-  if (unpatchLogger) return; // prevent double patch
+  if (unpatchLogger) return;
 
   unpatchLogger = after("receiveMessage", MessageActions, (args) => {
     if (!storage.logging?.enabled) return;
 
     const message = args?.[1];
-    if (!message?.content) return;
+    if (!message?.id) return;
+    if (!message.content) return;
     if (message.author?.bot) return;
+
+    // 🚫 HARD DEDUPLICATION
+    if (message.id === lastMessageId) return;
+    lastMessageId = message.id;
 
     const username = message.author?.username ?? "Unknown";
     const timestamp = new Date().toLocaleTimeString();
 
     const entry = `[${timestamp}] ${username}: ${message.content}`;
-
-    // Prevent accidental duplicate entries
-    const last = storage.messageLogs[storage.messageLogs.length - 1];
-    if (last === entry) return;
 
     storage.messageLogs.push(entry);
 
@@ -990,6 +993,7 @@ function stopLogger() {
 
   unpatchLogger();
   unpatchLogger = null;
+  lastMessageId = null;
 
   logger.log("Logger detached.");
 }
