@@ -947,16 +947,14 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
-/* =========================
-   LOGGING SYSTEM (FIXED)
+ /* =========================
+   LOGGING SYSTEM
 ========================= */
 
 storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
-
-// DO NOT redeclare receiveMessage here
 
 function startLogger() {
   if (unpatchLogger) return;
@@ -974,11 +972,14 @@ function startLogger() {
 
     const logEntry = `[${timestamp}] (${channelId}) ${author}: ${message.content}`;
 
-    storage.messageLogs.push(logEntry);
+    // 🔥 IMPORTANT: Replace array reference (reactive-safe)
+    const updatedLogs = [...(storage.messageLogs ?? []), logEntry];
 
-    if (storage.messageLogs.length > 1000) {
-      storage.messageLogs.shift();
+    if (updatedLogs.length > 1000) {
+      updatedLogs.shift();
     }
+
+    storage.messageLogs = updatedLogs;
   });
 }
 
