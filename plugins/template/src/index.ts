@@ -947,70 +947,64 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
- /* =========================
-   MESSAGE LOGGER (FIXED)
+ 
+    /* =========================
+   SIMPLE MESSAGE LOGGER (RELIABLE)
 ========================= */
+
+storage.logging ??= { enabled: false };
+storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
 
 function startLogger() {
   if (unpatchLogger) return;
 
-  const Dispatcher = findByProps("dispatch", "subscribe");
-  if (!Dispatcher?.subscribe) {
-    logger.error("Dispatcher not found");
-    return;
-  }
-
-  const callback = (event: any) => {
+  // Patch the MessageActions module itself
+  unpatchLogger = after("receiveMessage", MessageActions, (args) => {
     if (!storage.logging?.enabled) return;
-    if (event?.type !== "MESSAGE_CREATE") return;
 
-    const channelId = storage.logging.channelId;
-    if (!channelId) return;
-
-    const message = event.message;
+    const message = args?.[1];
     if (!message) return;
-    if (message.channel_id !== channelId) return;
-    if (message.author?.bot) return;
     if (!message.content) return;
+    if (message.author?.bot) return;
 
-    storage.messageLogs ??= [];
+    const username = message.author?.username ?? "Unknown";
+    const timestamp = new Date().toLocaleTimeString();
+    const text = message.content;
 
-    const timestamp = new Date().toLocaleString();
-    const entry = `[${timestamp}] ${message.author.username}: ${message.content}`;
+    const logEntry = `[${timestamp}] ${username}: ${text}`;
 
-    storage.messageLogs.push(entry);
+    const updated = [...(storage.messageLogs ?? []), logEntry];
 
-    if (storage.messageLogs.length > 1000) {
-      storage.messageLogs.shift();
-    }
-  };
+    // cap at 1000 entries
+    if (updated.length > 1000) updated.shift();
 
-  Dispatcher.subscribe(callback);
-  unpatchLogger = () => Dispatcher.unsubscribe(callback);
-
-  logger.log("Logger started.");
+    storage.messageLogs = updated;
+  });
 }
 
 function stopLogger() {
   if (unpatchLogger) {
     unpatchLogger();
     unpatchLogger = null;
-    logger.log("Logger stopped.");
   }
 }
+
+/* =========================
+   /log COMMAND
+========================= */
 
 commands.push(
   registerCommand({
     name: "log",
     displayName: "log",
-    description: "Enable or disable message logging for this channel",
+    description: "Enable or disable message logging",
     options: [
       {
         name: "enabled",
         displayName: "enabled",
-        description: "true = enable, false = disable",
+        description: "true = enable logging, false = disable",
         required: true,
         type: 5,
       },
@@ -1018,24 +1012,17 @@ commands.push(
     applicationId: "-1",
     inputType: 1,
     type: 1,
-
     execute: (args, ctx) => {
-      storage.logging ??= { enabled: false, channelId: null };
-      storage.messageLogs ??= [];
+      // Ensure storage object exists
+      storage.logging ??= { enabled: false };
 
-      const enabled = args.find(a => a.name === "enabled")?.value;
-
-      if (typeof enabled !== "boolean") return;
+      const enabled =
+        args.find(a => a.name === "enabled")?.value ?? false;
 
       storage.logging.enabled = enabled;
 
-      if (enabled) {
-        storage.logging.channelId = ctx.channel.id;
-        startLogger();
-      } else {
-        storage.logging.channelId = null;
-        stopLogger();
-      }
+      if (enabled) startLogger();
+      else stopLogger();
 
       const currentUser = UserStore.getCurrentUser();
 
@@ -1045,8 +1032,8 @@ commands.push(
           createBotMessage({
             channelId: ctx.channel.id,
             content: enabled
-              ? "🟢 Logging ENABLED for this channel."
-              : "🔴 Logging DISABLED.",
+              ? "📝 Message logging enabled."
+              : "🛑 Message logging disabled.",
           }),
           { author: currentUser }
         )
