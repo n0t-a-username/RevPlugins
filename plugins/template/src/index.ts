@@ -949,7 +949,7 @@ React.createElement(GiveawaySection, { userId })
 
  
  /* =========================
-   SIMPLE MESSAGE LOGGER (STABLE)
+   SIMPLE MESSAGE LOGGER (STABLE + NO DUPLICATES)
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -961,30 +961,42 @@ function startLogger() {
   if (unpatchLogger) return;
 
   const MessageStore = findByStoreName("MessageStore");
-  if (!MessageStore) {
+  if (!MessageStore?.prototype) {
     logger.error("MessageStore not found");
     return;
   }
 
-  unpatchLogger = after("addMessage", MessageStore.prototype, ([message]) => {
-    if (!storage.logging?.enabled) return;
-    if (!message?.content) return;
-    if (message.author?.bot) return;
+  unpatchLogger = after(
+    "add",
+    MessageStore.prototype,
+    ([message]) => {
+      if (!storage.logging?.enabled) return;
+      if (!message?.content) return;
+      if (!message?.id) return;
+      if (message.author?.bot) return;
 
-    const entry = `[${new Date().toLocaleTimeString()}] ${message.author?.username ?? "Unknown"}: ${message.content}`;
+      const username = message.author?.username ?? "Unknown";
+      const timestamp = new Date().toLocaleTimeString();
 
-    storage.messageLogs ??= [];
-    storage.messageLogs.push(entry);
+      const logEntry = `[${timestamp}] ${username}: ${message.content}`;
 
-    if (storage.messageLogs.length > 1000)
-      storage.messageLogs.shift();
-  });
+      const logs = storage.messageLogs ?? [];
+      logs.push(logEntry);
+
+      if (logs.length > 1000) logs.shift();
+
+      storage.messageLogs = logs;
+    }
+  );
+
+  logger.log("Logger started (MessageStore.add)");
 }
 
 function stopLogger() {
   if (unpatchLogger) {
     unpatchLogger();
     unpatchLogger = null;
+    logger.log("Logger stopped.");
   }
 }
 
