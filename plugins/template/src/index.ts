@@ -958,49 +958,86 @@ storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
 
-function startLogger() {
+function addLogEntry(entry: string) {
+  const currentLogs = storage.messageLogs ?? [];
+  const updated = [...currentLogs, entry];
+
+  if (updated.length > 500) updated.shift();
+
+  storage.messageLogs = updated;
+}
+
+function startLogger(channelId?: string) {
   if (unpatchLogger) return;
 
   const MessageEvents = findByProps("receiveMessage", "sendMessage");
   if (!MessageEvents?.receiveMessage) return;
+
+  // Log start entry
+  const startTime = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  addLogEntry(
+    `[${startTime}] 🟢 Started logging in channel ID: ${channelId ?? "Unknown"}`
+  );
 
   unpatchLogger = after("receiveMessage", MessageEvents, (args) => {
     if (!storage.logging?.enabled) return;
 
     const message = args?.[1];
 
-    // 1. VALIDATION & ECHO FILTER
-    if (!message?.content) return;
+    // Validation & echo filter
+    if (!message) return;
     if (message.author?.bot) return;
     if (message.state === "SENDING") return;
 
-    // 2. LOGGING
-    const username = message.author?.username ?? "Unknown";
     const timestamp = new Date().toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
     });
 
-    // Keep logs single-line
-    const cleanContent = message.content.replace(/\n/g, " ");
-    const logEntry = `[${timestamp}] ${username}: ${cleanContent}`;
+    const username = message.author?.username ?? "Unknown";
 
-    // 3. UPDATE STORAGE
-    const currentLogs = storage.messageLogs ?? [];
-    const updated = [...currentLogs, logEntry];
+    // Clean content
+    const cleanContent = message.content
+      ? message.content.replace(/\n/g, " ")
+      : "";
 
-    if (updated.length > 500) updated.shift();
+    let logEntry = `[${timestamp}] ${username}: ${cleanContent}`;
 
-    storage.messageLogs = updated;
+    // Attachment logging (URL only)
+    if (Array.isArray(message.attachments) && message.attachments.length) {
+      const urls = message.attachments
+        .map((a: any) => a.url)
+        .filter(Boolean)
+        .join(" ");
+
+      if (urls.length) {
+        logEntry += ` [Attachment: ${urls}]`;
+      }
+    }
+
+    addLogEntry(logEntry);
   });
 }
 
 function stopLogger() {
-  if (unpatchLogger) {
-    unpatchLogger();
-    unpatchLogger = null;
-  }
+  if (!unpatchLogger) return;
+
+  unpatchLogger();
+  unpatchLogger = null;
+
+  const stopTime = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+
+  addLogEntry(`[${stopTime}] 🔴 Logging ended`);
 }
 
 /* =========================
@@ -1019,7 +1056,7 @@ commands.push(
         description: "true = enable, false = disable",
         required: true,
         type: 5,
-      }
+      },
     ],
     applicationId: "-1",
     inputType: 1,
@@ -1030,8 +1067,11 @@ commands.push(
 
       storage.logging.enabled = enabled;
 
-      if (enabled) startLogger();
-      else stopLogger();
+      if (enabled) {
+        startLogger(ctx.channel.id);
+      } else {
+        stopLogger();
+      }
 
       const currentUser = UserStore.getCurrentUser();
 
