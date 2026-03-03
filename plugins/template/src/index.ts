@@ -947,9 +947,8 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
- 
-    /* =========================
-   SIMPLE MESSAGE LOGGER (RELIABLE)
+/* =========================
+   SIMPLE MESSAGE LOGGER (FIXED — NO DUPES)
 ========================= */
 
 storage.logging ??= { enabled: false };
@@ -960,13 +959,14 @@ let unpatchLogger: (() => void) | null = null;
 function startLogger() {
   if (unpatchLogger) return;
 
-  // Patch the MessageActions module itself
-  unpatchLogger = after("receiveMessage", MessageActions, (args) => {
+  const MessageStore = findByStoreName("MessageStore");
+  if (!MessageStore) return;
+
+  unpatchLogger = after("receiveMessage", MessageStore, (args) => {
     if (!storage.logging?.enabled) return;
 
-    const message = args?.[1];
-    if (!message) return;
-    if (!message.content) return;
+    const message = args?.[0];
+    if (!message?.content) return;
     if (message.author?.bot) return;
 
     const username = message.author?.username ?? "Unknown";
@@ -1013,7 +1013,6 @@ commands.push(
     inputType: 1,
     type: 1,
     execute: (args, ctx) => {
-      // Ensure storage object exists
       storage.logging ??= { enabled: false };
 
       const enabled =
@@ -1041,16 +1040,6 @@ commands.push(
     },
   })
 );
-
-/* =========================
-   EXISTING COMMANDS
-   (UNCHANGED — YOUR ORIGINAL CODE CONTINUES HERE)
-========================= */
-
-/* 
-   Keep all your existing commands exactly as-is below this line.
-   Nothing else was modified.
-*/
 
 /* =========================
    PLUGIN LIFECYCLE
