@@ -947,47 +947,59 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
- 
-    /* =========================
-   SIMPLE MESSAGE LOGGER
+ /* =========================
+   MESSAGE LOGGER (FIXED)
 ========================= */
 
 storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
 
 let unpatchLogger: (() => void) | null = null;
+let lastLoggedId: string | null = null;
 
 function startLogger() {
   if (unpatchLogger) return;
 
-  const MessageUtils = findByProps("receiveMessage", "createBotMessage");
-  const receiveMessage = MessageUtils?.receiveMessage;
-
-  if (!receiveMessage) {
-    logger.error("Logger failed: receiveMessage not found");
+  const MessageStore = findByStoreName("MessageStore");
+  if (!MessageStore?.addChangeListener) {
+    logger.error("Logger failed: MessageStore not found");
     return;
   }
 
-  unpatchLogger = after("receiveMessage", receiveMessage, (_, args) => {
+  const handler = () => {
     if (!storage.logging?.enabled) return;
 
-    const message = args?.[1];
-    if (!message) return;
-    if (message.author?.bot) return;
-    if (!message.content) return;
+    const channelId = storage.logging.channelId;
+    if (!channelId) return;
+
+    const messages = MessageStore.getMessages?.(channelId);
+    if (!Array.isArray(messages) || messages.length === 0) return;
+
+    const latest = messages[messages.length - 1];
+    if (!latest) return;
+
+    if (latest.id === lastLoggedId) return;
+    lastLoggedId = latest.id;
+
+    if (latest.author?.bot) return;
+    if (!latest.content) return;
 
     const timestamp = new Date().toLocaleString();
-    const username = message.author?.username ?? "Unknown";
-    const text = message.content;
+    const username = latest.author?.username ?? "Unknown";
 
-    const logEntry = `[${timestamp}] ${username}: ${text}`;
+    const logEntry = `[${timestamp}] ${username}: ${latest.content}`;
 
     const updated = [...(storage.messageLogs ?? []), logEntry];
 
     if (updated.length > 1000) updated.shift();
 
     storage.messageLogs = updated;
-  });
+  };
+
+  MessageStore.addChangeListener(handler);
+  unpatchLogger = () => MessageStore.removeChangeListener(handler);
+
+  logger.log("Logger attached successfully.");
 }
 
 function stopLogger() {
@@ -1005,41 +1017,56 @@ commands.push(
   registerCommand({
     name: "log",
     displayName: "log",
-    description: "Enable or disable message logging",
+    description: "Enable or disable message logging for this channel",
     options: [
       {
         name: "enabled",
         displayName: "enabled",
-        description: "true = enable logging, false = disable",
+        description: "true = enable logging, false = disable logging",
         required: true,
-        type: 5,
+        type: 5, // BOOLEAN
       },
     ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
+
     execute: (args, ctx) => {
-      // Ensure storage object exists
-      storage.logging ??= { enabled: false };
+      // Ensure storage structure exists
+      storage.logging ??= { enabled: false, channelId: null };
+      storage.messageLogs ??= [];
 
-      const enabled =
-        args.find(a => a.name === "enabled")?.value ?? false;
+      // Get boolean safely (handles string or boolean)
+      let enabled = args.find(a => a.name === "enabled")?.value;
 
+      if (enabled === "true") enabled = true;
+      if (enabled === "false") enabled = false;
+
+      if (typeof enabled !== "boolean") return;
+
+      // Update state
       storage.logging.enabled = enabled;
 
-      if (enabled) startLogger();
-      else stopLogger();
+      if (enabled) {
+        // Lock logging to this channel
+        storage.logging.channelId = ctx.channel.id;
+        startLogger();
+      } else {
+        storage.logging.channelId = null;
+        stopLogger();
+      }
 
       const currentUser = UserStore.getCurrentUser();
 
+      // Confirmation message
       receiveMessage(
         ctx.channel.id,
         Object.assign(
           createBotMessage({
             channelId: ctx.channel.id,
             content: enabled
-              ? "📝 Message logging enabled."
-              : "🛑 Message logging disabled.",
+              ? "📝 Logging ENABLED for this channel."
+              : "🛑 Logging DISABLED.",
           }),
           { author: currentUser }
         )
