@@ -947,52 +947,25 @@ React.createElement(GiveawaySection, { userId })
 );
 });
 
-/* =========================
-   MESSAGE LOGGER (BULLETPROOF)
-========================= */
-
 storage.logging ??= { enabled: false };
 storage.messageLogs ??= [];
 
-let unpatchLogger: (() => void) | null = null;
+after("receiveMessage", MessageActions, (args) => {
+  if (!storage.logging?.enabled) return;
 
-function startLogger() {
-  if (unpatchLogger) return;
+  const message = args?.[1];
+  if (!message?.id) return;
+  if (!message.content) return;
+  if (message.author?.bot) return;
 
-  unpatchLogger = after("receiveMessage", MessageActions, (args) => {
-    if (!storage.logging?.enabled) return;
+  storage.messageLogs.push(
+    `[${new Date().toISOString()}] ${message.author.username}: ${message.content}`
+  );
 
-    const message = args?.[1];
-    if (!message?.id) return;
-    if (!message.content) return;
-    if (message.author?.bot) return;
-
-    // 🔒 HARD DEDUPLICATION BY MESSAGE ID
-    if (storage.logging.lastId === message.id) return;
-    storage.logging.lastId = message.id;
-
-    const entry = `[${new Date().toISOString()}] ${message.author?.username ?? "Unknown"}: ${message.content}`;
-
-    storage.messageLogs.push(entry);
-
-    if (storage.messageLogs.length > 1000) {
-      storage.messageLogs.shift();
-    }
-  });
-
-  logger.log("Logger attached.");
-}
-
-function stopLogger() {
-  if (!unpatchLogger) return;
-
-  unpatchLogger();
-  unpatchLogger = null;
-
-  storage.logging.lastId = null;
-
-  logger.log("Logger detached.");
-}
+  if (storage.messageLogs.length > 1000) {
+    storage.messageLogs.shift();
+  }
+});
 
 /* =========================
    /log COMMAND
@@ -1002,14 +975,13 @@ commands.push(
   registerCommand({
     name: "log",
     displayName: "log",
-    description: "Enable or disable message logging in this plugin",
+    description: "Enable or disable message logging",
     options: [
       {
         name: "enabled",
         displayName: "enabled",
-        description: "true = enable logging, false = disable logging",
         required: true,
-        type: 5, // boolean
+        type: 5,
       },
     ],
     applicationId: "-1",
@@ -1017,18 +989,11 @@ commands.push(
     type: 1,
 
     execute: (args, ctx) => {
-      storage.logging ??= { enabled: false };
-
       const enabled =
         args.find(a => a.name === "enabled")?.value === true;
 
-      // Prevent re-running same state
-      if (storage.logging.enabled === enabled) return;
-
+      storage.logging ??= { enabled: false };
       storage.logging.enabled = enabled;
-
-      if (enabled) startLogger();
-      else stopLogger();
 
       const currentUser = UserStore.getCurrentUser();
 
@@ -1038,8 +1003,8 @@ commands.push(
           createBotMessage({
             channelId: ctx.channel.id,
             content: enabled
-              ? "🟢 Message logging enabled."
-              : "🔴 Message logging disabled.",
+              ? "🟢 Logging enabled."
+              : "🔴 Logging disabled.",
           }),
           { author: currentUser }
         )
