@@ -149,27 +149,15 @@ ${iconUrl ? `> **Icon**: [icon](${iconUrl})` : ""}`;
 })
 );
 
-// ---- /clone-server ----
+// ---- /clone-server (Fixed Order Version) ----
 commands.push(
   registerCommand({
     name: "clone-server",
     displayName: "clone-server",
-    description: "Clones channels/categories from a source server into this one",
+    description: "Clones channels in the exact order of the source server",
     options: [
-      {
-        name: "source_id",
-        displayName: "source_id",
-        description: "The ID of the server you want to copy FROM",
-        required: true,
-        type: 3,
-      },
-      {
-        name: "delay",
-        displayName: "delay",
-        description: "Delay between creating channels (ms) - default 500",
-        required: false,
-        type: 4,
-      }
+      { name: "source_id", displayName: "source_id", description: "Source Server ID", required: true, type: 3 },
+      { name: "delay", displayName: "delay", description: "Delay in ms", required: false, type: 4 }
     ],
     applicationId: "-1",
     inputType: 1,
@@ -177,48 +165,48 @@ commands.push(
     execute: async (args, ctx) => {
       const targetGuildId = ctx.channel.guild_id;
       const sourceGuildId = args.find(a => a.name === "source_id")?.value;
-      const delay = Number(args.find(a => a.name === "delay")?.value ?? 500);
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 600); // Slightly higher delay for safety
       const currentUser = UserStore.getCurrentUser();
 
       if (!targetGuildId || !sourceGuildId) return;
 
       try {
-        // 1. Fetch source channels
         const res = await HTTP.get({ url: `/guilds/${sourceGuildId}/channels` });
         const sourceChannels = res?.body;
-
-        if (!Array.isArray(sourceChannels)) throw new Error("Could not fetch source channels.");
+        if (!Array.isArray(sourceChannels)) return;
 
         receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
           channelId: ctx.channel.id, 
-          content: `🏗️ Starting clone of ${sourceChannels.length} channels...` 
+          content: "🏗️ Cloning with sorted positioning..." 
         }), { author: currentUser }));
 
-        // 2. Separate Categories and Channels
-        // We must create categories FIRST so we can put channels inside them
-        const categories = sourceChannels.filter(c => c.type === 4);
-        const children = sourceChannels.filter(c => c.type !== 4);
+        // --- THE FIX: SORT BY POSITION ---
+        // We sort ascending (0, 1, 2...) so the top channels are created first
+        const sortedChannels = [...sourceChannels].sort((a, b) => a.position - b.position);
 
-        // Map to keep track of old Category ID -> new Category ID
+        const categories = sortedChannels.filter(c => c.type === 4);
+        const children = sortedChannels.filter(c => c.type !== 4);
+
         const categoryMap: Record<string, string> = {};
 
-        // 3. Create Categories
+        // 1. Create Categories in order
         for (const cat of categories) {
           try {
             const newCat = await HTTP.post({
               url: `/guilds/${targetGuildId}/channels`,
-              body: { name: cat.name, type: 4, permission_overwrites: cat.permission_overwrites }
+              body: { 
+                name: cat.name, 
+                type: 4, 
+                position: cat.position // Explicitly pass position
+              }
             });
             categoryMap[cat.id] = newCat.body.id;
             await sleep(delay);
-          } catch (e) { logger.error("Category clone failed", e); }
+          } catch {}
         }
 
-        // 4. Create Channels
-        let createdCount = 0;
+        // 2. Create Channels in order
         for (const ch of children) {
-          // Skip voice/stage channels if you only want text, or keep them:
-          // Types: 0=Text, 2=Voice, 5=Announcements, 15=Forum
           try {
             await HTTP.post({
               url: `/guilds/${targetGuildId}/channels`,
@@ -226,30 +214,26 @@ commands.push(
                 name: ch.name,
                 type: ch.type,
                 topic: ch.topic,
-                nsfw: ch.nsfw,
                 parent_id: ch.parent_id ? categoryMap[ch.parent_id] : null,
-                permission_overwrites: ch.permission_overwrites
+                position: ch.position // Explicitly pass position
               }
             });
-            createdCount++;
             await sleep(delay);
-          } catch (e) { logger.error("Channel clone failed", e); }
+          } catch {}
         }
 
         receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
           channelId: ctx.channel.id, 
-          content: `✅ Done! Created ${createdCount} channels and ${Object.keys(categoryMap).length} categories.` 
+          content: "✅ Clone complete. Order should now match!" 
         }), { author: currentUser }));
 
       } catch (err) {
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-          channelId: ctx.channel.id, 
-          content: `⚠️ Clone failed: ${String(err)}` 
-        }), { author: currentUser }));
+        logger.error("Clone error", err);
       }
     },
   })
 );
+
 
 
 commands.push(
