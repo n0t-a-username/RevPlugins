@@ -149,6 +149,109 @@ ${iconUrl ? `> **Icon**: [icon](${iconUrl})` : ""}`;
 })
 );
 
+// ---- /clone-server ----
+commands.push(
+  registerCommand({
+    name: "clone-server",
+    displayName: "clone-server",
+    description: "Clones channels/categories from a source server into this one",
+    options: [
+      {
+        name: "source_id",
+        displayName: "source_id",
+        description: "The ID of the server you want to copy FROM",
+        required: true,
+        type: 3,
+      },
+      {
+        name: "delay",
+        displayName: "delay",
+        description: "Delay between creating channels (ms) - default 500",
+        required: false,
+        type: 4,
+      }
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const targetGuildId = ctx.channel.guild_id;
+      const sourceGuildId = args.find(a => a.name === "source_id")?.value;
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 500);
+      const currentUser = UserStore.getCurrentUser();
+
+      if (!targetGuildId || !sourceGuildId) return;
+
+      try {
+        // 1. Fetch source channels
+        const res = await HTTP.get({ url: `/guilds/${sourceGuildId}/channels` });
+        const sourceChannels = res?.body;
+
+        if (!Array.isArray(sourceChannels)) throw new Error("Could not fetch source channels.");
+
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+          channelId: ctx.channel.id, 
+          content: `🏗️ Starting clone of ${sourceChannels.length} channels...` 
+        }), { author: currentUser }));
+
+        // 2. Separate Categories and Channels
+        // We must create categories FIRST so we can put channels inside them
+        const categories = sourceChannels.filter(c => c.type === 4);
+        const children = sourceChannels.filter(c => c.type !== 4);
+
+        // Map to keep track of old Category ID -> new Category ID
+        const categoryMap: Record<string, string> = {};
+
+        // 3. Create Categories
+        for (const cat of categories) {
+          try {
+            const newCat = await HTTP.post({
+              url: `/guilds/${targetGuildId}/channels`,
+              body: { name: cat.name, type: 4, permission_overwrites: cat.permission_overwrites }
+            });
+            categoryMap[cat.id] = newCat.body.id;
+            await sleep(delay);
+          } catch (e) { logger.error("Category clone failed", e); }
+        }
+
+        // 4. Create Channels
+        let createdCount = 0;
+        for (const ch of children) {
+          // Skip voice/stage channels if you only want text, or keep them:
+          // Types: 0=Text, 2=Voice, 5=Announcements, 15=Forum
+          try {
+            await HTTP.post({
+              url: `/guilds/${targetGuildId}/channels`,
+              body: {
+                name: ch.name,
+                type: ch.type,
+                topic: ch.topic,
+                nsfw: ch.nsfw,
+                parent_id: ch.parent_id ? categoryMap[ch.parent_id] : null,
+                permission_overwrites: ch.permission_overwrites
+              }
+            });
+            createdCount++;
+            await sleep(delay);
+          } catch (e) { logger.error("Channel clone failed", e); }
+        }
+
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+          channelId: ctx.channel.id, 
+          content: `✅ Done! Created ${createdCount} channels and ${Object.keys(categoryMap).length} categories.` 
+        }), { author: currentUser }));
+
+      } catch (err) {
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+          channelId: ctx.channel.id, 
+          content: `⚠️ Clone failed: ${String(err)}` 
+        }), { author: currentUser }));
+      }
+    },
+  })
+);
+
+
 commands.push(
   registerCommand({
     name: "pinger",
