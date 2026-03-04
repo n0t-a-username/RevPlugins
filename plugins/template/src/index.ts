@@ -145,6 +145,119 @@ ${iconUrl ? `> **Icon**: [icon](${iconUrl})` : ""}`;
 })
 );
 
+// ---- /random-ping (Batched & Customizable) ----
+commands.push(
+  registerCommand({
+    name: "random-ping",
+    displayName: "random-ping",
+    description: "Pings a custom number of random users in batches",
+    options: [
+      {
+        name: "amount",
+        displayName: "amount",
+        description: "Total number of users to ping (e.g. 34)",
+        required: true,
+        type: 4, // Integer
+      },
+      {
+        name: "delay",
+        displayName: "delay",
+        description: "Delay between batches in ms (default 2500)",
+        required: false,
+        type: 4, // Integer
+      },
+      {
+        name: "message",
+        displayName: "message",
+        description: "Message to send with each batch",
+        required: false,
+        type: 3, // String
+      }
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const guildId = ctx.channel.guild_id;
+      if (!guildId) return;
+
+      const totalRequested = Number(args.find(a => a.name === "amount")?.value ?? 0);
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 2500);
+      const customMsg = args.find(a => a.name === "message")?.value ?? "Wake up!";
+      const currentUser = UserStore.getCurrentUser();
+
+      if (totalRequested <= 0) return;
+
+      try {
+        // Fetch 500 members to keep it efficient and fast
+        const res = await HTTP.get({ 
+          url: `/guilds/${guildId}/members?limit=500` 
+        });
+        
+        const members = res?.body;
+
+        if (!Array.isArray(members) || members.length === 0) {
+          throw new Error("Could not fetch member list.");
+        }
+
+        // 1. Extract IDs, 2. Remove self, 3. Shuffle, 4. Take the requested amount
+        const selectedIds = members
+          .map(m => m.user.id)
+          .filter(id => id !== currentUser.id)
+          .sort(() => 0.5 - Math.random())
+          .slice(0, totalRequested);
+
+        const actualCount = selectedIds.length;
+
+        // Notify the user locally that the process started
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: `🚀 Pinging ${actualCount} users in batches of 10...`
+            }),
+            { author: currentUser }
+          )
+        );
+
+        // Batch processing (10 at a time)
+        for (let i = 0; i < selectedIds.length; i += 10) {
+          const batch = selectedIds.slice(i, i + 10);
+          const pings = batch.map(id => `<@${id}>`).join(" ");
+          
+          const content = `${customMsg}\n${pings}`;
+
+          MessageActions.sendMessage(
+            ctx.channel.id,
+            { content },
+            void 0,
+            { nonce: Date.now().toString() }
+          );
+
+          // Wait only if there are more batches to send
+          if (i + 10 < selectedIds.length) {
+            await sleep(delay);
+          }
+        }
+
+      } catch (err) {
+        receiveMessage(
+          ctx.channel.id,
+          Object.assign(
+            createBotMessage({
+              channelId: ctx.channel.id,
+              content: `⚠️ Error: ${String(err)}`
+            }),
+            { author: currentUser }
+          )
+        );
+      }
+    },
+  })
+);
+
+
 commands.push(
   registerCommand({
     name: "react",
