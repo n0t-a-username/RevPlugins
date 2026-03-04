@@ -113,8 +113,8 @@ export default function Settings() {
       <Header />
       <BetterTableRowGroup title="Information" icon={messageHeaderIcon} padding>
         <Text style={{ color: "#aaa" }}>
-          Command list: /mcs, /msp, /log, /nuke, /raid, /purge, /react, /pinger /userid,
-          /lockdown, /server-info, /fetchprofile, /dupe-channel, /delete-channel
+          Command list: /mcs, /msp, /log, /nuke, /raid, /spam, /purge, /react, /pinger /userid,
+          /lockdown, /server-info, /clone-server, /fetchprofile, /dupe-channel, /delete-channel
         </Text>
       </BetterTableRowGroup>
 
