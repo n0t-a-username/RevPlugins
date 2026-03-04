@@ -9,6 +9,10 @@ import { storage } from "@vendetta/plugin";
 import { React } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 
+
+const GuildMemberStore = findByStoreName("GuildMemberStore"); 
+const RelationshipStore = findByStoreName("RelationshipStore");
+
 const MessageActions = findByProps("sendMessage", "editMessage");
 const UserStore = findByStoreName("UserStore");
 const ChannelStore = findByProps("getChannel");
@@ -145,81 +149,94 @@ ${iconUrl ? `> **Icon**: [icon](${iconUrl})` : ""}`;
 })
 );
 
-// Add MemberStore to your imports if not already there
-const MemberStore = findByStoreName("MemberStore");
+// Add these to your finding props section
 
-// ---- /random-ping (Cached Version) ----
+// ---- /random-ping (Robust Version) ----
 commands.push(
   registerCommand({
     name: "random-ping",
     displayName: "random-ping",
-    description: "Pings random users using locally cached members",
+    description: "Pings random users safely",
     options: [
       {
         name: "amount",
         displayName: "amount",
-        description: "Total number of users to ping",
+        description: "Total pings",
         required: true,
         type: 4,
       },
       {
         name: "delay",
         displayName: "delay",
-        description: "Delay between batches (ms)",
+        description: "ms between batches",
         required: false,
         type: 4,
-      },
+      }
     ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
-      const guildId = ctx.channel.guild_id;
-      if (!guildId) return;
+      try {
+        const guildId = ctx.channel.guild_id;
+        const totalRequested = Number(args.find(a => a.name === "amount")?.value ?? 0);
+        const delay = Number(args.find(a => a.name === "delay")?.value ?? 2500);
+        const currentUser = UserStore.getCurrentUser();
 
-      const totalRequested = Number(args.find(a => a.name === "amount")?.value ?? 0);
-      const delay = Number(args.find(a => a.name === "delay")?.value ?? 2500);
-      const currentUser = UserStore.getCurrentUser();
+        if (!guildId) {
+          logger.log("RandomPing: No Guild ID found.");
+          return;
+        }
 
-      // Get member IDs from the local store for this guild
-      const cachedMemberIds = MemberStore.getMemberIds(guildId);
+        // 1. Get member IDs from the store
+        // We use getMemberIds (standard) or getMembers (alternative)
+        let memberIds = GuildMemberStore?.getMemberIds?.(guildId) || [];
 
-      if (!cachedMemberIds || cachedMemberIds.length === 0) {
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-          channelId: ctx.channel.id, 
-          content: "⚠️ No members found in cache. Try scrolling up the member list first!" 
-        }), { author: currentUser }));
-        return;
-      }
+        // 2. If the store is empty, try to grab anyone currently visible (fallback)
+        if (memberIds.length === 0) {
+          logger.log("RandomPing: MemberStore empty, trying fallbacks...");
+          // This picks up people from your friends list as a last resort just to test
+          memberIds = Object.keys(RelationshipStore?.getRelationships() ?? {});
+        }
 
-      // Shuffle and pick
-      const selectedIds = cachedMemberIds
-        .filter(id => id !== currentUser.id)
-        .sort(() => 0.5 - Math.random())
-        .slice(0, totalRequested);
+        if (memberIds.length === 0) {
+          receiveMessage(ctx.channel.id, createBotMessage({ 
+            channelId: ctx.channel.id, 
+            content: "❌ No users found in cache. Try opening the member list sidebar first!" 
+          }));
+          return;
+        }
 
-      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-        channelId: ctx.channel.id, 
-        content: `🚀 Found ${cachedMemberIds.length} users in cache. Pinging ${selectedIds.length}...` 
-      }), { author: currentUser }));
+        // Shuffle and filter
+        const selectedIds = memberIds
+          .filter(id => id !== currentUser.id)
+          .sort(() => 0.5 - Math.random())
+          .slice(0, totalRequested);
 
-      // Batching 10 at a time
-      for (let i = 0; i < selectedIds.length; i += 10) {
-        const batch = selectedIds.slice(i, i + 10);
-        const pings = batch.map(id => `<@${id}>`).join(" ");
+        logger.log(`RandomPing: Found ${memberIds.length} users, selected ${selectedIds.length}`);
 
-        MessageActions.sendMessage(
-          ctx.channel.id,
-          { content: pings },
-          void 0,
-          { nonce: Date.now().toString() }
-        );
+        // Batch processing
+        for (let i = 0; i < selectedIds.length; i += 10) {
+          const batch = selectedIds.slice(i, i + 10);
+          const pings = batch.map(id => `<@${id}>`).join(" ");
 
-        if (i + 10 < selectedIds.length) await sleep(delay);
+          MessageActions.sendMessage(
+            ctx.channel.id,
+            { content: pings },
+            void 0,
+            { nonce: Date.now().toString() }
+          );
+
+          if (i + 10 < selectedIds.length) await sleep(delay);
+        }
+
+      } catch (err) {
+        logger.error("RandomPing Execution Error:", err);
       }
     },
   })
 );
+
 
 
 
