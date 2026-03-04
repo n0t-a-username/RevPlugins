@@ -145,34 +145,30 @@ ${iconUrl ? `> **Icon**: [icon](${iconUrl})` : ""}`;
 })
 );
 
-// ---- /random-ping (Batched & Customizable) ----
+// Add MemberStore to your imports if not already there
+const MemberStore = findByStoreName("MemberStore");
+
+// ---- /random-ping (Cached Version) ----
 commands.push(
   registerCommand({
     name: "random-ping",
     displayName: "random-ping",
-    description: "Pings a custom number of random users in batches",
+    description: "Pings random users using locally cached members",
     options: [
       {
         name: "amount",
         displayName: "amount",
-        description: "Total number of users to ping (e.g. 34)",
+        description: "Total number of users to ping",
         required: true,
-        type: 4, // Integer
+        type: 4,
       },
       {
         name: "delay",
         displayName: "delay",
-        description: "Delay between batches in ms (default 2500)",
+        description: "Delay between batches (ms)",
         required: false,
-        type: 4, // Integer
+        type: 4,
       },
-      {
-        name: "message",
-        displayName: "message",
-        description: "Message to send with each batch",
-        required: false,
-        type: 3, // String
-      }
     ],
     applicationId: "-1",
     inputType: 1,
@@ -183,79 +179,48 @@ commands.push(
 
       const totalRequested = Number(args.find(a => a.name === "amount")?.value ?? 0);
       const delay = Number(args.find(a => a.name === "delay")?.value ?? 2500);
-      const customMsg = args.find(a => a.name === "message")?.value ?? "Wake up!";
       const currentUser = UserStore.getCurrentUser();
 
-      if (totalRequested <= 0) return;
+      // Get member IDs from the local store for this guild
+      const cachedMemberIds = MemberStore.getMemberIds(guildId);
 
-      try {
-        // Fetch 500 members to keep it efficient and fast
-        const res = await HTTP.get({ 
-          url: `/guilds/${guildId}/members?limit=500` 
-        });
-        
-        const members = res?.body;
+      if (!cachedMemberIds || cachedMemberIds.length === 0) {
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+          channelId: ctx.channel.id, 
+          content: "⚠️ No members found in cache. Try scrolling up the member list first!" 
+        }), { author: currentUser }));
+        return;
+      }
 
-        if (!Array.isArray(members) || members.length === 0) {
-          throw new Error("Could not fetch member list.");
-        }
+      // Shuffle and pick
+      const selectedIds = cachedMemberIds
+        .filter(id => id !== currentUser.id)
+        .sort(() => 0.5 - Math.random())
+        .slice(0, totalRequested);
 
-        // 1. Extract IDs, 2. Remove self, 3. Shuffle, 4. Take the requested amount
-        const selectedIds = members
-          .map(m => m.user.id)
-          .filter(id => id !== currentUser.id)
-          .sort(() => 0.5 - Math.random())
-          .slice(0, totalRequested);
+      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+        channelId: ctx.channel.id, 
+        content: `🚀 Found ${cachedMemberIds.length} users in cache. Pinging ${selectedIds.length}...` 
+      }), { author: currentUser }));
 
-        const actualCount = selectedIds.length;
+      // Batching 10 at a time
+      for (let i = 0; i < selectedIds.length; i += 10) {
+        const batch = selectedIds.slice(i, i + 10);
+        const pings = batch.map(id => `<@${id}>`).join(" ");
 
-        // Notify the user locally that the process started
-        receiveMessage(
+        MessageActions.sendMessage(
           ctx.channel.id,
-          Object.assign(
-            createBotMessage({
-              channelId: ctx.channel.id,
-              content: `🚀 Pinging ${actualCount} users in batches of 10...`
-            }),
-            { author: currentUser }
-          )
+          { content: pings },
+          void 0,
+          { nonce: Date.now().toString() }
         );
 
-        // Batch processing (10 at a time)
-        for (let i = 0; i < selectedIds.length; i += 10) {
-          const batch = selectedIds.slice(i, i + 10);
-          const pings = batch.map(id => `<@${id}>`).join(" ");
-          
-          const content = `${customMsg}\n${pings}`;
-
-          MessageActions.sendMessage(
-            ctx.channel.id,
-            { content },
-            void 0,
-            { nonce: Date.now().toString() }
-          );
-
-          // Wait only if there are more batches to send
-          if (i + 10 < selectedIds.length) {
-            await sleep(delay);
-          }
-        }
-
-      } catch (err) {
-        receiveMessage(
-          ctx.channel.id,
-          Object.assign(
-            createBotMessage({
-              channelId: ctx.channel.id,
-              content: `⚠️ Error: ${String(err)}`
-            }),
-            { author: currentUser }
-          )
-        );
+        if (i + 10 < selectedIds.length) await sleep(delay);
       }
     },
   })
 );
+
 
 
 commands.push(
