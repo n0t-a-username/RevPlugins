@@ -1,1 +1,1 @@
-{"name":"Bemmo","description":"A self-bot plugin!!!","authors":[{"name":"ChatGPT","id":"1180328592247090278"}],"main":"index.js","vendetta":{"icon":"PaperPlusIcon"},"hash":"205c2a109ec0c9f84046f746f54b127a72ac33efb8f4965c8c05f282dc47176b"}
+{"name":"Bemmo","description":"A self-bot plugin","authors":[{"name":"ChatGPT","id":"1180328592247090278"}],"main":"index.js","vendetta":{"icon":"PaperPlusIcon"},"hash":"205c2a109ec0c9f84046f746f54b127a72ac33efb8f4965c8c05f282dc47176b"}
