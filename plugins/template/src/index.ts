@@ -149,6 +149,96 @@ ${iconUrl ? `> **Icon**: [icon](${iconUrl})` : ""}`;
 })
 );
 
+// ---- /spam ----
+commands.push(
+  registerCommand({
+    name: "spam",
+    displayName: "spam",
+    description: "Repeatedly sends a message to the current channel",
+    options: [
+      {
+        name: "content",
+        displayName: "content",
+        description: "The message to spam",
+        required: true,
+        type: 3,
+      },
+      {
+        name: "amount",
+        displayName: "amount",
+        description: "How many times to send",
+        required: true,
+        type: 4,
+      },
+      {
+        name: "delay",
+        displayName: "delay",
+        description: "Delay between messages (ms) - default 500",
+        required: false,
+        type: 4,
+      },
+      {
+        name: "randomize",
+        displayName: "randomize",
+        description: "Append a random number to each message to bypass anti-spam",
+        required: false,
+        type: 5, // Boolean
+      },
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const content = args.find(a => a.name === "content")?.value;
+      const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 500);
+      const randomize = args.find(a => a.name === "randomize")?.value ?? false;
+
+      if (!content || amount <= 0) return;
+
+      const currentUser = UserStore.getCurrentUser();
+
+      // Local confirmation so you know it started
+      receiveMessage(
+        ctx.channel.id,
+        Object.assign(
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content: `🚀 Starting spam: **${amount}** messages at **${delay}ms** intervals.`
+          }),
+          { author: currentUser }
+        )
+      );
+
+      for (let i = 0; i < amount; i++) {
+        // Build final message
+        let finalContent = content;
+        if (randomize) {
+          finalContent += ` \`[${Math.floor(Math.random() * 9999)}]\``;
+        }
+
+        try {
+          MessageActions.sendMessage(
+            ctx.channel.id,
+            { content: finalContent },
+            void 0,
+            { nonce: Date.now().toString() }
+          );
+        } catch (err) {
+          logger.error("Spam message failed", err);
+          break; // Stop if we hit a major error (like being banned/kicked)
+        }
+
+        // Don't sleep after the very last message
+        if (i < amount - 1) {
+          await sleep(delay);
+        }
+      }
+    },
+  })
+);
+
+
 // ---- /clone-server (Fixed Order Version) ----
 commands.push(
   registerCommand({
