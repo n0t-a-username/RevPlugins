@@ -153,7 +153,7 @@ export default function Settings() {
   );
 
   /* =========================
-     RAID PAGE (PADDING ADDED)
+     RAID PAGE
   ========================= */
 
   const renderRaidMessagesPage = () => (
@@ -182,13 +182,13 @@ export default function Settings() {
           onPress={() => setSelectedPage("main")}
         />
       )}
-      {/* PADDING FOR ANDROID UI OVERLAY */}
-      <View style={{ height: 80 }} />
+      {/* PADDING FOR ANDROID UI OVERLAY (ADJUSTED TO 25) */}
+      <View style={{ height: 25 }} />
     </>
   );
 
   /* =========================
-     MESSAGE LOGS PAGE (PADDING ADDED)
+     MESSAGE LOGS PAGE
   ========================= */
 
   const renderMessageLogsPage = () => (
@@ -229,8 +229,8 @@ export default function Settings() {
           onPress={() => setSelectedPage("main")}
         />
       )}
-      {/* PADDING FOR ANDROID UI OVERLAY */}
-      <View style={{ height: 80 }} />
+      {/* PADDING FOR ANDROID UI OVERLAY (ADJUSTED TO 25) */}
+      <View style={{ height: 25 }} />
     </>
   );
 
