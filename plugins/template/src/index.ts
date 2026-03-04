@@ -42,6 +42,53 @@ if (!words.length) return "### (no spam messages configured)";
 return words[Math.floor(Math.random() * words.length)];
 }
 
+// ---- /info ----
+commands.push(
+  registerCommand({
+    name: "info",
+    displayName: "info",
+    description: "Displays a list of all available commands and their descriptions",
+    options: [],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: (args, ctx) => {
+      const currentUser = UserStore.getCurrentUser();
+
+      const content = 
+`# 📜 Commands:
+> **</mcs:0>** - Send a message in every channel of the server.
+> **</msp:0>** - Outputs all user IDs collected from the selective mass ping list.
+> **</log:0>** - Enable or disable the message logger.
+> **</nuke:0>** - Deletes all channels in a server.
+> **</raid:0>** - Start a message raid with configured words.
+> **</spam:0>** - Repeatedly sends a message with optional 2-digit randomizer.
+> **</purge:0>** - Delete messages in a channel (self-only or all).
+> **</react:0>** - Adds regional indicator reactions to spell a word.
+> **</random-ping:0>** - Pings a custom amount of users in safe batches.
+> **</userid:0>** - Displays a specific user's ID.
+> **</lockdown:0>** - Toggle server privacy by denying @everyone view/send permissions.
+> **</server-info:0>** - Displays detailed information about the current server.
+> **</clone-server:0>** - Copies channel structure from a source ID to this server.
+> **</fetchprofile:0>** - Fetch and display a user's avatar.
+> **</dupe-channel:0>** - Duplicates a selected channel multiple times.
+> **</delete-channel:0>** - Deletes a specific selected channel.`;
+
+      receiveMessage(
+        ctx.channel.id,
+        Object.assign(
+          createBotMessage({
+            channelId: ctx.channel.id,
+            content
+          }),
+          { author: currentUser }
+        )
+      );
+    },
+  })
+);
+
+
 // ---- /server-info ----
 commands.push(
 registerCommand({
