@@ -3,6 +3,7 @@ import Settings from "./Settings";
 import GiveawaySection from "./GiveawaySection";
 import * as CopyMessageID from "./CopyMessageID";
 import * as RichPresence from "./RichPresence";
+import patchSidebar from "./Sidebar";
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
@@ -1537,10 +1538,22 @@ commands.push(
    PLUGIN LIFECYCLE
 ========================= */
 
+import patchSidebar from "./Sidebar"; 
+
+let unpatchSidebar: () => void;
+
 export default {
   onLoad: () => {
+    // 1. Initialize Sidebar (Bemmo Entry)
+    try {
+      unpatchSidebar = patchSidebar();
+    } catch (e) {
+      logger.error("Bemmo: Sidebar patch failed", e);
+    }
+
+    // 2. Start Services
     logger.log(
-      "All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing, CopyMessageID, Log"
+      "All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing, CopyMessageID, Log, Bemmo Prison"
     );
 
     RichPresence.startRichPresence();
@@ -1551,11 +1564,21 @@ export default {
   },
 
   onUnload: () => {
+    // 1. Unregister all Slash Commands
     for (const unregister of commands) unregister();
 
+    // 2. Kill the Sidebar Patch
+    if (typeof unpatchSidebar === "function") unpatchSidebar();
+
+    // 3. Emergency Prison Release (Stop the loop)
+    if (prisonState.interval) {
+      clearInterval(prisonState.interval);
+      prisonState.active = false;
+    }
+
+    // 4. Stop Other Services
     CopyMessageID.onUnload?.();
     RichPresence.stopRichPresence();
-
     stopLogger();
 
     logger.log("Plugin unloaded.");
