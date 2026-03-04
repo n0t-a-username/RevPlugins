@@ -42,6 +42,112 @@ if (!words.length) return "### (no spam messages configured)";
 return words[Math.floor(Math.random() * words.length)];
 }
 
+// Global state
+let prisonState = {
+  active: false,
+  targetId: null,
+  gcId: null,
+  interval: null
+};
+
+// Helper to convert your URL to Base64 for the Discord API
+const getIconBase64 = async (url) => {
+  try {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    return null;
+  }
+};
+
+// ---- /gc-prison ----
+commands.push(
+  registerCommand({
+    name: "gc-prison",
+    displayName: "gc-prison",
+    description: "Sets current GC as 'Bemmo Prison' with custom icon",
+    options: [],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const channelId = ctx.channel.id;
+      const channel = ChannelStore.getChannel(channelId);
+      const iconUrl = "https://raw.githubusercontent.com/n0t-a-username/RevPlugins/refs/heads/master/plugins/template/src/components/Bemmo.png";
+
+      if (!channel || channel.type !== 3) return; // Silent exit if not a GC
+
+      prisonState.gcId = channelId;
+
+      try {
+        const iconBase64 = await getIconBase64(iconUrl);
+        
+        // Update Name and Icon
+        await HTTP.patch({
+          url: `/channels/${channelId}`,
+          body: {
+            name: "Bemmo Prison",
+            icon: iconBase64 // Discord expects data:image/png;base64,...
+          }
+        });
+      } catch (err) {
+        logger.error("Failed to style the prison:", err);
+      }
+    },
+  })
+);
+
+// ---- /imprison ----
+commands.push(
+  registerCommand({
+    name: "imprison",
+    displayName: "imprison",
+    description: "Force a user to stay in Bemmo Prison",
+    options: [
+      { name: "user", displayName: "user", description: "User ID to lock up", required: true, type: 3 },
+      { name: "status", displayName: "status", description: "true = Start, false = Stop", required: true, type: 5 }
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const targetId = args.find(a => a.name === "user")?.value.replace(/[<@!>]/g, "");
+      const status = args.find(a => a.name === "status")?.value;
+
+      if (status === false) {
+        if (prisonState.interval) clearInterval(prisonState.interval);
+        prisonState.active = false;
+        return;
+      }
+
+      if (!prisonState.gcId) return;
+
+      prisonState.active = true;
+      prisonState.targetId = targetId;
+
+      // Background loop (Checks every 3 seconds)
+      prisonState.interval = setInterval(async () => {
+        if (!prisonState.active) return;
+        const currentGC = ChannelStore.getChannel(prisonState.gcId);
+        
+        if (currentGC && !currentGC.recipients.includes(prisonState.targetId)) {
+          try {
+            await HTTP.put({
+              url: `/channels/${prisonState.gcId}/recipients/${prisonState.targetId}`
+            });
+          } catch {}
+        }
+      }, 3000);
+    },
+  })
+);
+
+
 // ---- /info ----
 commands.push(
   registerCommand({
