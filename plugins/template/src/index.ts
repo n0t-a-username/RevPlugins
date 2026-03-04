@@ -149,7 +149,7 @@ ${iconUrl ? `> **Icon**: [icon](${iconUrl})` : ""}`;
 })
 );
 
-// ---- /spam ----
+// ---- /spam (Silent & 2-Digit Randomizer) ----
 commands.push(
   registerCommand({
     name: "spam",
@@ -173,16 +173,16 @@ commands.push(
       {
         name: "delay",
         displayName: "delay",
-        description: "Delay between messages (ms) - default 500",
+        description: "Delay between messages (ms) - default 1000",
         required: false,
         type: 4,
       },
       {
         name: "randomize",
         displayName: "randomize",
-        description: "Append a random number to each message to bypass anti-spam",
+        description: "Append a 2-digit random number to each message",
         required: false,
-        type: 5, // Boolean
+        type: 5,
       },
     ],
     applicationId: "-1",
@@ -191,30 +191,18 @@ commands.push(
     execute: async (args, ctx) => {
       const content = args.find(a => a.name === "content")?.value;
       const amount = Number(args.find(a => a.name === "amount")?.value ?? 0);
-      const delay = Number(args.find(a => a.name === "delay")?.value ?? 500);
+      const delay = Number(args.find(a => a.name === "delay")?.value ?? 1000);
       const randomize = args.find(a => a.name === "randomize")?.value ?? false;
 
       if (!content || amount <= 0) return;
 
-      const currentUser = UserStore.getCurrentUser();
-
-      // Local confirmation so you know it started
-      receiveMessage(
-        ctx.channel.id,
-        Object.assign(
-          createBotMessage({
-            channelId: ctx.channel.id,
-            content: `🚀 Starting spam: **${amount}** messages at **${delay}ms** intervals.`
-          }),
-          { author: currentUser }
-        )
-      );
-
       for (let i = 0; i < amount; i++) {
-        // Build final message
         let finalContent = content;
+        
         if (randomize) {
-          finalContent += ` \`[${Math.floor(Math.random() * 9999)}]\``;
+          // Generates a random number from 0 to 99
+          const rnd = Math.floor(Math.random() * 100);
+          finalContent += ` \`${rnd}\``;
         }
 
         try {
@@ -225,11 +213,9 @@ commands.push(
             { nonce: Date.now().toString() }
           );
         } catch (err) {
-          logger.error("Spam message failed", err);
-          break; // Stop if we hit a major error (like being banned/kicked)
+          break; 
         }
 
-        // Don't sleep after the very last message
         if (i < amount - 1) {
           await sleep(delay);
         }
@@ -237,7 +223,6 @@ commands.push(
     },
   })
 );
-
 
 // ---- /clone-server (Fixed Order Version) ----
 commands.push(
