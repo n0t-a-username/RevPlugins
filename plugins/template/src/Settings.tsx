@@ -24,7 +24,7 @@ const Forms = UiForms || {};
 const { FormRow } = Forms as any;
 const FormSlider = (General as any)?.FormSlider ?? (Forms as any)?.FormSlider;
 
-// --- Storage Initializers ---
+// --- Storage Logic ---
 if (!Array.isArray(storage.words) || storage.words.length !== 10) {
   storage.words = Array(10).fill("");
 }
@@ -72,9 +72,9 @@ export default function Settings() {
   const scrollRef = React.useRef<any>(null);
 
   React.useEffect(() => {
-    const pageValues = { main: 0, raidMessages: 1, messageLogs: 2, visuals: 3 };
+    const pageMap = { main: 0, raidMessages: 1, messageLogs: 2, visuals: 3 };
     Animated.timing(slideAnim, {
-      toValue: pageValues[selectedPage],
+      toValue: pageMap[selectedPage],
       duration: 220,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
@@ -106,7 +106,7 @@ export default function Settings() {
   };
 
   /* =========================
-     MAIN PAGE
+     MAIN PAGE (RESTORED)
   ========================= */
 
   const renderMainPage = () => (
@@ -119,12 +119,24 @@ export default function Settings() {
         </Text>
       </BetterTableRowGroup>
 
+      <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
+        <Text style={{ color: "#aaa", marginBottom: 8 }}>
+          Press the "Mass Selective Ping" button on user profiles.
+        </Text>
+        <TextInput
+          multiline
+          value={storage.eventGiveawayPing}
+          onChangeText={(v) => (storage.eventGiveawayPing = v)}
+          style={{ ...inputStyle, minHeight: 120 }}
+        />
+      </BetterTableRowGroup>
+
       <BetterTableRowGroup title="Tools/Misc">
         {FormRow && (
           <>
             <FormRow
               label="Visuals & Theme"
-              subLabel="Custom background image, blur, and opacity"
+              subLabel="Background image, blur, and opacity"
               trailing={<FormRow.Arrow />}
               onPress={() => setSelectedPage("visuals")}
             />
@@ -143,62 +155,41 @@ export default function Settings() {
           </>
         )}
       </BetterTableRowGroup>
-
-      <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
-        <TextInput
-          multiline
-          value={storage.eventGiveawayPing}
-          onChangeText={(v) => (storage.eventGiveawayPing = v)}
-          style={{ ...inputStyle, minHeight: 80 }}
-        />
-      </BetterTableRowGroup>
       <View style={{ height: 40 }} />
     </>
   );
 
   /* =========================
-     VISUALS PAGE
+     VISUALS PAGE (NEW)
   ========================= */
 
   const renderVisualsPage = () => (
     <>
       <Header />
-      <BetterTableRowGroup title="Custom Background" icon={visualsHeaderIcon} padding>
-        <Text style={{ color: "#fff", marginBottom: 8 }}>Background URL</Text>
+      <BetterTableRowGroup title="Visuals" icon={visualsHeaderIcon} padding>
+        <Text style={{ color: "#fff", marginBottom: 6 }}>Background URL</Text>
         <TextInput
           style={inputStyle}
           value={storage.theme.backgroundUrl}
-          placeholder="https://i.imgur.com/example.png"
-          placeholderTextColor="#666"
+          placeholder="https://..."
           onChangeText={(v) => (storage.theme.backgroundUrl = v)}
         />
-
         <View style={{ marginTop: 20 }}>
           <Text style={{ color: "#fff" }}>Background Opacity: {Math.round(storage.theme.opacity * 100)}%</Text>
-          <FormSlider
-            value={storage.theme.opacity}
-            onValueChange={(v: number) => (storage.theme.opacity = v)}
-          />
-
-          <Text style={{ color: "#fff", marginTop: 15 }}>Blur: {Math.round(storage.theme.blur)}px</Text>
-          <FormSlider
-            value={storage.theme.blur}
-            onValueChange={(v: number) => (storage.theme.blur = v)}
-            range={{ min: 0, max: 20 }}
-          />
+          <FormSlider value={storage.theme.opacity} onValueChange={(v) => (storage.theme.opacity = v)} />
+          
+          <Text style={{ color: "#fff", marginTop: 15 }}>Blur Strength: {Math.round(storage.theme.blur)}px</Text>
+          <FormSlider value={storage.theme.blur} onValueChange={(v) => (storage.theme.blur = v)} range={{ min: 0, max: 20 }} />
 
           <Text style={{ color: "#fff", marginTop: 15 }}>Chat Transparency: {Math.round(storage.theme.chatOpacity * 100)}%</Text>
-          <FormSlider
-            value={storage.theme.chatOpacity}
-            onValueChange={(v: number) => (storage.theme.chatOpacity = v)}
-          />
+          <FormSlider value={storage.theme.chatOpacity} onValueChange={(v) => (storage.theme.chatOpacity = v)} />
         </View>
       </BetterTableRowGroup>
-
       <View style={{ height: 20 }} />
       <FormRow
         label="Back"
-        trailing={<Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
+        subLabel="Return to main menu"
+        trailing={arrowBackIcon && <Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
         onPress={() => setSelectedPage("main")}
       />
       <View style={{ height: 25 }} />
@@ -206,7 +197,7 @@ export default function Settings() {
   );
 
   /* =========================
-     RAID PAGE
+     RAID PAGE (RESTORED)
   ========================= */
 
   const renderRaidMessagesPage = () => (
@@ -216,18 +207,15 @@ export default function Settings() {
         {[...Array(10).keys()].map((i) => (
           <View key={i} style={{ marginBottom: 12 }}>
             <Text style={{ color: "#fff", marginBottom: 6 }}>Message {i + 1}</Text>
-            <TextInput
-              style={inputStyle}
-              value={storage.words[i]}
-              onChangeText={(v) => (storage.words[i] = v)}
-            />
+            <TextInput style={inputStyle} value={storage.words[i]} onChangeText={(v) => (storage.words[i] = v)} />
           </View>
         ))}
       </BetterTableRowGroup>
       <View style={{ height: 20 }} />
       <FormRow
         label="Back"
-        trailing={<Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
+        subLabel="Return to main menu"
+        trailing={arrowBackIcon && <Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
         onPress={() => setSelectedPage("main")}
       />
       <View style={{ height: 25 }} />
@@ -235,13 +223,14 @@ export default function Settings() {
   );
 
   /* =========================
-     MESSAGE LOGS PAGE
+     MESSAGE LOGS PAGE (RESTORED)
   ========================= */
 
   const renderMessageLogsPage = () => (
     <>
       <Header />
       <BetterTableRowGroup title="Message Logs" icon={messageHeaderIcon} padding>
+        <Text style={{ color: "#aaa", marginBottom: 8 }}>Captured messages will appear below.</Text>
         <TextInput multiline editable={false} value={logsText} style={{ ...inputStyle, minHeight: 260 }} />
         <View style={{ flexDirection: "row", marginTop: 12, gap: 10 }}>
           <TouchableOpacity onPress={copyLogs} style={{ flex: 1, backgroundColor: "#2ecc71", padding: 12, borderRadius: 8, alignItems: "center" }}>
@@ -252,11 +241,11 @@ export default function Settings() {
           </TouchableOpacity>
         </View>
       </BetterTableRowGroup>
-
       <View style={{ height: 20 }} />
       <FormRow
         label="Back"
-        trailing={<Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
+        subLabel="Return to main menu"
+        trailing={arrowBackIcon && <Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
         onPress={() => setSelectedPage("main")}
       />
       <View style={{ height: 25 }} />
