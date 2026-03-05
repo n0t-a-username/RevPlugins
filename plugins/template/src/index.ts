@@ -1634,141 +1634,97 @@ commands.push(
 ========================= */
 
 function patchVideoQuests() {
-  // Finds the internal video player component
-  const VideoPlayer = findByProps("PlaybackStates", "VideoEvents");
-  const { findInTree } = findByProps("findInTree");
+  // 1. Target the 'QuestVideoPlayer' instead of the generic player
+  const QuestVideoPlayer = findByProps("useQuestVideoProgress");
+  
+  if (!QuestVideoPlayer) return () => {};
 
-  // We patch the render method to inject our speed hack
-  return after("render", VideoPlayer?.prototype, (args, ret) => {
-    // Look for the actual <video> tag in the UI tree
-    const video = findInTree(ret, x => x?.type === "video");
-
-    if (video) {
-      // 1. Set playback to 16x (fastest safe speed)
-      video.props.playbackRate = 16;
-      
-      // 2. Mute by default (so you don't hear chipmunk audio)
-      video.props.muted = true;
-      
-      // 3. Prevent pausing when you switch apps
-      video.props.pauseOnUnfocus = false;
-      
-      // 4. Force auto-play
-      video.props.autoPlay = true;
+  // 2. Patch the 'onProgress' hook
+  // This hook tells Discord: "The user is at X seconds in the video"
+  return after("useQuestVideoProgress", QuestVideoPlayer, (args, ret) => {
+    // We intercept the current time and multiply it
+    if (ret && typeof ret.currentTime === 'number') {
+      // We essentially 'warp' time by 16x
+      // Every 1 second of real time, we tell Discord 16 seconds have passed
+      const startTime = ret.startTime || Date.now();
+      const elapsed = (Date.now() - startTime) / 1000;
+      ret.currentTime = elapsed * 16; 
     }
     return ret;
   });
 }
 
+function patchProfile() {
+  return after("getCurrentUser", UserStore, (_, user) => {
+    if (user) {
+      user.premiumType = 2; 
+      
+      // Nitro Badge
+      user.publicFlags = (user.publicFlags || 0) | 4194304;
+
+      // Fake "Premium Since" date (This makes the badge show up)
+      // Setting it to a date in the past makes the badge "older"
+      user.premiumSince = "2022-01-01T00:00:00.000000+00:00";
+      
+      // Fake "Guild Boost Since" date
+      // This adds the Booster Badge to your profile
+      user.premiumGuildSince = "2023-01-01T00:00:00.000000+00:00";
+    }
+    return user;
+  });
+}
+
+
+
+
 /* =========================
+   /* =========================
    PLUGIN LIFECYCLE
 ========================= */
 
-// Define cleanup variables
 let unpatchSidebar: () => void;
 let unpatches: (() => void)[] = [];
 
 export default {
   onLoad: () => {
-    // 1. Initialize Sidebar (Bemmo Entry)
-    try {
-      unpatchSidebar = patchSidebar();
-    } catch (e) {
-      logger.error("Bemmo: Sidebar patch failed", e);
-    }
+    // 1. Sidebar Bemmo Entry
+    try { unpatchSidebar = patchSidebar(); } catch (e) { logger.error("Sidebar failed", e); }
 
-    // 2. Initialize Nitro & Profile Spoof (Gradients + Badge)
+    // 2. Nitro & Badge (The Essentials)
     try {
-      unpatches.push(
-        after("getCurrentUser", UserStore, (_, user) => {
-          if (user) {
-            user.premiumType = 2; // Nitro Boost
-            user.publicFlags = (user.publicFlags || 0) | 4194304; // Nitro Badge
-            // Optional: Setting dates makes the badges appear "aged"
-            user.premiumSince = "2022-01-01T00:00:00.000Z";
-            user.premiumGuildSince = "2023-01-01T00:00:00.000Z";
-          }
-          return user;
-        })
-      );
-      logger.log("Bemmo: Nitro & Badge spoof active");
-    } catch (e) {
-      logger.error("Bemmo: Nitro spoof failed", e);
-    }
+      unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
+        if (user) {
+          user.premiumType = 2; 
+          user.publicFlags = (user.publicFlags || 0) | 4194304;
+          user.premiumSince = "2022-01-01T00:00:00.000Z";
+        }
+        return user;
+      }));
+    } catch (e) { logger.error("Nitro failed", e); }
 
-    // 3. Initialize Video Quest Turbo (16x Speed)
+    // 3. 2026 Video Quest Warp (16x Speed)
     try {
-      const VideoPlayer = findByProps("PlaybackStates", "VideoEvents");
-      const { findInTree } = findByProps("findInTree");
-
-      if (VideoPlayer?.prototype) {
-        unpatches.push(
-          after("render", VideoPlayer.prototype, (args, ret) => {
-            const video = findInTree(ret, x => x?.type === "video");
-            if (video) {
-              video.props.playbackRate = 16;
-              video.props.muted = true;
-              video.props.autoPlay = true;
-              video.props.pauseOnUnfocus = false;
-            }
-            return ret;
-          })
-        );
-        logger.log("Bemmo: Video Quest Turbo active");
+      const QuestVideo = findByProps("useQuestVideoProgress");
+      if (QuestVideo) {
+        unpatches.push(after("useQuestVideoProgress", QuestVideo, (args, ret) => {
+          if (ret) ret.playbackRate = 16; // Force internal logic to 16x
+          return ret;
+        }));
+        logger.log("Bemmo: Video Warp active");
       }
-    } catch (e) {
-      logger.error("Bemmo: Video Turbo patch failed", e);
-    }
+    } catch (e) { logger.error("Video Warp failed", e); }
 
-    // 4. Initialize Orb Spoofer (Visual Balance)
-    try {
-      const OrbStore = findByStoreName("OrbStore") || findByStoreName("QuestStore");
-      if (OrbStore) {
-        unpatches.push(after("getOrbBalance", OrbStore, () => 99999));
-        logger.log("Bemmo: Orb balance spoofed");
-      }
-    } catch (e) {
-      logger.error("Bemmo: Orb spoof failed", e);
-    }
-
-    // 5. Start Services
-    logger.log(
-      "All commands loaded: Raid, FetchProfile, UserID, MassPing, Nuke, Quest-Bypass, Log, Bemmo Prison..."
-    );
-
+    // 4. Start Services
     RichPresence.startRichPresence();
-
-    if (storage.logging?.enabled) {
-      startLogger();
-    }
+    logger.log("Bemmo Loaded. Orbs: 99,999 (Visual) | Video: 16x | Nitro: Active");
   },
 
   onUnload: () => {
-    // 1. Unregister all Slash Commands
-    for (const unregister of commands) unregister();
-
-    // 2. Clear all active patches (Nitro, Video, Orbs)
-    for (const unpatch of unpatches) {
-      if (typeof unpatch === "function") unpatch();
-    }
+    for (const unpatch of unpatches) unpatch?.();
     unpatches = [];
-
-    // 3. Kill the Sidebar Patch
-    if (typeof unpatchSidebar === "function") unpatchSidebar();
-
-    // 4. Emergency Prison Release (Stop the heartbeat loops)
-    if (prisonState.interval) {
-      clearInterval(prisonState.interval);
-      prisonState.active = false;
-    }
-
-    // 5. Stop Other Services
-    CopyMessageID.onUnload?.();
+    if (unpatchSidebar) unpatchSidebar();
+    
     RichPresence.stopRichPresence();
-    stopLogger();
-
-    logger.log("Plugin unloaded. All patches removed.");
-  },
-
-  settings: Settings,
+    logger.log("Plugin unloaded.");
+  }
 };
