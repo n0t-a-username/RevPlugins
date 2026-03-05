@@ -38,10 +38,6 @@ if (!Array.isArray(storage.messageLogs)) {
 if (typeof storage.nitroSpoof !== "boolean") {
   storage.nitroSpoof = false;
 }
-// Initialize Snow Trigger toggle
-if (typeof storage.snowTriggerEnabled !== "boolean") {
-  storage.snowTriggerEnabled = false;
-}
 
 const inputStyle = {
   backgroundColor: "#222",
@@ -126,12 +122,6 @@ export default function Settings() {
               subLabel="Unlock gradient themes and app icons"
               value={storage.nitroSpoof}
               onValueChange={(v: boolean) => (storage.nitroSpoof = v)}
-            />
-            <FormSwitchRow
-              label="Snow Trigger"
-              subLabel="Show snow overlay when certain words are detected"
-              value={storage.snowTriggerEnabled}
-              onValueChange={(v: boolean) => (storage.snowTriggerEnabled = v)}
             />
             <FormRow
               label="Edit Raid Messages"
