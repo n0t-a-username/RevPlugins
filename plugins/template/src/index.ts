@@ -66,6 +66,83 @@ const getIconBase64 = async (url) => {
   }
 };
 
+// ---- /steal ----
+commands.push(
+  registerCommand({
+    name: "steal",
+    displayName: "steal",
+    description: "Steals an emoji or sticker from a message",
+    options: [
+      {
+        name: "emoji",
+        displayName: "emoji",
+        description: "Paste the custom emoji here",
+        required: false,
+        type: 3,
+      },
+      {
+        name: "message_id",
+        displayName: "message_id",
+        description: "Steal the sticker from a specific message ID",
+        required: false,
+        type: 3,
+      }
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const emojiInput = args.find(a => a.name === "emoji")?.value;
+      const msgId = args.find(a => a.name === "message_id")?.value;
+      const currentUser = UserStore.getCurrentUser();
+
+      // 1. Handle Custom Emoji Stealing
+      if (emojiInput) {
+        const emojiRegex = /<(a?):(\w+):(\18)>/; // Standard Discord Emoji Format
+        const match = emojiInput.match(/<?(?:a:)?(\w+):(\d+)>?/);
+
+        if (match) {
+          const [_, name, id] = match;
+          const isAnimated = emojiInput.includes("<a:");
+          const url = `https://cdn.discordapp.com/emojis/${id}.${isAnimated ? "gif" : "png"}?size=128`;
+
+          receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
+            channelId: ctx.channel.id,
+            content: `# 🔍 Emoji Stolen: \`${name}\`\n> **URL:** ${url}`
+          }), { author: currentUser }));
+          return;
+        }
+      }
+
+      // 2. Handle Sticker Stealing (via Message ID)
+      if (msgId) {
+        try {
+          const res = await HTTP.get({ url: `/channels/${ctx.channel.id}/messages/${msgId}` });
+          const message = res?.body;
+          const sticker = message?.sticker_items?.[0];
+
+          if (sticker) {
+            const stickerUrl = `https://cdn.discordapp.com/stickers/${sticker.id}.png`;
+            receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
+              channelId: ctx.channel.id,
+              content: `# 🔍 Sticker Stolen: \`${sticker.name}\`\n> **URL:** ${stickerUrl}`
+            }), { author: currentUser }));
+            return;
+          }
+        } catch (err) {
+          logger.error("Steal failed:", err);
+        }
+      }
+
+      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
+        channelId: ctx.channel.id,
+        content: "❌ Could not find an emoji or sticker to steal. Make sure you pasted a custom emoji!"
+      }), { author: currentUser }));
+    },
+  })
+);
+
+
 // ---- /gc-prison ----
 commands.push(
   registerCommand({
