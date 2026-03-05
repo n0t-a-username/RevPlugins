@@ -11,6 +11,16 @@ import { React } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 
 
+if (!storage.theme) {
+  storage.theme = {
+    backgroundUrl: "",
+    blur: 0,
+    opacity: 1,
+    chatOpacity: 1
+  };
+}
+
+
 const GuildMemberStore = findByStoreName("GuildMemberStore"); 
 const RelationshipStore = findByStoreName("RelationshipStore");
 
