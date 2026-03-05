@@ -84,8 +84,8 @@ commands.push(
         type: 3,
       },
       {
-        name: "message_id",
-        displayName: "message_id",
+        name: "message id",
+        displayname: "message id",
         description: "Steal the sticker from a specific message ID",
         required: false,
         type: 3,
@@ -243,7 +243,7 @@ commands.push(
       const currentUser = UserStore.getCurrentUser();
 
       const content = 
-`# 📜 Commands:
+`# 📜 Commands
 > **</mcs:0>** - Send a message in every channel of the server.
 > **</msp:0>** - Outputs all user IDs collected from the selective mass ping list.
 > **</log:0>** - Enable or disable the message logger.
@@ -252,9 +252,12 @@ commands.push(
 > **</spam:0>** - Repeatedly sends a message with optional 2-digit randomizer.
 > **</purge:0>** - Delete messages in a channel (self-only or all).
 > **</react:0>** - Adds regional indicator reactions to spell a word.
-> **</random-ping:0>** - Pings a custom amount of users in safe batches.
+> **</steal:0>** - Steal emojis and stickers.
+> **</pinger:0>** - Pings a custom amount of users in safe batches.
 > **</userid:0>** - Displays a specific user's ID.
-> **</lockdown:0>** - Toggle server privacy by denying @everyone view/send permissions.
+> **</gc-prison:0>** - Sets a groupchat as a Bemmo Prison
+> **</imprison:0>** - Trap a user in a Bemmo Prison
+> **</lockdown:0>** - Toggle server privacy by denying view/send permissions.
 > **</server-info:0>** - Displays detailed information about the current server.
 > **</clone-server:0>** - Copies channel structure from a source ID to this server.
 > **</fetchprofile:0>** - Fetch and display a user's avatar.
@@ -345,7 +348,7 @@ registerCommand({
 
 > **Name**: ${guild.name}
 > **ID**: ${guild.id}
-> **Owner ID**: <@${guild.owner_id}>
+> **Owner**: <@${guild.owner_id}>
 > **Members**: ${guild.approximate_member_count ?? guild.member_count ?? 0}
 > **Channels**: ${Array.isArray(channels) ? channels.length : 0}
 > **Roles**: ${Array.isArray(roles) ? roles.length : 0}
@@ -640,8 +643,8 @@ commands.push(
     description: "Adds regional indicator reactions to spell a desired word",
     options: [
       {
-        name: "message_id",
-        displayName: "message_id",
+        name: "message id",
+        displayname: "message id",
         description: "Message ID to react to",
         required: true,
         type: 3,
@@ -1685,3 +1688,4 @@ export default {
 
   settings: Settings,
 };
+
