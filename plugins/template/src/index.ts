@@ -1629,46 +1629,54 @@ commands.push(
   })
 );
 
-/* =========================
-   VIDEO QUEST & ORB SPOOFER
-========================= */
-
-// Persistent tracker so it doesn't reset when you close the UI
-const questStartTime = new Map();
-
 function patchVideoQuests() {
   const QuestStore = findByStoreName("QuestStore");
-  if (!QuestStore) return () => {};
+  // We need the internal API module to send the heartbeat
+  const { post } = findByProps("get", "post", "put");
+
+  if (!QuestStore || !post) return () => {};
 
   return after("getQuest", QuestStore, (args, ret) => {
-    // Only target quests that are active and not finished
-    if (ret && ret.userStatus && !ret.userStatus.completedAt) {
+    // Check if it's a video quest we haven't finished
+    if (ret && ret.userStatus && !ret.userStatus.completedAt && ret.config?.videoMetadata) {
       const questId = ret.id;
-      
-      // If we haven't started 'watching' this quest yet, start the clock now
-      if (!questStartTime.has(questId)) {
-        questStartTime.set(questId, Date.now());
-        logger.log(`Bemmo: Started background timer for Quest ${questId}`);
+      const duration = ret.config.videoMetadata.duration || 30;
+
+      // START THE GHOST WATCHER
+      if (!ret._bemmoActive) {
+        ret._bemmoActive = true;
+        ret._startTime = Date.now();
+
+        // Send a heartbeat every 20 seconds to keep the server happy
+        const interval = setInterval(async () => {
+          const elapsed = (Date.now() - ret._startTime) / 1000;
+          
+          try {
+            await post({
+              url: `/quests/${questId}/video-progress`,
+              body: { 
+                current_time: Math.min(elapsed, duration),
+                state: elapsed >= duration ? "COMPLETED" : "PLAYING"
+              }
+            });
+            
+            if (elapsed >= duration) {
+              clearInterval(interval);
+              logger.log(`Bemmo: Quest ${questId} validated by server!`);
+            }
+          } catch (e) {
+            clearInterval(interval);
+          }
+        }, 20000); // 20-second heartbeats (Discord's standard)
       }
 
-      const startTime = questStartTime.get(questId);
-      const elapsedSeconds = (Date.now() - startTime) / 1000;
-      
-      // Get the real video duration (usually 30 or 60s)
-      const requiredSeconds = ret.config?.videoMetadata?.duration || 30;
-
-      if (elapsedSeconds >= requiredSeconds) {
-        // Time is up! Tell the UI we are done.
-        ret.userStatus.progress = { 
-          WATCH_VIDEO: { value: requiredSeconds, target: requiredSeconds } 
-        };
-        // This forces the "Claim" button to appear
+      // Update UI so it looks correct while we wait
+      const totalElapsed = (Date.now() - ret._startTime) / 1000;
+      if (totalElapsed >= duration) {
+        ret.userStatus.progress = { WATCH_VIDEO: { value: duration, target: duration } };
         ret.userStatus.completedAt = new Date().toISOString();
       } else {
-        // Still 'watching' in the background...
-        ret.userStatus.progress = { 
-          WATCH_VIDEO: { value: Math.floor(elapsedSeconds), target: requiredSeconds } 
-        };
+        ret.userStatus.progress = { WATCH_VIDEO: { value: Math.floor(totalElapsed), target: duration } };
       }
     }
     return ret;
