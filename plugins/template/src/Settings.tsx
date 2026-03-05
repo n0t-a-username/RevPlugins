@@ -4,7 +4,6 @@ import { useProxy } from "@vendetta/storage";
 import Header from "./components/Header";
 import BetterTableRowGroup from "./components/BetterTableRowGroup";
 import { Forms as UiForms, General } from "@vendetta/ui/components";
-import { semanticColors } from "@vendetta/ui";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 
 const {
@@ -20,11 +19,11 @@ const {
   ToastAndroid,
 } = ReactNative;
 
-// Safer component extraction to prevent the "undefined" error
 const Forms = UiForms || {};
-const { FormRow, FormDivider } = Forms as any;
-// Try to find the slider in General or Forms
-const FormSlider = (General as any)?.FormSlider ?? (Forms as any)?.Slider ?? (General as any)?.Slider;
+const { FormRow } = Forms as any;
+
+// Fixed Slider Extraction: Vendetta/Revenge usually nests it here
+const FormSlider = (Forms as any)?.FormSlider ?? (General as any)?.FormSlider ?? (Forms as any)?.Slider;
 
 /* =========================
    STORAGE INITIALIZATION
@@ -98,18 +97,8 @@ export default function Settings() {
       .join("\n");
   }, [storage.messageLogs.length, selectedPage]);
 
-  const copyLogs = async () => {
-    await Clipboard.setString(logsText);
-    ToastAndroid.show("Logs copied.", ToastAndroid.SHORT);
-  };
-
-  const clearLogs = () => {
-    storage.messageLogs = [];
-    ToastAndroid.show("Logs cleared.", ToastAndroid.SHORT);
-  };
-
   /* =========================
-     MAIN PAGE (ORDER FIXED)
+     PAGE RENDERS
   ========================= */
 
   const renderMainPage = () => (
@@ -123,7 +112,7 @@ export default function Settings() {
         </Text>
       </BetterTableRowGroup>
 
-      {/* 2. Mass Ping (Now strictly below Information) */}
+      {/* 2. Mass Ping (Below Information) */}
       <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
         <Text style={{ color: "#aaa", marginBottom: 8 }}>
           Press the "Mass Selective Ping" button on user profiles.
@@ -136,7 +125,7 @@ export default function Settings() {
         />
       </BetterTableRowGroup>
 
-      {/* 3. Tools/Misc (Bottom row) */}
+      {/* 3. Tools/Misc (Rows) */}
       <BetterTableRowGroup title="Tools/Misc">
         {FormRow && (
           <>
@@ -165,10 +154,6 @@ export default function Settings() {
     </>
   );
 
-  /* =========================
-     VISUALS PAGE
-  ========================= */
-
   const renderVisualsPage = () => (
     <>
       <Header />
@@ -177,23 +162,23 @@ export default function Settings() {
         <TextInput
           style={inputStyle}
           value={storage.theme.backgroundUrl}
-          placeholder="https://i.imgur.com/image.png"
+          placeholder="https://..."
           onChangeText={(v) => (storage.theme.backgroundUrl = v)}
         />
         <View style={{ marginTop: 20 }}>
           {FormSlider ? (
             <>
               <Text style={{ color: "#fff" }}>Background Opacity: {Math.round(storage.theme.opacity * 100)}%</Text>
-              <FormSlider value={storage.theme.opacity} onValueChange={(v: number) => (storage.theme.opacity = v)} />
+              <FormSlider value={storage.theme.opacity} onValueChange={(v: any) => (storage.theme.opacity = v)} />
               
               <Text style={{ color: "#fff", marginTop: 15 }}>Blur Strength: {Math.round(storage.theme.blur)}px</Text>
-              <FormSlider value={storage.theme.blur} onValueChange={(v: number) => (storage.theme.blur = v)} range={{ min: 0, max: 20 }} />
+              <FormSlider value={storage.theme.blur} onValueChange={(v: any) => (storage.theme.blur = v)} range={{ min: 0, max: 20 }} />
 
               <Text style={{ color: "#fff", marginTop: 15 }}>Chat Transparency: {Math.round(storage.theme.chatOpacity * 100)}%</Text>
-              <FormSlider value={storage.theme.chatOpacity} onValueChange={(v: number) => (storage.theme.chatOpacity = v)} />
+              <FormSlider value={storage.theme.chatOpacity} onValueChange={(v: any) => (storage.theme.chatOpacity = v)} />
             </>
           ) : (
-            <Text style={{ color: "#e74c3c" }}>Error: Slider component not found in this build.</Text>
+            <Text style={{ color: "#ff4444" }}>Slider component not found.</Text>
           )}
         </View>
       </BetterTableRowGroup>
@@ -207,10 +192,6 @@ export default function Settings() {
       <View style={{ height: 25 }} />
     </>
   );
-
-  /* =========================
-     RAID PAGE
-  ========================= */
 
   const renderRaidMessagesPage = () => (
     <>
@@ -226,7 +207,6 @@ export default function Settings() {
       <View style={{ height: 20 }} />
       <FormRow
         label="Back"
-        subLabel="Return to main menu"
         trailing={arrowBackIcon && <Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
         onPress={() => setSelectedPage("main")}
       />
@@ -234,29 +214,23 @@ export default function Settings() {
     </>
   );
 
-  /* =========================
-     MESSAGE LOGS PAGE
-  ========================= */
-
   const renderMessageLogsPage = () => (
     <>
       <Header />
       <BetterTableRowGroup title="Message Logs" icon={messageHeaderIcon} padding>
-        <Text style={{ color: "#aaa", marginBottom: 8 }}>Captured messages will appear below.</Text>
         <TextInput multiline editable={false} value={logsText} style={{ ...inputStyle, minHeight: 260 }} />
         <View style={{ flexDirection: "row", marginTop: 12, gap: 10 }}>
-          <TouchableOpacity onPress={copyLogs} style={{ flex: 1, backgroundColor: "#2ecc71", padding: 12, borderRadius: 8, alignItems: "center" }}>
-            <Text style={{ color: "#fff", fontWeight: "600" }}>Copy Log</Text>
+          <TouchableOpacity onPress={() => { Clipboard.setString(logsText); ToastAndroid.show("Copied", 0); }} style={{ flex: 1, backgroundColor: "#2ecc71", padding: 12, borderRadius: 8, alignItems: "center" }}>
+            <Text style={{ color: "#fff", fontWeight: "600" }}>Copy</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={clearLogs} style={{ flex: 1, backgroundColor: "#e74c3c", padding: 12, borderRadius: 8, alignItems: "center" }}>
-            <Text style={{ color: "#fff", fontWeight: "600" }}>Clear Log</Text>
+          <TouchableOpacity onPress={() => { storage.messageLogs = []; ToastAndroid.show("Cleared", 0); }} style={{ flex: 1, backgroundColor: "#e74c3c", padding: 12, borderRadius: 8, alignItems: "center" }}>
+            <Text style={{ color: "#fff", fontWeight: "600" }}>Clear</Text>
           </TouchableOpacity>
         </View>
       </BetterTableRowGroup>
       <View style={{ height: 20 }} />
       <FormRow
         label="Back"
-        subLabel="Return to main menu"
         trailing={arrowBackIcon && <Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
         onPress={() => setSelectedPage("main")}
       />
