@@ -1616,207 +1616,45 @@ commands.push(
   })
 );
 
-/* =========================
-   SNOW OVERLAY SYSTEM
-========================= */
-import { FluxDispatcher, findByProps } from "@vendetta/metro";
-const { View, Animated, Dimensions, Easing, Image } = ReactNative;
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const GeneralView = findByTypeName("View"); // To patch the layout
-
-const persistentParticles = [];
-let snowInitialized = false;
-
-function createParticle(index) {
-    const animValue = new Animated.Value(-50);
-    const x = Math.random() * SCREEN_WIDTH;
-    const size = 5 + Math.random() * 20;
-    const duration = 4000 + Math.random() * 6000;
-    return { id: index, x, size, duration, animValue };
-}
-
-function startParticleAnimation(particle) {
-    const animate = () => {
-        particle.animValue.setValue(-50);
-        Animated.timing(particle.animValue, {
-            toValue: SCREEN_HEIGHT + 50,
-            duration: particle.duration,
-            useNativeDriver: true,
-            easing: Easing.linear
-        }).start(() => animate());
-    };
-    animate();
-}
-
-const ParticleItem = React.memo(({ particle }: any) => (
-    <Animated.View style={{
-        position: "absolute", left: particle.x, top: 0,
-        width: particle.size, height: particle.size,
-        opacity: 0.7, transform: [{ translateY: particle.animValue }]
-    }}>
-        <Image 
-            source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} 
-            style={{ width: '100%', height: '100%' }} 
-        />
-    </Animated.View>
-));
-
-const SnowOverlay = ({ visible }: { visible: boolean }) => {
-    React.useEffect(() => {
-        if (visible && !snowInitialized) {
-            for (let i = 0; i < 50; i++) {
-                const p = createParticle(i);
-                persistentParticles.push(p);
-                startParticleAnimation(p);
-            }
-            snowInitialized = true;
-        }
-    }, [visible]);
-
-    if (!visible) return null;
-    return (
-        <View pointerEvents="none" style={[ReactNative.StyleSheet.absoluteFill, { zIndex: 9999 }]}>
-            {persistentParticles.map(p => <ParticleItem key={p.id} particle={p} />)}
-        </View>
-    );
-};
-
-let setSnowVisibleGlobal: (v: boolean) => void;
-const SnowController = () => {
-    const [visible, setVisible] = React.useState(false);
-    React.useEffect(() => { setSnowVisibleGlobal = setVisible; }, []);
-    return <SnowOverlay visible={visible} />;
-};
-
 
 /* =========================
-   PLUGIN LIFECYCLE (MERGED)
+   PLUGIN LIFECYCLE (FINAL)
 ========================= */
 
 let unpatchSidebar: () => void;
 let unpatches: (() => void)[] = [];
 
-// Snow system state
-const persistentParticles = [];
-let snowInitialized = false;
-let setSnowVisibleGlobal: (v: boolean) => void;
-
-/* --- Snow Helper Components --- */
-const ParticleItem = React.memo(({ particle }: any) => (
-  <Animated.View style={{
-    position: "absolute", left: particle.x, top: 0,
-    width: particle.size, height: particle.size,
-    opacity: 0.7, transform: [{ translateY: particle.animValue }]
-  }}>
-    <Image 
-      source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} 
-      style={{ width: '100%', height: '100%' }} 
-    />
-  </Animated.View>
-));
-
-const SnowController = () => {
-  const [visible, setVisible] = React.useState(false);
-  
-  React.useEffect(() => {
-    setSnowVisibleGlobal = setVisible;
-    if (visible && !snowInitialized) {
-      // Create 50 low-res particles on first trigger
-      for (let i = 0; i < 50; i++) {
-        const p = {
-          id: i,
-          x: Math.random() * SCREEN_WIDTH,
-          size: 10 + Math.random() * 15,
-          duration: 3000 + Math.random() * 3000,
-          animValue: new Animated.Value(-50)
-        };
-        persistentParticles.push(p);
-        
-        // Start Loop
-        const run = () => {
-          p.animValue.setValue(-50);
-          Animated.timing(p.animValue, {
-            toValue: SCREEN_HEIGHT + 50,
-            duration: p.duration,
-            useNativeDriver: true,
-            easing: Easing.linear
-          }).start(() => run());
-        };
-        run();
-      }
-      snowInitialized = true;
-    }
-  }, [visible]);
-
-  if (!visible) return null;
-  return (
-    <View pointerEvents="none" style={[ReactNative.StyleSheet.absoluteFill, { zIndex: 9999 }]}>
-      {persistentParticles.map(p => <ParticleItem key={p.id} particle={p} />)}
-    </View>
-  );
-};
-
 export default {
   onLoad: () => {
-    // 0. Ensure storage defaults
+    // Initialize storage if it doesn't exist
     storage.nitroSpoof ??= false;
-    storage.snowTriggerEnabled ??= false;
 
-    // 1. Sidebar Entry
+    // 1. Sidebar Entry (Bemmo Tab)
     try { 
       unpatchSidebar = patchSidebar(); 
     } catch (e) { 
       logger.error("Sidebar failed", e); 
     }
 
-    // 2. Nitro Spoof Patch
-    unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-      if (user && storage.nitroSpoof) {
-        user.premiumType = 2; 
-        user.premiumState = {
-          premiumSubscriptionType: 2,
-          premiumSource: 1,
-          premiumSubscriptionGroupRole: 0
-        };
-      }
-      return user;
-    }));
-
-    // 3. Snow Message Listener
-    const handleMessage = (data: any) => {
-      if (!storage.snowTriggerEnabled) return;
-      
-      const content = data.message?.content?.toLowerCase();
-      if (content && content.includes("nigger")) {
-        if (setSnowVisibleGlobal) {
-          setSnowVisibleGlobal(true);
-          // Show for 2.5 seconds then hide
-          setTimeout(() => setSnowVisibleGlobal(false), 2500);
+    // 2. Nitro Spoof (Conditional)
+    try {
+      unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
+        // Only apply if the toggle in Settings is ON
+        if (user && storage.nitroSpoof) {
+          user.premiumType = 2; 
+          user.premiumState = {
+            premiumSubscriptionType: 2,
+            premiumSource: 1,
+            premiumSubscriptionGroupRole: 0
+          };
         }
-      }
-    };
-    FluxDispatcher.subscribe("MESSAGE_CREATE", handleMessage);
-    unpatches.push(() => FluxDispatcher.unsubscribe("MESSAGE_CREATE", handleMessage));
+        return user;
+      }));
+    } catch (e) { 
+      logger.error("Nitro failed", e); 
+    }
 
-    // 4. Layout Injection (Injects Snow into the App View)
-    // We patch the 'General' View to find the root container
-    const View = findByProps("render", "displayName").View; 
-    unpatches.push(before("render", View, (args) => {
-      const [props] = args;
-      if (props?.style?.some?.(s => s?.flex === 1) && props?.children) {
-        let children = Array.isArray(props.children) ? props.children : [props.children];
-        
-        // Don't inject if it's already there
-        if (!children.some(c => c?.key === "bemmo-snow-system")) {
-          props.children = [
-            ...children,
-            React.createElement(SnowController, { key: "bemmo-snow-system" })
-          ];
-        }
-      }
-    }));
-
-    // 5. Initialize Core Services
+    // 3. Services (Copy ID, RPC, Logger)
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
@@ -1825,26 +1663,21 @@ export default {
       logger.error("Service initialization failed", e);
     }
 
-    logger.log("Bemmo Plugin: Lifecycle fully loaded.");
+    logger.log("Bemmo Plugin: Fully loaded.");
   },
 
   onUnload: () => {
-    // 1. Unregister All Slash Commands
     for (const unregister of commands) unregister();
-
-    // 2. Kill All Active Hooks (Nitro, Snow Listener, Layout Patch)
     for (const unpatch of unpatches) {
       if (typeof unpatch === "function") unpatch();
     }
     unpatches = [];
 
-    // 3. Stop GC Prison
     if (prisonState.interval) {
       clearInterval(prisonState.interval);
       prisonState.active = false;
     }
 
-    // 4. Cleanup UI & Background
     if (typeof unpatchSidebar === "function") unpatchSidebar();
     CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
