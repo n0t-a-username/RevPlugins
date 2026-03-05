@@ -80,27 +80,7 @@ function patchNitro() {
 }
 
 
-function patchVideoQuests() {
-  // We search for the internal video player component
-  const VideoPlayer = findByProps("PlaybackStates", "VideoEvents");
 
-  return after("render", VideoPlayer?.prototype, (args, ret) => {
-    // Find the actual <video> element in the rendered UI
-    const videoElement = findInTree(ret, x => x?.type === "video");
-
-    if (videoElement) {
-      // 1. Force 16x speed (The maximum stable speed)
-      videoElement.props.playbackRate = 16;
-      
-      // 2. Auto-mute so you can stay in VC or listen to music
-      videoElement.props.muted = true;
-      
-      // 3. Prevent the video from pausing if you switch tabs
-      videoElement.props.pauseOnUnfocus = false;
-    }
-    return ret;
-  });
-}
 
 
 
@@ -1649,34 +1629,111 @@ commands.push(
   })
 );
 
+/* =========================
+   VIDEO QUEST SPOOFER
+========================= */
+
+function patchVideoQuests() {
+  // Finds the internal video player component
+  const VideoPlayer = findByProps("PlaybackStates", "VideoEvents");
+  const { findInTree } = findByProps("findInTree");
+
+  // We patch the render method to inject our speed hack
+  return after("render", VideoPlayer?.prototype, (args, ret) => {
+    // Look for the actual <video> tag in the UI tree
+    const video = findInTree(ret, x => x?.type === "video");
+
+    if (video) {
+      // 1. Set playback to 16x (fastest safe speed)
+      video.props.playbackRate = 16;
+      
+      // 2. Mute by default (so you don't hear chipmunk audio)
+      video.props.muted = true;
+      
+      // 3. Prevent pausing when you switch apps
+      video.props.pauseOnUnfocus = false;
+      
+      // 4. Force auto-play
+      video.props.autoPlay = true;
+    }
+    return ret;
+  });
+}
 
 /* =========================
    PLUGIN LIFECYCLE
 ========================= */
 
+// Define cleanup variables
 let unpatchSidebar: () => void;
-let unpatchNitro: () => void; // New variable for cleanup
+let unpatches: (() => void)[] = [];
 
 export default {
   onLoad: () => {
-    // 1. Initialize Sidebar
+    // 1. Initialize Sidebar (Bemmo Entry)
     try {
       unpatchSidebar = patchSidebar();
     } catch (e) {
       logger.error("Bemmo: Sidebar patch failed", e);
     }
 
-    // 2. Initialize Nitro Spoof
+    // 2. Initialize Nitro & Profile Spoof (Gradients + Badge)
     try {
-      unpatchNitro = patchNitro();
-      logger.log("Bemmo: Nitro Spoof active (Gradients unlocked)");
+      unpatches.push(
+        after("getCurrentUser", UserStore, (_, user) => {
+          if (user) {
+            user.premiumType = 2; // Nitro Boost
+            user.publicFlags = (user.publicFlags || 0) | 4194304; // Nitro Badge
+            // Optional: Setting dates makes the badges appear "aged"
+            user.premiumSince = "2022-01-01T00:00:00.000Z";
+            user.premiumGuildSince = "2023-01-01T00:00:00.000Z";
+          }
+          return user;
+        })
+      );
+      logger.log("Bemmo: Nitro & Badge spoof active");
     } catch (e) {
       logger.error("Bemmo: Nitro spoof failed", e);
     }
 
-    // 3. Start Services
+    // 3. Initialize Video Quest Turbo (16x Speed)
+    try {
+      const VideoPlayer = findByProps("PlaybackStates", "VideoEvents");
+      const { findInTree } = findByProps("findInTree");
+
+      if (VideoPlayer?.prototype) {
+        unpatches.push(
+          after("render", VideoPlayer.prototype, (args, ret) => {
+            const video = findInTree(ret, x => x?.type === "video");
+            if (video) {
+              video.props.playbackRate = 16;
+              video.props.muted = true;
+              video.props.autoPlay = true;
+              video.props.pauseOnUnfocus = false;
+            }
+            return ret;
+          })
+        );
+        logger.log("Bemmo: Video Quest Turbo active");
+      }
+    } catch (e) {
+      logger.error("Bemmo: Video Turbo patch failed", e);
+    }
+
+    // 4. Initialize Orb Spoofer (Visual Balance)
+    try {
+      const OrbStore = findByStoreName("OrbStore") || findByStoreName("QuestStore");
+      if (OrbStore) {
+        unpatches.push(after("getOrbBalance", OrbStore, () => 99999));
+        logger.log("Bemmo: Orb balance spoofed");
+      }
+    } catch (e) {
+      logger.error("Bemmo: Orb spoof failed", e);
+    }
+
+    // 5. Start Services
     logger.log(
-      "All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing, CopyMessageID, Log, Bemmo Prison"
+      "All commands loaded: Raid, FetchProfile, UserID, MassPing, Nuke, Quest-Bypass, Log, Bemmo Prison..."
     );
 
     RichPresence.startRichPresence();
@@ -1690,13 +1747,16 @@ export default {
     // 1. Unregister all Slash Commands
     for (const unregister of commands) unregister();
 
-    // 2. Kill the Sidebar Patch
+    // 2. Clear all active patches (Nitro, Video, Orbs)
+    for (const unpatch of unpatches) {
+      if (typeof unpatch === "function") unpatch();
+    }
+    unpatches = [];
+
+    // 3. Kill the Sidebar Patch
     if (typeof unpatchSidebar === "function") unpatchSidebar();
 
-    // 3. Kill the Nitro Spoof
-    if (typeof unpatchNitro === "function") unpatchNitro();
-
-    // 4. Emergency Prison Release
+    // 4. Emergency Prison Release (Stop the heartbeat loops)
     if (prisonState.interval) {
       clearInterval(prisonState.interval);
       prisonState.active = false;
@@ -1707,7 +1767,7 @@ export default {
     RichPresence.stopRichPresence();
     stopLogger();
 
-    logger.log("Plugin unloaded.");
+    logger.log("Plugin unloaded. All patches removed.");
   },
 
   settings: Settings,
