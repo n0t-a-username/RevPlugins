@@ -97,8 +97,8 @@ export default function Settings() {
       <Header />
       <BetterTableRowGroup title="Information" icon={messageHeaderIcon} padding>
         <Text style={{ color: "#aaa" }}>
-          Command list: /mcs, /msp, /log, /info, /nuke, /raid, /spam, /purge, /react, /pinger /userid,
-          /lockdown, /server-info, /clone-server, /fetchprofile, /dupe-channel, /delete-channel
+          Command list: /mcs, /msp, /log, /info, /nuke, /raid, /spam, /purge, /react, /steal, /pinger /userid,
+          /lockdown, /gc-prison, /imprison, /server-info, /clone-server, /fetchprofile, /dupe-channel, /delete-channel
         </Text>
       </BetterTableRowGroup>
 
@@ -119,13 +119,13 @@ export default function Settings() {
           <>
             <FormSwitchRow
               label="Nitro Spoof"
-              subLabel="Locally unlock themes, gradients, and gift status."
+              subLabel="Unlock gradient themes and app icons"
               value={storage.nitroSpoof}
               onValueChange={(v: boolean) => (storage.nitroSpoof = v)}
             />
             <FormRow
               label="Edit Raid Messages"
-              subLabel="Customize the 10 raid message slots"
+              subLabel="Customize 10 raid message slots"
               trailing={<FormRow.Arrow />}
               onPress={() => setSelectedPage("raidMessages")}
             />
