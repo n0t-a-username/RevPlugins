@@ -3,8 +3,7 @@ import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import Header from "./components/Header";
 import BetterTableRowGroup from "./components/BetterTableRowGroup";
-import { Forms as UiForms } from "@vendetta/ui/components";
-import { semanticColors } from "@vendetta/ui";
+import { Forms as UiForms, General } from "@vendetta/ui/components";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 
 const {
@@ -21,19 +20,14 @@ const {
 } = ReactNative;
 
 const Forms = UiForms || {};
-const { FormRow } = Forms as any;
+const { FormRow, FormDivider } = Forms as any;
+const { FormSlider } = General as any; // Vendetta slider component
 
-if (!Array.isArray(storage.words) || storage.words.length !== 10) {
-  storage.words = Array(10).fill("");
-}
-
-if (typeof storage.eventGiveawayPing !== "string") {
-  storage.eventGiveawayPing = "";
-}
-
-if (!Array.isArray(storage.messageLogs)) {
-  storage.messageLogs = [];
-}
+// Icons
+const messageHeaderIcon = getAssetIDByName("ic_information_24px");
+const raidHeaderIcon = getAssetIDByName("SlashBoxIcon");
+const visualsHeaderIcon = getAssetIDByName("ic_mfa_sms_24px");
+const arrowBackIcon = getAssetIDByName("ic_arrow_back_24px");
 
 const inputStyle = {
   backgroundColor: "#222",
@@ -46,215 +40,122 @@ const inputStyle = {
   borderColor: "#333",
 };
 
-const messageHeaderIcon = getAssetIDByName("ic_information_24px");
-const raidHeaderIcon = getAssetIDByName("SlashBoxIcon");
-const massPingHeaderIcon = getAssetIDByName("SlashBoxIcon");
-const arrowBackIcon = getAssetIDByName("ic_arrow_back_24px");
-
 export default function Settings() {
   useProxy(storage);
 
+  // Added "visuals" to the page type
   const [selectedPage, setSelectedPage] = React.useState<
-    "main" | "raidMessages" | "messageLogs"
+    "main" | "raidMessages" | "messageLogs" | "visuals"
   >("main");
 
   const [containerWidth, setContainerWidth] = React.useState(0);
   const slideAnim = React.useRef(new Animated.Value(0)).current;
-  const scrollRef = React.useRef<any>(null);
 
   React.useEffect(() => {
+    const pageMap = { main: 0, raidMessages: 1, messageLogs: 2, visuals: 3 };
     Animated.timing(slideAnim, {
-      toValue:
-        selectedPage === "main"
-          ? 0
-          : selectedPage === "raidMessages"
-          ? 1
-          : 2,
+      toValue: pageMap[selectedPage],
       duration: 220,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
   }, [selectedPage]);
 
-  const translateX =
-    containerWidth > 0
+  const translateX = containerWidth > 0
       ? slideAnim.interpolate({
-          inputRange: [0, 1, 2],
-          outputRange: [0, -containerWidth, -containerWidth * 2],
+          inputRange: [0, 1, 2, 3],
+          outputRange: [0, -containerWidth, -containerWidth * 2, -containerWidth * 3],
         })
       : 0;
 
-  /* =========================
-     LOG PERFORMANCE FIX
-  ========================= */
+  // Render Visuals Page
+  const renderVisualsPage = () => (
+    <>
+      <Header />
+      <BetterTableRowGroup title="Custom Background" icon={visualsHeaderIcon} padding>
+        <Text style={{ color: "#fff", marginBottom: 8 }}>Image URL</Text>
+        <TextInput
+          style={inputStyle}
+          value={storage.theme.backgroundUrl}
+          placeholder="https://example.com/image.png"
+          placeholderTextColor="#666"
+          onChangeText={(v) => (storage.theme.backgroundUrl = v)}
+        />
+        
+        <View style={{ marginTop: 20 }}>
+          <Text style={{ color: "#fff" }}>Background Opacity: {Math.round(storage.theme.opacity * 100)}%</Text>
+          <FormSlider
+            value={storage.theme.opacity}
+            onValueChange={(v: number) => (storage.theme.opacity = v)}
+          />
 
-  const logsText = React.useMemo(() => {
-    return storage.messageLogs
-      .map((log: any) => (typeof log === "object" ? log.t : log))
-      .join("\n");
-  }, [storage.messageLogs.length, selectedPage]);
+          <Text style={{ color: "#fff", marginTop: 15 }}>Blur Strength: {Math.round(storage.theme.blur)}px</Text>
+          <FormSlider
+            value={storage.theme.blur}
+            onValueChange={(v: number) => (storage.theme.blur = v)}
+            range={{ min: 0, max: 20 }}
+          />
 
-  const copyLogs = async () => {
-    await Clipboard.setString(logsText);
-    ToastAndroid.show("Logs copied.", ToastAndroid.SHORT);
-  };
+          <Text style={{ color: "#fff", marginTop: 15 }}>Chat Transparency: {Math.round(storage.theme.chatOpacity * 100)}%</Text>
+          <FormSlider
+            value={storage.theme.chatOpacity}
+            onValueChange={(v: number) => (storage.theme.chatOpacity = v)}
+          />
+        </View>
+      </BetterTableRowGroup>
 
-  const clearLogs = () => {
-    storage.messageLogs = [];
-    ToastAndroid.show("Logs cleared.", ToastAndroid.SHORT);
-  };
+      <View style={{ height: 20 }} />
+      <FormRow
+        label="Back"
+        trailing={<Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
+        onPress={() => setSelectedPage("main")}
+      />
+    </>
+  );
 
-  /* =========================
-     MAIN PAGE
-  ========================= */
-
+  // Add the new button to renderMainPage
   const renderMainPage = () => (
     <>
       <Header />
-      <BetterTableRowGroup title="Information" icon={messageHeaderIcon} padding>
-        <Text style={{ color: "#aaa" }}>
-          Command list: /mcs, /msp, /log, /info, /nuke, /raid, /spam, /purge, /react, /pinger /userid,
-          /lockdown, /server-info, /clone-server, /fetchprofile, /dupe-channel, /delete-channel
-        </Text>
-      </BetterTableRowGroup>
-
-      <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
-        <Text style={{ color: "#aaa", marginBottom: 8 }}>
-          Press the "Mass Selective Ping" button on user profiles.
-        </Text>
-        <TextInput
-          multiline
-          value={storage.eventGiveawayPing}
-          onChangeText={(v) => (storage.eventGiveawayPing = v)}
-          style={{ ...inputStyle, minHeight: 120 }}
-        />
-      </BetterTableRowGroup>
-
       <BetterTableRowGroup title="Tools/Misc">
-        {FormRow && (
-          <>
-            <FormRow
-              label="Edit Raid Messages"
-              subLabel="Customize the 10 raid message slots"
-              trailing={<FormRow.Arrow />}
-              onPress={() => setSelectedPage("raidMessages")}
-            />
-            <FormRow
-              label="Message Logs"
-              subLabel="View captured message logs"
-              trailing={<FormRow.Arrow />}
-              onPress={() => setSelectedPage("messageLogs")}
-            />
-          </>
-        )}
+        <FormRow
+          label="Edit Raid Messages"
+          subLabel="Customize the 10 raid message slots"
+          trailing={<FormRow.Arrow />}
+          onPress={() => setSelectedPage("raidMessages")}
+        />
+        <FormRow
+          label="Visuals & Theme"
+          subLabel="Background image, blur, and opacity"
+          trailing={<FormRow.Arrow />}
+          onPress={() => setSelectedPage("visuals")}
+        />
+        <FormRow
+          label="Message Logs"
+          subLabel="View captured message logs"
+          trailing={<FormRow.Arrow />}
+          onPress={() => setSelectedPage("messageLogs")}
+        />
       </BetterTableRowGroup>
       <View style={{ height: 40 }} />
     </>
   );
 
-  /* =========================
-     RAID PAGE
-  ========================= */
-
-  const renderRaidMessagesPage = () => (
-    <>
-      <Header />
-      <BetterTableRowGroup title="Raid Messages" icon={raidHeaderIcon} padding>
-        {[...Array(10).keys()].map((i) => (
-          <View key={i} style={{ marginBottom: 12 }}>
-            <Text style={{ color: "#fff", marginBottom: 6 }}>
-              Message {i + 1}
-            </Text>
-            <TextInput
-              style={inputStyle}
-              value={storage.words[i]}
-              onChangeText={(v) => (storage.words[i] = v)}
-            />
-          </View>
-        ))}
-      </BetterTableRowGroup>
-      <View style={{ height: 20 }} />
-      {FormRow && (
-        <FormRow
-          label="Back"
-          subLabel="Return to main menu"
-          trailing={arrowBackIcon && <Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
-          onPress={() => setSelectedPage("main")}
-        />
-      )}
-      {/* PADDING FOR ANDROID UI OVERLAY (ADJUSTED TO 25) */}
-      <View style={{ height: 25 }} />
-    </>
-  );
-
-  /* =========================
-     MESSAGE LOGS PAGE
-  ========================= */
-
-  const renderMessageLogsPage = () => (
-    <>
-      <Header />
-      <BetterTableRowGroup title="Message Logs" icon={messageHeaderIcon} padding>
-        <Text style={{ color: "#aaa", marginBottom: 8 }}>
-          Captured messages will appear below.
-        </Text>
-
-        {selectedPage === "messageLogs" ? (
-          <TextInput
-            multiline
-            editable={false}
-            value={logsText}
-            style={{ ...inputStyle, minHeight: 260 }}
-          />
-        ) : (
-          <View style={{ height: 260, backgroundColor: "#111", borderRadius: 8 }} />
-        )}
-
-        <View style={{ flexDirection: "row", marginTop: 12, gap: 10 }}>
-          <TouchableOpacity onPress={copyLogs} style={{ flex: 1, backgroundColor: "#2ecc71", padding: 12, borderRadius: 8, alignItems: "center" }}>
-            <Text style={{ color: "#fff", fontWeight: "600" }}>Copy Log</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={clearLogs} style={{ flex: 1, backgroundColor: "#e74c3c", padding: 12, borderRadius: 8, alignItems: "center" }}>
-            <Text style={{ color: "#fff", fontWeight: "600" }}>Clear Log</Text>
-          </TouchableOpacity>
-        </View>
-      </BetterTableRowGroup>
-
-      <View style={{ height: 20 }} />
-      {FormRow && (
-        <FormRow
-          label="Back"
-          subLabel="Return to main menu"
-          trailing={arrowBackIcon && <Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
-          onPress={() => setSelectedPage("main")}
-        />
-      )}
-      {/* PADDING FOR ANDROID UI OVERLAY (ADJUSTED TO 25) */}
-      <View style={{ height: 25 }} />
-    </>
-  );
-
+  // Update return to include 4 sections
   return (
     <View style={{ flex: 1 }} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
-      <ScrollView ref={scrollRef} style={{ flex: 1 }}>
+      <ScrollView style={{ flex: 1 }}>
         <Animated.View
           style={{
             flexDirection: "row",
-            width: containerWidth * 3 || "300%",
+            width: containerWidth * 4 || "400%",
             transform: [{ translateX }],
           }}
         >
-          <View style={{ width: containerWidth || "100%" }}>
-            {renderMainPage()}
-          </View>
-
-          <View style={{ width: containerWidth || "100%" }}>
-            {selectedPage === "raidMessages" ? renderRaidMessagesPage() : null}
-          </View>
-
-          <View style={{ width: containerWidth || "100%" }}>
-            {renderMessageLogsPage()}
-          </View>
+          <View style={{ width: containerWidth || "100%" }}>{renderMainPage()}</View>
+          <View style={{ width: containerWidth || "100%" }}>{selectedPage === "raidMessages" && renderRaidMessagesPage()}</View>
+          <View style={{ width: containerWidth || "100%" }}>{selectedPage === "messageLogs" && renderMessageLogsPage()}</View>
+          <View style={{ width: containerWidth || "100%" }}>{selectedPage === "visuals" && renderVisualsPage()}</View>
         </Animated.View>
       </ScrollView>
     </View>
