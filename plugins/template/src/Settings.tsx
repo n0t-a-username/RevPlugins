@@ -22,13 +22,15 @@ const {
 const Forms = UiForms || {};
 const { FormRow } = Forms as any;
 
-// Deep search for the Slider component across UI modules
+// --- Advanced Slider Discovery ---
+// This checks every possible export location used by Discord/Vendetta builds
 const FormSlider = 
   (General as any)?.FormSlider || 
   (Forms as any)?.FormSlider || 
   (General as any)?.Slider || 
   (Forms as any)?.Slider ||
-  (ReactNative as any).Slider;
+  Object.values(General || {}).find((c: any) => c?.render?.name?.includes("Slider") || c?.name?.includes("Slider")) ||
+  Object.values(Forms || {}).find((c: any) => c?.render?.name?.includes("Slider") || c?.name?.includes("Slider"));
 
 /* =========================
    STORAGE INITIALIZATION
@@ -164,7 +166,7 @@ export default function Settings() {
         <TextInput
           style={inputStyle}
           value={storage.theme.backgroundUrl}
-          placeholder="https://i.imgur.com/image.png"
+          placeholder="https://..."
           onChangeText={(v) => (storage.theme.backgroundUrl = v)}
         />
         <View style={{ marginTop: 20 }}>
@@ -173,29 +175,27 @@ export default function Settings() {
               <Text style={{ color: "#fff" }}>Background Opacity: {Math.round(storage.theme.opacity * 100)}%</Text>
               <FormSlider 
                 value={storage.theme.opacity} 
-                onValueChange={(v: any) => (storage.theme.opacity = v)} 
-                minimumValue={0}
-                maximumValue={1}
+                onValueChange={(v: number) => (storage.theme.opacity = v)} 
+                initialValue={storage.theme.opacity}
               />
               
               <Text style={{ color: "#fff", marginTop: 15 }}>Blur Strength: {Math.round(storage.theme.blur)}px</Text>
               <FormSlider 
                 value={storage.theme.blur} 
-                onValueChange={(v: any) => (storage.theme.blur = v)} 
+                onValueChange={(v: number) => (storage.theme.blur = v)} 
                 minimumValue={0}
                 maximumValue={20}
+                step={1}
               />
 
               <Text style={{ color: "#fff", marginTop: 15 }}>Chat Transparency: {Math.round(storage.theme.chatOpacity * 100)}%</Text>
               <FormSlider 
                 value={storage.theme.chatOpacity} 
-                onValueChange={(v: any) => (storage.theme.chatOpacity = v)} 
-                minimumValue={0}
-                maximumValue={1}
+                onValueChange={(v: number) => (storage.theme.chatOpacity = v)} 
               />
             </>
           ) : (
-            <Text style={{ color: "#ff4444" }}>Slider component still not found. Try a different build.</Text>
+            <Text style={{ color: "#ff4444" }}>No compatible Slider component found. Use a text input?</Text>
           )}
         </View>
       </BetterTableRowGroup>
@@ -210,6 +210,8 @@ export default function Settings() {
     </>
   );
 
+  // ... (renderRaidMessagesPage and renderMessageLogsPage stay the same)
+  
   const renderRaidMessagesPage = () => (
     <>
       <Header />
