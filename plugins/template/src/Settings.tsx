@@ -1,9 +1,9 @@
-import { ReactNative, React } from "@vendetta/metro/common"; // Added React here
+import { ReactNative, React } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import Header from "./components/Header";
 import BetterTableRowGroup from "./components/BetterTableRowGroup";
-import { Forms as UiForms, General } from "@vendetta/ui/components";
+import { Forms as UiForms } from "@vendetta/ui/components";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 
 const {
@@ -19,19 +19,8 @@ const {
   ToastAndroid,
 } = ReactNative;
 
-// ... the rest of your code remains the same
-
-
 const Forms = UiForms || {};
 const { FormRow } = Forms as any;
-
-const FormSlider = 
-  (General as any)?.FormSlider || 
-  (Forms as any)?.FormSlider || 
-  (General as any)?.Slider || 
-  (Forms as any)?.Slider ||
-  Object.values(General || {}).find((c: any) => c?.render?.name?.includes("Slider") || c?.name?.includes("Slider")) ||
-  Object.values(Forms || {}).find((c: any) => c?.render?.name?.includes("Slider") || c?.name?.includes("Slider"));
 
 /* =========================
    STORAGE INITIALIZATION
@@ -46,14 +35,6 @@ if (!Array.isArray(storage.messageLogs)) {
   storage.messageLogs = [];
 }
 
-// Ensure theme object exists with proper defaults for sliders
-storage.theme ??= {
-  backgroundUrl: "",
-  blur: 0,
-  opacity: 1,
-  chatOpacity: 0.8
-};
-
 const inputStyle = {
   backgroundColor: "#222",
   color: "#fff",
@@ -67,7 +48,6 @@ const inputStyle = {
 
 const messageHeaderIcon = getAssetIDByName("ic_information_24px");
 const raidHeaderIcon = getAssetIDByName("SlashBoxIcon");
-const visualsHeaderIcon = getAssetIDByName("ic_mfa_sms_24px");
 const massPingHeaderIcon = getAssetIDByName("SlashBoxIcon");
 const arrowBackIcon = getAssetIDByName("ic_arrow_back_24px");
 
@@ -75,15 +55,14 @@ export default function Settings() {
   useProxy(storage);
 
   const [selectedPage, setSelectedPage] = React.useState<
-    "main" | "raidMessages" | "messageLogs" | "visuals"
+    "main" | "raidMessages" | "messageLogs"
   >("main");
 
   const [containerWidth, setContainerWidth] = React.useState(0);
   const slideAnim = React.useRef(new Animated.Value(0)).current;
-  const scrollRef = React.useRef<any>(null);
 
   React.useEffect(() => {
-    const pageMap = { main: 0, raidMessages: 1, messageLogs: 2, visuals: 3 };
+    const pageMap = { main: 0, raidMessages: 1, messageLogs: 2 };
     Animated.timing(slideAnim, {
       toValue: pageMap[selectedPage],
       duration: 220,
@@ -94,8 +73,8 @@ export default function Settings() {
 
   const translateX = containerWidth > 0
       ? slideAnim.interpolate({
-          inputRange: [0, 1, 2, 3],
-          outputRange: [0, -containerWidth, -containerWidth * 2, -containerWidth * 3],
+          inputRange: [0, 1, 2],
+          outputRange: [0, -containerWidth, -containerWidth * 2],
         })
       : 0;
 
@@ -135,12 +114,6 @@ export default function Settings() {
         {FormRow && (
           <>
             <FormRow
-              label="Visuals & Theme"
-              subLabel="Background image, blur, and opacity"
-              trailing={<FormRow.Arrow />}
-              onPress={() => setSelectedPage("visuals")}
-            />
-            <FormRow
               label="Edit Raid Messages"
               subLabel="Customize the 10 raid message slots"
               trailing={<FormRow.Arrow />}
@@ -156,61 +129,6 @@ export default function Settings() {
         )}
       </BetterTableRowGroup>
       <View style={{ height: 40 }} />
-    </>
-  );
-
-  const renderVisualsPage = () => (
-    <>
-      <Header />
-      <BetterTableRowGroup title="Visuals" icon={visualsHeaderIcon} padding>
-        <Text style={{ color: "#fff", marginBottom: 6 }}>Background URL</Text>
-        <TextInput
-          style={inputStyle}
-          value={storage.theme.backgroundUrl}
-          placeholder="https://..."
-          onChangeText={(v) => (storage.theme.backgroundUrl = v)}
-        />
-        <View style={{ marginTop: 20 }}>
-          {FormSlider ? (
-            <>
-              <Text style={{ color: "#fff" }}>Background Opacity: {Math.round(storage.theme.opacity * 100)}%</Text>
-              <FormSlider 
-                value={storage.theme.opacity} 
-                onValueChange={(v: number) => (storage.theme.opacity = v)} 
-                minimumValue={0}
-                maximumValue={1}
-              />
-              
-              <Text style={{ color: "#fff", marginTop: 15 }}>Blur Strength: {Math.round(storage.theme.blur)}px</Text>
-              <FormSlider 
-                value={storage.theme.blur} 
-                onValueChange={(v: number) => (storage.theme.blur = v)} 
-                minimumValue={0}
-                maximumValue={20}
-                step={1}
-              />
-
-              <Text style={{ color: "#fff", marginTop: 15 }}>Chat Transparency: {Math.round(storage.theme.chatOpacity * 100)}%</Text>
-              <FormSlider 
-                value={storage.theme.chatOpacity} 
-                onValueChange={(v: number) => (storage.theme.chatOpacity = v)} 
-                minimumValue={0}
-                maximumValue={1}
-              />
-            </>
-          ) : (
-            <Text style={{ color: "#ff4444" }}>No compatible Slider component found.</Text>
-          )}
-        </View>
-      </BetterTableRowGroup>
-      <View style={{ height: 20 }} />
-      <FormRow
-        label="Back"
-        subLabel="Return to main menu"
-        trailing={arrowBackIcon && <Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
-        onPress={() => setSelectedPage("main")}
-      />
-      <View style={{ height: 25 }} />
     </>
   );
 
@@ -261,18 +179,17 @@ export default function Settings() {
 
   return (
     <View style={{ flex: 1 }} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
-      <ScrollView ref={scrollRef} style={{ flex: 1 }}>
+      <ScrollView style={{ flex: 1 }}>
         <Animated.View
           style={{
             flexDirection: "row",
-            width: containerWidth * 4 || "400%",
+            width: containerWidth * 3 || "300%",
             transform: [{ translateX }],
           }}
         >
           <View style={{ width: containerWidth || "100%" }}>{renderMainPage()}</View>
           <View style={{ width: containerWidth || "100%" }}>{selectedPage === "raidMessages" ? renderRaidMessagesPage() : null}</View>
           <View style={{ width: containerWidth || "100%" }}>{selectedPage === "messageLogs" ? renderMessageLogsPage() : null}</View>
-          <View style={{ width: containerWidth || "100%" }}>{selectedPage === "visuals" ? renderVisualsPage() : null}</View>
         </Animated.View>
       </ScrollView>
     </View>
