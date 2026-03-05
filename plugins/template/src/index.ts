@@ -1632,62 +1632,85 @@ commands.push(
 function patchVideoQuests() {
   const QuestStore = findByStoreName("QuestStore");
   const Dispatcher = findByProps("dispatch", "subscribe");
+  const Toasts = findByProps("showToast");
 
-  if (!QuestStore || !Dispatcher) {
-    logger.error("QuestStore or Dispatcher not found.");
-    return () => {};
-  }
+  if (!QuestStore || !Dispatcher) return () => {};
 
-  // 1. Hook the Store to fake the UI progress
-  const unpatchStore = after("getQuest", QuestStore, (args, ret) => {
-    if (ret && ret.userStatus && !ret.userStatus.completedAt) {
-      const startTime = ret._bemmoStart || Date.now();
-      const elapsed = (Date.now() - startTime) / 1000;
-      const target = ret.config?.videoMetadata?.duration || 30;
+  const activeIntervals = new Map();
 
-      if (elapsed >= target) {
-        ret.userStatus.progress = { WATCH_VIDEO: { value: target, target: target } };
-        ret.userStatus.completedAt = new Date().toISOString();
+  const startHeartbeat = (quest, duration) => {
+    if (activeIntervals.has(quest.id)) return;
+    
+    // Toast: Starting Quest
+    Toasts?.showToast(`Starting quest: ${quest.config?.messages?.questName || "Video Quest"}`);
+    
+    const start = Date.now();
+    const interval = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - start) / 1000);
+      
+      if (elapsed >= duration) {
+        // Send final completion signal
+        Dispatcher.dispatch({
+          type: "QUEST_VIDEO_STATE_UPDATE",
+          questId: quest.id,
+          state: "COMPLETED",
+          currentTime: duration
+        });
+
+        // Toast: Quest Finished
+        Toasts?.showToast(`Quest finished: ${quest.config?.messages?.questName || "Video Quest"}`);
+        
+        clearInterval(interval);
+        activeIntervals.delete(quest.id);
       } else {
-        ret.userStatus.progress = { WATCH_VIDEO: { value: Math.floor(elapsed), target: target } };
+        // Regular heartbeat
+        Dispatcher.dispatch({
+          type: "QUEST_VIDEO_STATE_UPDATE",
+          questId: quest.id,
+          state: "PLAYING",
+          currentTime: elapsed
+        });
       }
+    }, 15000);
+
+    activeIntervals.set(quest.id, interval);
+  };
+
+  // 1. Hook the Dispatcher to catch when quests are loaded or clicked
+  const unpatchDispatch = after("dispatch", Dispatcher, (args) => {
+    const [action] = args;
+    
+    // Check for work when quests load or user interacts
+    if (action.type === "QUESTS_FETCH_SUCCESS" || action.type === "QUEST_VIDEO_STATE_UPDATE") {
+      const quests = QuestStore.getQuests?.() || [];
+      quests.forEach(q => {
+        if (q.userStatus?.enrolledAt && !q.userStatus?.completedAt && q.config?.videoMetadata) {
+          startHeartbeat(q, q.config.videoMetadata.duration || 30);
+        }
+      });
+    }
+    return;
+  });
+
+  // 2. Visual Patch so the UI looks ready
+  const unpatchStore = after("getQuest", QuestStore, (args, ret) => {
+    if (ret && ret.userStatus && !ret.userStatus.completedAt && activeIntervals.has(ret.id)) {
+      // Show the progress bar as 100% so the 'Claim' button stays available
+      ret.userStatus.progress = { 
+        WATCH_VIDEO: { value: 100, target: 100 } 
+      };
     }
     return ret;
   });
 
-  // 2. Background Heartbeat Loop (The part that actually talks to the server)
-  const heartbeatInterval = setInterval(() => {
-    const quests = QuestStore.getQuests?.() || [];
-    
-    // Filter for quests that are enrolled but not finished
-    const activeQuests = Array.from(quests.values()).filter((q: any) => 
-      q.userStatus?.enrolledAt && !q.userStatus?.completedAt
-    );
-
-    activeQuests.forEach((quest: any) => {
-      if (!quest._bemmoStart) quest._bemmoStart = Date.now();
-      const elapsed = (Date.now() - quest._bemmoStart) / 1000;
-      const duration = quest.config?.videoMetadata?.duration || 30;
-
-      // Send the heartbeat signal to Discord's server
-      Dispatcher.dispatch({
-        type: "QUEST_VIDEO_STATE_UPDATE",
-        questId: quest.id,
-        state: elapsed >= duration ? "COMPLETED" : "PLAYING",
-        currentTime: Math.min(Math.floor(elapsed), duration)
-      });
-
-      if (elapsed >= duration) {
-        logger.log(`Bemmo: Quest ${quest.id} is ready to claim.`);
-      }
-    });
-  }, 15000); // Ping every 15 seconds
-
   return () => {
+    unpatchDispatch();
     unpatchStore();
-    clearInterval(heartbeatInterval);
+    activeIntervals.forEach(clearInterval);
+    activeIntervals.clear();
   };
 }
+
 
 
 
