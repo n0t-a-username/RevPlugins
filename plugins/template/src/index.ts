@@ -80,6 +80,91 @@ function patchNitro() {
 }
 
 
+commands.push(
+  registerCommand({
+    name: "quest-bypass",
+    displayName: "quest-bypass",
+    description: "Accepts and completes a quest via its URL",
+    options: [
+      {
+        name: "url",
+        displayName: "url",
+        description: "The Discord Quest link (e.g., discord.com/quests/1473790...)",
+        required: true,
+        type: 3,
+      }
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const url = args.find(a => a.name === "url")?.value;
+      const currentUser = UserStore.getCurrentUser();
+      
+      // Extract ID from the URL using Regex
+      const questIdMatch = url.match(/quests\/(\d+)/);
+      if (!questIdMatch) {
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+          channelId: ctx.channel.id, content: "❌ Invalid Quest URL." 
+        }), { author: currentUser }));
+        return;
+      }
+
+      const questId = questIdMatch[1];
+
+      try {
+        // 1. Attempt to Enroll (Accept the Quest)
+        // This bypasses the need to find the quest in your settings menu
+        await HTTP.post({ url: `/quests/${questId}/enroll` });
+
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+          channelId: ctx.channel.id, 
+          content: `🔗 Quest **${questId}** accepted! Detecting quest type...` 
+        }), { author: currentUser }));
+
+        // 2. Fetch Quest Data to see if it's a Video or Game
+        const questData = await HTTP.get({ url: `/quests/${questId}` });
+        const isVideo = !!questData.body?.config?.videoMetadata;
+
+        if (isVideo) {
+          // Instant Video Bypass
+          const duration = questData.body.config.videoMetadata.duration || 120;
+          await HTTP.post({ url: `/quests/${questId}/video-progress`, body: { timestamp: duration } });
+          
+          receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+            channelId: ctx.channel.id, content: "⚡ **Video Quest Bypassed!** Claim your Orbs in settings." 
+          }), { author: currentUser }));
+        } else {
+          // Start the 15-minute Heartbeat Spoof for games
+          receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+            channelId: ctx.channel.id, content: "🎮 **Game Quest detected.** Starting 15m heartbeat spoof. Don't close Discord!" 
+          }), { author: currentUser }));
+          
+          let elapsed = 0;
+          const interval = setInterval(async () => {
+            elapsed += 30;
+            await HTTP.post({ url: `/quests/${questId}/heartbeat`, body: { terminal: false } });
+            
+            if (elapsed >= 900) { // 15 minutes
+              clearInterval(interval);
+              await HTTP.post({ url: `/quests/${questId}/heartbeat`, body: { terminal: true } });
+              receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+                channelId: ctx.channel.id, content: "✅ **Game Quest Finished!** You can now claim your reward." 
+              }), { author: currentUser }));
+            }
+          }, 30000);
+        }
+
+      } catch (err) {
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+          channelId: ctx.channel.id, content: `⚠️ Failed: ${err.message || "Unknown error"}` 
+        }), { author: currentUser }));
+      }
+    },
+  })
+);
+
+
 // ---- /steal ----
 commands.push(
   registerCommand({
