@@ -1,4 +1,4 @@
-import { ReactNative } from "@vendetta/metro/common";
+import { ReactNative, React } from "@vendetta/metro/common"; // Added React here
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import Header from "./components/Header";
@@ -18,6 +18,9 @@ const {
   Clipboard,
   ToastAndroid,
 } = ReactNative;
+
+// ... the rest of your code remains the same
+
 
 const Forms = UiForms || {};
 const { FormRow } = Forms as any;
