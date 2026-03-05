@@ -4,7 +4,6 @@ import GiveawaySection from "./GiveawaySection";
 import * as CopyMessageID from "./CopyMessageID";
 import * as RichPresence from "./RichPresence";
 import patchSidebar from "./Sidebar";
-import { initTheme } from "./ThemeEngine";
 import { registerCommand } from "@vendetta/commands";
 import { findByProps, findByStoreName, findByTypeName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
@@ -1619,86 +1618,50 @@ commands.push(
    PLUGIN LIFECYCLE
 ========================= */
 
-// Store unpatch functions in a scope accessible to both onLoad and onUnload
-let unpatches = {
-  theme: null as (() => void) | null,
-  sidebar: null as (() => void) | null,
-};
+import patchSidebar from "./Sidebar"; 
+
+let unpatchSidebar: () => void;
 
 export default {
-  onLoad: async () => {
-    logger.log("Bemmo: Initializing...");
-
-    // 1. Ensure Storage Defaults (Prevents crashes if storage is empty)
-    storage.words ??= Array(10).fill("");
-    storage.theme ??= { 
-      backgroundUrl: "", 
-      blur: 0, 
-      opacity: 1, 
-      chatOpacity: 0.8 
-    };
-    storage.logging ??= { enabled: false };
-    storage.messageLogs ??= [];
-
-    // 2. Start Theme Engine
+  onLoad: () => {
+    // 1. Initialize Sidebar (Bemmo Entry)
     try {
-      unpatches.theme = initTheme();
-      if (unpatches.theme) logger.log("Bemmo: Theme Engine started.");
-    } catch (e) {
-      logger.error("Bemmo: Theme init failed", e);
-    }
-
-    // 3. Patch Sidebar (The Bemmo Button)
-    try {
-      unpatches.sidebar = patchSidebar();
-      if (unpatches.sidebar) logger.log("Bemmo: Sidebar patched.");
+      unpatchSidebar = patchSidebar();
     } catch (e) {
       logger.error("Bemmo: Sidebar patch failed", e);
     }
 
-    // 4. Start Background Services
-    try {
-      RichPresence.startRichPresence();
-      
-      // Resume logging if it was active in the last session
-      if (storage.logging?.enabled) {
-        startLogger("Auto-Resume");
-      }
-    } catch (e) {
-      logger.error("Bemmo: Service startup failed", e);
-    }
+    // 2. Start Services
+    logger.log(
+      "All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing, CopyMessageID, Log, Bemmo Prison"
+    );
 
-    logger.log("Bemmo Plugin: All systems online.");
+    RichPresence.startRichPresence();
+
+    if (storage.logging?.enabled) {
+      startLogger();
+    }
   },
 
   onUnload: () => {
-    logger.log("Bemmo: Shutting down...");
-
     // 1. Unregister all Slash Commands
-    commands.forEach(unreg => {
-      try { unreg(); } catch {}
-    });
+    for (const unregister of commands) unregister();
 
-    // 2. Run all UI unpatchers
-    if (typeof unpatches.theme === "function") unpatches.theme();
-    if (typeof unpatches.sidebar === "function") unpatches.sidebar();
-    
-    // 3. Stop Logger and clear intervals
-    stopLogger(true);
+    // 2. Kill the Sidebar Patch
+    if (typeof unpatchSidebar === "function") unpatchSidebar();
 
-    // 4. Emergency Prison Release
+    // 3. Emergency Prison Release (Stop the loop)
     if (prisonState.interval) {
       clearInterval(prisonState.interval);
       prisonState.active = false;
     }
 
-    // 5. Shutdown remaining modules
+    // 4. Stop Other Services
+    CopyMessageID.onUnload?.();
     RichPresence.stopRichPresence();
-    if (typeof CopyMessageID.onUnload === "function") {
-      CopyMessageID.onUnload();
-    }
+    stopLogger();
 
-    logger.log("Bemmo Plugin: Shutdown complete.");
+    logger.log("Plugin unloaded.");
   },
 
   settings: Settings,
