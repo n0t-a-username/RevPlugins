@@ -4,6 +4,7 @@ import { useProxy } from "@vendetta/storage";
 import Header from "./components/Header";
 import BetterTableRowGroup from "./components/BetterTableRowGroup";
 import { Forms as UiForms, General } from "@vendetta/ui/components";
+import { semanticColors } from "@vendetta/ui";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 
 const {
@@ -20,14 +21,27 @@ const {
 } = ReactNative;
 
 const Forms = UiForms || {};
-const { FormRow, FormDivider } = Forms as any;
-const { FormSlider } = General as any; // Vendetta slider component
+const { FormRow } = Forms as any;
+const FormSlider = (General as any)?.FormSlider ?? (Forms as any)?.FormSlider;
 
-// Icons
-const messageHeaderIcon = getAssetIDByName("ic_information_24px");
-const raidHeaderIcon = getAssetIDByName("SlashBoxIcon");
-const visualsHeaderIcon = getAssetIDByName("ic_mfa_sms_24px");
-const arrowBackIcon = getAssetIDByName("ic_arrow_back_24px");
+// --- Storage Initializers ---
+if (!Array.isArray(storage.words) || storage.words.length !== 10) {
+  storage.words = Array(10).fill("");
+}
+if (typeof storage.eventGiveawayPing !== "string") {
+  storage.eventGiveawayPing = "";
+}
+if (!Array.isArray(storage.messageLogs)) {
+  storage.messageLogs = [];
+}
+if (!storage.theme) {
+  storage.theme = {
+    backgroundUrl: "",
+    blur: 0,
+    opacity: 1,
+    chatOpacity: 1
+  };
+}
 
 const inputStyle = {
   backgroundColor: "#222",
@@ -40,48 +54,125 @@ const inputStyle = {
   borderColor: "#333",
 };
 
+const messageHeaderIcon = getAssetIDByName("ic_information_24px");
+const raidHeaderIcon = getAssetIDByName("SlashBoxIcon");
+const visualsHeaderIcon = getAssetIDByName("ic_mfa_sms_24px");
+const massPingHeaderIcon = getAssetIDByName("SlashBoxIcon");
+const arrowBackIcon = getAssetIDByName("ic_arrow_back_24px");
+
 export default function Settings() {
   useProxy(storage);
 
-  // Added "visuals" to the page type
   const [selectedPage, setSelectedPage] = React.useState<
     "main" | "raidMessages" | "messageLogs" | "visuals"
   >("main");
 
   const [containerWidth, setContainerWidth] = React.useState(0);
   const slideAnim = React.useRef(new Animated.Value(0)).current;
+  const scrollRef = React.useRef<any>(null);
 
   React.useEffect(() => {
-    const pageMap = { main: 0, raidMessages: 1, messageLogs: 2, visuals: 3 };
+    const pageValues = { main: 0, raidMessages: 1, messageLogs: 2, visuals: 3 };
     Animated.timing(slideAnim, {
-      toValue: pageMap[selectedPage],
+      toValue: pageValues[selectedPage],
       duration: 220,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
   }, [selectedPage]);
 
-  const translateX = containerWidth > 0
+  const translateX =
+    containerWidth > 0
       ? slideAnim.interpolate({
           inputRange: [0, 1, 2, 3],
           outputRange: [0, -containerWidth, -containerWidth * 2, -containerWidth * 3],
         })
       : 0;
 
-  // Render Visuals Page
+  const logsText = React.useMemo(() => {
+    return storage.messageLogs
+      .map((log: any) => (typeof log === "object" ? log.t : log))
+      .join("\n");
+  }, [storage.messageLogs.length, selectedPage]);
+
+  const copyLogs = async () => {
+    await Clipboard.setString(logsText);
+    ToastAndroid.show("Logs copied.", ToastAndroid.SHORT);
+  };
+
+  const clearLogs = () => {
+    storage.messageLogs = [];
+    ToastAndroid.show("Logs cleared.", ToastAndroid.SHORT);
+  };
+
+  /* =========================
+     MAIN PAGE
+  ========================= */
+
+  const renderMainPage = () => (
+    <>
+      <Header />
+      <BetterTableRowGroup title="Information" icon={messageHeaderIcon} padding>
+        <Text style={{ color: "#aaa" }}>
+          Command list: /mcs, /msp, /log, /info, /nuke, /raid, /spam, /purge, /react, /pinger /userid,
+          /lockdown, /server-info, /clone-server, /fetchprofile, /dupe-channel, /delete-channel
+        </Text>
+      </BetterTableRowGroup>
+
+      <BetterTableRowGroup title="Tools/Misc">
+        {FormRow && (
+          <>
+            <FormRow
+              label="Visuals & Theme"
+              subLabel="Custom background image, blur, and opacity"
+              trailing={<FormRow.Arrow />}
+              onPress={() => setSelectedPage("visuals")}
+            />
+            <FormRow
+              label="Edit Raid Messages"
+              subLabel="Customize the 10 raid message slots"
+              trailing={<FormRow.Arrow />}
+              onPress={() => setSelectedPage("raidMessages")}
+            />
+            <FormRow
+              label="Message Logs"
+              subLabel="View captured message logs"
+              trailing={<FormRow.Arrow />}
+              onPress={() => setSelectedPage("messageLogs")}
+            />
+          </>
+        )}
+      </BetterTableRowGroup>
+
+      <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
+        <TextInput
+          multiline
+          value={storage.eventGiveawayPing}
+          onChangeText={(v) => (storage.eventGiveawayPing = v)}
+          style={{ ...inputStyle, minHeight: 80 }}
+        />
+      </BetterTableRowGroup>
+      <View style={{ height: 40 }} />
+    </>
+  );
+
+  /* =========================
+     VISUALS PAGE
+  ========================= */
+
   const renderVisualsPage = () => (
     <>
       <Header />
       <BetterTableRowGroup title="Custom Background" icon={visualsHeaderIcon} padding>
-        <Text style={{ color: "#fff", marginBottom: 8 }}>Image URL</Text>
+        <Text style={{ color: "#fff", marginBottom: 8 }}>Background URL</Text>
         <TextInput
           style={inputStyle}
           value={storage.theme.backgroundUrl}
-          placeholder="https://example.com/image.png"
+          placeholder="https://i.imgur.com/example.png"
           placeholderTextColor="#666"
           onChangeText={(v) => (storage.theme.backgroundUrl = v)}
         />
-        
+
         <View style={{ marginTop: 20 }}>
           <Text style={{ color: "#fff" }}>Background Opacity: {Math.round(storage.theme.opacity * 100)}%</Text>
           <FormSlider
@@ -89,7 +180,7 @@ export default function Settings() {
             onValueChange={(v: number) => (storage.theme.opacity = v)}
           />
 
-          <Text style={{ color: "#fff", marginTop: 15 }}>Blur Strength: {Math.round(storage.theme.blur)}px</Text>
+          <Text style={{ color: "#fff", marginTop: 15 }}>Blur: {Math.round(storage.theme.blur)}px</Text>
           <FormSlider
             value={storage.theme.blur}
             onValueChange={(v: number) => (storage.theme.blur = v)}
@@ -110,41 +201,71 @@ export default function Settings() {
         trailing={<Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
         onPress={() => setSelectedPage("main")}
       />
+      <View style={{ height: 25 }} />
     </>
   );
 
-  // Add the new button to renderMainPage
-  const renderMainPage = () => (
+  /* =========================
+     RAID PAGE
+  ========================= */
+
+  const renderRaidMessagesPage = () => (
     <>
       <Header />
-      <BetterTableRowGroup title="Tools/Misc">
-        <FormRow
-          label="Edit Raid Messages"
-          subLabel="Customize the 10 raid message slots"
-          trailing={<FormRow.Arrow />}
-          onPress={() => setSelectedPage("raidMessages")}
-        />
-        <FormRow
-          label="Visuals & Theme"
-          subLabel="Background image, blur, and opacity"
-          trailing={<FormRow.Arrow />}
-          onPress={() => setSelectedPage("visuals")}
-        />
-        <FormRow
-          label="Message Logs"
-          subLabel="View captured message logs"
-          trailing={<FormRow.Arrow />}
-          onPress={() => setSelectedPage("messageLogs")}
-        />
+      <BetterTableRowGroup title="Raid Messages" icon={raidHeaderIcon} padding>
+        {[...Array(10).keys()].map((i) => (
+          <View key={i} style={{ marginBottom: 12 }}>
+            <Text style={{ color: "#fff", marginBottom: 6 }}>Message {i + 1}</Text>
+            <TextInput
+              style={inputStyle}
+              value={storage.words[i]}
+              onChangeText={(v) => (storage.words[i] = v)}
+            />
+          </View>
+        ))}
       </BetterTableRowGroup>
-      <View style={{ height: 40 }} />
+      <View style={{ height: 20 }} />
+      <FormRow
+        label="Back"
+        trailing={<Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
+        onPress={() => setSelectedPage("main")}
+      />
+      <View style={{ height: 25 }} />
     </>
   );
 
-  // Update return to include 4 sections
+  /* =========================
+     MESSAGE LOGS PAGE
+  ========================= */
+
+  const renderMessageLogsPage = () => (
+    <>
+      <Header />
+      <BetterTableRowGroup title="Message Logs" icon={messageHeaderIcon} padding>
+        <TextInput multiline editable={false} value={logsText} style={{ ...inputStyle, minHeight: 260 }} />
+        <View style={{ flexDirection: "row", marginTop: 12, gap: 10 }}>
+          <TouchableOpacity onPress={copyLogs} style={{ flex: 1, backgroundColor: "#2ecc71", padding: 12, borderRadius: 8, alignItems: "center" }}>
+            <Text style={{ color: "#fff", fontWeight: "600" }}>Copy Log</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={clearLogs} style={{ flex: 1, backgroundColor: "#e74c3c", padding: 12, borderRadius: 8, alignItems: "center" }}>
+            <Text style={{ color: "#fff", fontWeight: "600" }}>Clear Log</Text>
+          </TouchableOpacity>
+        </View>
+      </BetterTableRowGroup>
+
+      <View style={{ height: 20 }} />
+      <FormRow
+        label="Back"
+        trailing={<Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
+        onPress={() => setSelectedPage("main")}
+      />
+      <View style={{ height: 25 }} />
+    </>
+  );
+
   return (
     <View style={{ flex: 1 }} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
-      <ScrollView style={{ flex: 1 }}>
+      <ScrollView ref={scrollRef} style={{ flex: 1 }}>
         <Animated.View
           style={{
             flexDirection: "row",
@@ -153,9 +274,9 @@ export default function Settings() {
           }}
         >
           <View style={{ width: containerWidth || "100%" }}>{renderMainPage()}</View>
-          <View style={{ width: containerWidth || "100%" }}>{selectedPage === "raidMessages" && renderRaidMessagesPage()}</View>
-          <View style={{ width: containerWidth || "100%" }}>{selectedPage === "messageLogs" && renderMessageLogsPage()}</View>
-          <View style={{ width: containerWidth || "100%" }}>{selectedPage === "visuals" && renderVisualsPage()}</View>
+          <View style={{ width: containerWidth || "100%" }}>{selectedPage === "raidMessages" ? renderRaidMessagesPage() : null}</View>
+          <View style={{ width: containerWidth || "100%" }}>{selectedPage === "messageLogs" ? renderMessageLogsPage() : null}</View>
+          <View style={{ width: containerWidth || "100%" }}>{selectedPage === "visuals" ? renderVisualsPage() : null}</View>
         </Animated.View>
       </ScrollView>
     </View>
