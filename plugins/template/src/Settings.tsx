@@ -20,7 +20,7 @@ const {
 } = ReactNative;
 
 const Forms = UiForms || {};
-const { FormRow } = Forms as any;
+const { FormRow, FormSwitchRow } = Forms as any;
 
 /* =========================
    STORAGE INITIALIZATION
@@ -33,6 +33,10 @@ if (typeof storage.eventGiveawayPing !== "string") {
 }
 if (!Array.isArray(storage.messageLogs)) {
   storage.messageLogs = [];
+}
+// Initialize Nitro toggle
+if (typeof storage.nitroSpoof !== "boolean") {
+  storage.nitroSpoof = false;
 }
 
 const inputStyle = {
@@ -113,6 +117,12 @@ export default function Settings() {
       <BetterTableRowGroup title="Tools/Misc">
         {FormRow && (
           <>
+            <FormSwitchRow
+              label="Nitro Spoof"
+              subLabel="Locally unlock themes, gradients, and gift status."
+              value={storage.nitroSpoof}
+              onValueChange={(v: boolean) => (storage.nitroSpoof = v)}
+            />
             <FormRow
               label="Edit Raid Messages"
               subLabel="Customize the 10 raid message slots"
