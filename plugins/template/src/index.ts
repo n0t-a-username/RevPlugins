@@ -67,22 +67,6 @@ const getIconBase64 = async (url) => {
   }
 };
 
-// --- NITRO SPOOF PATCH ---
-// This tricks the client into unlocking Nitro-exclusive themes (Gradients)
-function patchNitro() {
-  return after("getCurrentUser", UserStore, (_, user) => {
-    if (user) {
-      // 1 = Classic, 2 = Boost (Unlocks Gradients)
-      user.premiumType = 2; 
-    }
-    return user;
-  });
-}
-
-
-
-
-
 
 
 // ---- /steal ----
@@ -1629,68 +1613,6 @@ commands.push(
   })
 );
 
-// Trackers
-const activeQuests = new Map();
-
-function patchVideoQuests() {
-  const QuestStore = findByStoreName("QuestStore");
-  // Find modules by what they do, not just their names
-  const Dispatcher = findByProps("dispatch", "subscribe");
-  const Toasts = findByProps("showToast", "showNotification");
-
-  if (!QuestStore || !Dispatcher) {
-    console.error("[Bemmo] Could not find QuestStore or Dispatcher.");
-    return () => {};
-  }
-
-  return after("getQuest", QuestStore, (args, ret) => {
-    // Only target video quests that are accepted but not done
-    if (ret?.userStatus && !ret.userStatus.completedAt && ret.config?.videoMetadata) {
-      const questId = ret.id;
-      const duration = ret.config.videoMetadata.duration || 30;
-
-      if (!activeQuests.has(questId)) {
-        const startTime = Date.now();
-        
-        // Show "Starting" Toast
-        Toasts?.showToast({ content: `Bemmo: Starting ${ret.config.messages?.questName || "Quest"}...` });
-
-        const interval = setInterval(() => {
-          const elapsed = Math.floor((Date.now() - startTime) / 1000);
-          
-          // Send the heartbeat signal Discord requires
-          Dispatcher.dispatch({
-            type: "QUEST_VIDEO_STATE_UPDATE",
-            questId: questId,
-            state: elapsed >= duration ? "COMPLETED" : "PLAYING",
-            currentTime: Math.min(elapsed, duration)
-          });
-
-          if (elapsed >= duration) {
-            Toasts?.showToast({ content: "Bemmo: Quest Ready to Claim!" });
-            clearInterval(interval);
-            activeQuests.delete(questId);
-          }
-        }, 10000); // 10 second pings are the sweet spot for 2026
-
-        activeQuests.set(questId, { startTime, interval });
-      }
-
-      // Force UI Progress
-      const questData = activeQuests.get(questId);
-      const seconds = Math.floor((Date.now() - questData.startTime) / 1000);
-      
-      if (seconds >= duration) {
-        ret.userStatus.progress = { WATCH_VIDEO: { value: duration, target: duration } };
-        ret.userStatus.completedAt = new Date().toISOString();
-      } else {
-        ret.userStatus.progress = { WATCH_VIDEO: { value: seconds, target: duration } };
-      }
-    }
-    return ret;
-  });
-}
-
 
 /* =========================
    PLUGIN LIFECYCLE (FINAL)
@@ -1718,19 +1640,7 @@ export default {
       logger.error("Nitro failed", e); 
     }
 
-    // 3. Video Quest Ghost Watcher
-    // This starts the heartbeats to satisfy the server for rewards
-    try {
-      const videoUnpatch = patchVideoQuests();
-      if (typeof videoUnpatch === "function") {
-        unpatches.push(videoUnpatch);
-        logger.log("Bemmo: Video Quest Spoofer active");
-      }
-    } catch (e) { 
-      logger.error("Quest patch failed", e); 
-    }
-
-    // 4. Services (Copy ID, RPC, Logger)
+    // 3. Services (Copy ID, RPC, Logger)
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
