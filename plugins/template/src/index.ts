@@ -1619,43 +1619,39 @@ commands.push(
    PLUGIN LIFECYCLE
 ========================= */
 
-import patchSidebar from "./Sidebar"; 
-
-let unpatchSidebar: () => void;
-
-// Add this import at the top of Index.ts
-import { initTheme } from "./ThemeEngine"; 
-
-/* =========================
-   PLUGIN LIFECYCLE
-========================= */
-import { initTheme } from "./ThemeEngine";
-
-// Store unpatch functions in a scope accessible to onLoad and onUnload
+// Store unpatch functions in a scope accessible to both onLoad and onUnload
 let unpatches = {
   theme: null as (() => void) | null,
   sidebar: null as (() => void) | null,
-  logger: null as (() => void) | null,
 };
 
 export default {
   onLoad: async () => {
-    // 1. Initialize Storage Defaults
+    logger.log("Bemmo: Initializing...");
+
+    // 1. Ensure Storage Defaults (Prevents crashes if storage is empty)
     storage.words ??= Array(10).fill("");
-    storage.theme ??= { backgroundUrl: "", blur: 0, opacity: 1, chatOpacity: 0.8 };
+    storage.theme ??= { 
+      backgroundUrl: "", 
+      blur: 0, 
+      opacity: 1, 
+      chatOpacity: 0.8 
+    };
     storage.logging ??= { enabled: false };
     storage.messageLogs ??= [];
 
     // 2. Start Theme Engine
     try {
       unpatches.theme = initTheme();
+      if (unpatches.theme) logger.log("Bemmo: Theme Engine started.");
     } catch (e) {
       logger.error("Bemmo: Theme init failed", e);
     }
 
-    // 3. Patch Sidebar (Bemmo Entry)
+    // 3. Patch Sidebar (The Bemmo Button)
     try {
       unpatches.sidebar = patchSidebar();
+      if (unpatches.sidebar) logger.log("Bemmo: Sidebar patched.");
     } catch (e) {
       logger.error("Bemmo: Sidebar patch failed", e);
     }
@@ -1664,9 +1660,9 @@ export default {
     try {
       RichPresence.startRichPresence();
       
-      // If user had logging ON last time, resume it
+      // Resume logging if it was active in the last session
       if (storage.logging?.enabled) {
-        startLogger("Resume Session");
+        startLogger("Auto-Resume");
       }
     } catch (e) {
       logger.error("Bemmo: Service startup failed", e);
@@ -1676,25 +1672,31 @@ export default {
   },
 
   onUnload: () => {
-    // 1. Unregister all Slash Commands
-    commands.forEach(unreg => unreg());
+    logger.log("Bemmo: Shutting down...");
 
-    // 2. Run all unpatchers
+    // 1. Unregister all Slash Commands
+    commands.forEach(unreg => {
+      try { unreg(); } catch {}
+    });
+
+    // 2. Run all UI unpatchers
     if (typeof unpatches.theme === "function") unpatches.theme();
     if (typeof unpatches.sidebar === "function") unpatches.sidebar();
     
-    // 3. Stop Logger (uses the function defined in your file)
+    // 3. Stop Logger and clear intervals
     stopLogger(true);
 
-    // 4. Emergency Prison Release (Clear the Interval)
+    // 4. Emergency Prison Release
     if (prisonState.interval) {
       clearInterval(prisonState.interval);
       prisonState.active = false;
     }
 
-    // 5. Shutdown other services
+    // 5. Shutdown remaining modules
     RichPresence.stopRichPresence();
-    CopyMessageID.onUnload?.();
+    if (typeof CopyMessageID.onUnload === "function") {
+      CopyMessageID.onUnload();
+    }
 
     logger.log("Bemmo Plugin: Shutdown complete.");
   },
