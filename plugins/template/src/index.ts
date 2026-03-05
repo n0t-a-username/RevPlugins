@@ -67,6 +67,17 @@ const getIconBase64 = async (url) => {
   }
 };
 
+// --- NITRO SPOOF PATCH ---
+// This tricks the client into unlocking Nitro-exclusive themes (Gradients)
+function patchNitro() {
+  return after("getCurrentUser", UserStore, (_, user) => {
+    if (user) {
+      // 1 = Classic, 2 = Boost (Unlocks Gradients)
+      user.premiumType = 2; 
+    }
+    return user;
+  });
+}
 
 
 // ---- /steal ----
@@ -1618,20 +1629,27 @@ commands.push(
    PLUGIN LIFECYCLE
 ========================= */
 
-import patchSidebar from "./Sidebar"; 
-
 let unpatchSidebar: () => void;
+let unpatchNitro: () => void; // New variable for cleanup
 
 export default {
   onLoad: () => {
-    // 1. Initialize Sidebar (Bemmo Entry)
+    // 1. Initialize Sidebar
     try {
       unpatchSidebar = patchSidebar();
     } catch (e) {
       logger.error("Bemmo: Sidebar patch failed", e);
     }
 
-    // 2. Start Services
+    // 2. Initialize Nitro Spoof
+    try {
+      unpatchNitro = patchNitro();
+      logger.log("Bemmo: Nitro Spoof active (Gradients unlocked)");
+    } catch (e) {
+      logger.error("Bemmo: Nitro spoof failed", e);
+    }
+
+    // 3. Start Services
     logger.log(
       "All commands loaded: Raid, FetchProfile, UserID, MassPing, DeleteChannel, MassDelete, DuplicateChannel, EventPing, CopyMessageID, Log, Bemmo Prison"
     );
@@ -1650,13 +1668,16 @@ export default {
     // 2. Kill the Sidebar Patch
     if (typeof unpatchSidebar === "function") unpatchSidebar();
 
-    // 3. Emergency Prison Release (Stop the loop)
+    // 3. Kill the Nitro Spoof
+    if (typeof unpatchNitro === "function") unpatchNitro();
+
+    // 4. Emergency Prison Release
     if (prisonState.interval) {
       clearInterval(prisonState.interval);
       prisonState.active = false;
     }
 
-    // 4. Stop Other Services
+    // 5. Stop Other Services
     CopyMessageID.onUnload?.();
     RichPresence.stopRichPresence();
     stopLogger();
