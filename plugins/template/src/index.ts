@@ -1630,10 +1630,20 @@ export default {
       logger.error("Sidebar failed", e); 
     }
 
-    // 2. Nitro Spoof (Unlocks Themes/Gradients)
+    // 2. Nitro Spoof (Unlocks Themes/Gradients + Premium State)
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        if (user) user.premiumType = 2; 
+        if (user) {
+          // Unlocks Nitro UI features
+          user.premiumType = 2; 
+
+          // Deep Billing Spoof (Visible in Settings > Subscriptions)
+          user.premiumState = {
+            premiumSubscriptionType: 2, // Nitro Full
+            premiumSource: 1,           // Shows as "Gifted"
+            premiumSubscriptionGroupRole: 0
+          };
+        }
         return user;
       }));
     } catch (e) { 
