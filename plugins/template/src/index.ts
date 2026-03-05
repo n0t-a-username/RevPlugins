@@ -1633,42 +1633,48 @@ commands.push(
    VIDEO QUEST & ORB SPOOFER
 ========================= */
 
+// Persistent tracker so it doesn't reset when you close the UI
+const questStartTime = new Map();
+
 function patchVideoQuests() {
   const QuestStore = findByStoreName("QuestStore");
-  const Dispatcher = findByProps("dispatch", "subscribe");
-
-  if (!QuestStore || !Dispatcher) return () => {};
+  if (!QuestStore) return () => {};
 
   return after("getQuest", QuestStore, (args, ret) => {
-    // Only target video quests that haven't been completed yet
-    if (ret && ret.config?.configVersion === 2 && ret.userStatus && !ret.userStatus.completedAt) {
+    // Only target quests that are active and not finished
+    if (ret && ret.userStatus && !ret.userStatus.completedAt) {
       const questId = ret.id;
-      const targetSeconds = ret.config.videoMetadata?.duration || 30;
       
-      // Start a "Server-Safe" timer the moment the quest is viewed
-      if (!ret._bemmoTimer) {
-        ret._bemmoTimer = Date.now();
-        logger.log(`Quest ${questId}: Starting ${targetSeconds}s server-side wait...`);
+      // If we haven't started 'watching' this quest yet, start the clock now
+      if (!questStartTime.has(questId)) {
+        questStartTime.set(questId, Date.now());
+        logger.log(`Bemmo: Started background timer for Quest ${questId}`);
       }
 
-      const elapsed = (Date.now() - ret._bemmoTimer) / 1000;
+      const startTime = questStartTime.get(questId);
+      const elapsedSeconds = (Date.now() - startTime) / 1000;
+      
+      // Get the real video duration (usually 30 or 60s)
+      const requiredSeconds = ret.config?.videoMetadata?.duration || 30;
 
-      if (elapsed >= targetSeconds) {
-        // Only after the real time has passed do we spoof the completion
+      if (elapsedSeconds >= requiredSeconds) {
+        // Time is up! Tell the UI we are done.
         ret.userStatus.progress = { 
-          WATCH_VIDEO: { value: targetSeconds, target: targetSeconds } 
+          WATCH_VIDEO: { value: requiredSeconds, target: requiredSeconds } 
         };
+        // This forces the "Claim" button to appear
         ret.userStatus.completedAt = new Date().toISOString();
       } else {
-        // Show progress so you know it's working
+        // Still 'watching' in the background...
         ret.userStatus.progress = { 
-          WATCH_VIDEO: { value: Math.floor(elapsed), target: targetSeconds } 
+          WATCH_VIDEO: { value: Math.floor(elapsedSeconds), target: requiredSeconds } 
         };
       }
     }
     return ret;
   });
 }
+
 
 
 /* =========================
