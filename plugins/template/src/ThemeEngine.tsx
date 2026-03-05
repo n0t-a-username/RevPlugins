@@ -1,5 +1,5 @@
 import { patcher } from "@vendetta";
-import { findByName, findByProps } from "@vendetta/metro";
+import { findByName } from "@vendetta/metro";
 import { ReactNative as RN, React } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
@@ -8,17 +8,19 @@ const ThemeBackground = ({ children }: { children: any }) => {
   useProxy(storage);
   const theme = storage.theme;
 
-  if (!theme?.backgroundUrl) return children;
+  // DEBUG: If no URL, we still show a red background to prove the patch works
+  const uri = theme?.backgroundUrl || "";
 
   return (
-    <RN.View style={{ flex: 1, backgroundColor: "#000" }}>
-      <RN.Image
-        source={{ uri: theme.backgroundUrl }}
-        style={[RN.StyleSheet.absoluteFill, { opacity: theme.opacity ?? 1 }]}
-        blurRadius={theme.blur ?? 0}
-        resizeMode="cover"
-      />
-      <RN.View style={{ flex: 1, backgroundColor: `rgba(0,0,0,${1 - (theme.chatOpacity ?? 0.8)})` }}>
+    <RN.View style={{ flex: 1, backgroundColor: "red", borderWeight: 5, borderColor: "yellow" }}>
+      {uri ? (
+        <RN.Image
+          source={{ uri }}
+          style={[RN.StyleSheet.absoluteFill, { opacity: theme.opacity ?? 1 }]}
+          resizeMode="cover"
+        />
+      ) : null}
+      <RN.View style={{ flex: 1, backgroundColor: `rgba(0,0,0,${1 - (theme.chatOpacity ?? 0.5)})` }}>
         {children}
       </RN.View>
     </RN.View>
@@ -26,33 +28,27 @@ const ThemeBackground = ({ children }: { children: any }) => {
 };
 
 export function initTheme() {
-  // Try multiple common component names for the chat container
-  const ChatComponent = 
-    findByName("MessagesWrapper", false) || 
-    findByName("Messages", false) || 
-    findByName("ChatList", false);
+  // We are going to try to patch three different potential targets
+  const targets = [
+    findByName("MessagesWrapper", false),
+    findByName("Messages", false),
+    findByName("Chat", false)
+  ].filter(Boolean);
 
-  if (!ChatComponent) {
-    // If this hits, we need to find the specific obfuscated name for your version
-    return; 
-  }
+  if (targets.length === 0) return;
 
-  // Force transparency on the component itself
-  return patcher.after("render", ChatComponent.prototype, (_, res) => {
-    if (!res) return res;
-
-    // Deep-dive into props to kill any solid backgrounds
-    const recursiveTransparent = (node: any) => {
-      if (node?.props?.style) {
-        node.props.style = [RN.StyleSheet.flatten(node.props.style), { backgroundColor: "transparent" }];
+  const unpatches = targets.map(target => 
+    patcher.after("render", target.prototype, (_, res) => {
+      if (!res) return res;
+      
+      // Force transparency on the incoming Discord component
+      if (res.props) {
+        res.props.style = [RN.StyleSheet.flatten(res.props.style), { backgroundColor: "transparent" }];
       }
-      if (node?.props?.children) {
-        React.Children.forEach(node.props.children, child => recursiveTransparent(child));
-      }
-    };
 
-    recursiveTransparent(res);
+      return <ThemeBackground>{res}</ThemeBackground>;
+    })
+  );
 
-    return <ThemeBackground>{res}</ThemeBackground>;
-  });
+  return () => unpatches.forEach(u => u());
 }
