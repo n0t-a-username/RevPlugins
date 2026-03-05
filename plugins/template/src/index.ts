@@ -11,15 +11,6 @@ import { React } from "@vendetta/metro/common";
 import { after } from "@vendetta/patcher";
 
 
-if (!storage.theme) {
-  storage.theme = {
-    backgroundUrl: "",
-    blur: 0,
-    opacity: 1,
-    chatOpacity: 1
-  };
-}
-
 
 const GuildMemberStore = findByStoreName("GuildMemberStore"); 
 const RelationshipStore = findByStoreName("RelationshipStore");
@@ -76,33 +67,7 @@ const getIconBase64 = async (url) => {
   }
 };
 
-const applyTheme = () => {
-  const oldStyle = document.getElementById("rn-plugin-theme");
-  if (oldStyle) oldStyle.remove();
 
-  const theme = storage.theme;
-  if (!theme?.backgroundUrl) return;
-
-  const style = document.createElement("style");
-  style.id = "rn-plugin-theme";
-  style.innerHTML = `
-    #app-mount::before {
-      content: "";
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      background: url('${theme.backgroundUrl}') center/cover no-repeat;
-      filter: blur(${theme.blur}px);
-      opacity: ${theme.opacity};
-      z-index: -1;
-    }
-    #app-mount { background: transparent !important; }
-    .chat-2Z1r9M, .sidebar-1tnWFu, .container-1NXE_f, .members-3WRCEx {
-      background: rgba(0, 0, 0, ${1 - theme.chatOpacity}) !important;
-    }
-  `;
-  document.head.appendChild(style);
-};
 
 // Inside your export default onLoad:
 applyTheme();
