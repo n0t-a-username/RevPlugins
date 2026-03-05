@@ -1629,77 +1629,66 @@ commands.push(
   })
 );
 
-// Persistent tracker for timestamps and intervals
-const questMap = new Map();
+// Trackers
+const activeQuests = new Map();
 
 function patchVideoQuests() {
   const QuestStore = findByStoreName("QuestStore");
+  // Find modules by what they do, not just their names
   const Dispatcher = findByProps("dispatch", "subscribe");
-  const { showToast } = findByProps("showToast") || {};
+  const Toasts = findByProps("showToast", "showNotification");
 
-  if (!QuestStore || !Dispatcher) return () => {};
+  if (!QuestStore || !Dispatcher) {
+    console.error("[Bemmo] Could not find QuestStore or Dispatcher.");
+    return () => {};
+  }
 
-  // 1. UI Patch: Keeps the progress bar moving and enables the button
-  const unpatchStore = after("getQuest", QuestStore, (args, ret) => {
-    if (ret && ret.userStatus && !ret.userStatus.completedAt && ret.config?.videoMetadata) {
+  return after("getQuest", QuestStore, (args, ret) => {
+    // Only target video quests that are accepted but not done
+    if (ret?.userStatus && !ret.userStatus.completedAt && ret.config?.videoMetadata) {
       const questId = ret.id;
       const duration = ret.config.videoMetadata.duration || 30;
 
-      // START THE PROCESS
-      if (!questMap.has(questId)) {
+      if (!activeQuests.has(questId)) {
         const startTime = Date.now();
         
-        // Toast: Starting
-        showToast?.(`Bemmo: Starting Quest (${duration}s)`);
+        // Show "Starting" Toast
+        Toasts?.showToast({ content: `Bemmo: Starting ${ret.config.messages?.questName || "Quest"}...` });
 
-        // Heartbeat Loop (Satisfies the Server)
         const interval = setInterval(() => {
-          const elapsed = (Date.now() - startTime) / 1000;
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
           
-          if (elapsed >= duration) {
-            // Tell server we finished
-            Dispatcher.dispatch({
-              type: "QUEST_VIDEO_STATE_UPDATE",
-              questId: questId,
-              state: "COMPLETED",
-              currentTime: duration
-            });
-            // Toast: Finished
-            showToast?.(`Bemmo: Quest Ready to Claim!`);
-            clearInterval(interval);
-          } else {
-            // Periodic "I'm watching" signal
-            Dispatcher.dispatch({
-              type: "QUEST_VIDEO_STATE_UPDATE",
-              questId: questId,
-              state: "PLAYING",
-              currentTime: Math.floor(elapsed)
-            });
-          }
-        }, 15000); // 15s heartbeats
+          // Send the heartbeat signal Discord requires
+          Dispatcher.dispatch({
+            type: "QUEST_VIDEO_STATE_UPDATE",
+            questId: questId,
+            state: elapsed >= duration ? "COMPLETED" : "PLAYING",
+            currentTime: Math.min(elapsed, duration)
+          });
 
-        questMap.set(questId, { startTime, interval });
+          if (elapsed >= duration) {
+            Toasts?.showToast({ content: "Bemmo: Quest Ready to Claim!" });
+            clearInterval(interval);
+            activeQuests.delete(questId);
+          }
+        }, 10000); // 10 second pings are the sweet spot for 2026
+
+        activeQuests.set(questId, { startTime, interval });
       }
 
-      // Sync UI Progress
-      const data = questMap.get(questId);
-      const elapsedSeconds = (Date.now() - data.startTime) / 1000;
-
-      if (elapsedSeconds >= duration) {
+      // Force UI Progress
+      const questData = activeQuests.get(questId);
+      const seconds = Math.floor((Date.now() - questData.startTime) / 1000);
+      
+      if (seconds >= duration) {
         ret.userStatus.progress = { WATCH_VIDEO: { value: duration, target: duration } };
         ret.userStatus.completedAt = new Date().toISOString();
       } else {
-        ret.userStatus.progress = { WATCH_VIDEO: { value: Math.floor(elapsedSeconds), target: duration } };
+        ret.userStatus.progress = { WATCH_VIDEO: { value: seconds, target: duration } };
       }
     }
     return ret;
   });
-
-  return () => {
-    unpatchStore();
-    questMap.forEach(q => clearInterval(q.interval));
-    questMap.clear();
-  };
 }
 
 
@@ -1712,14 +1701,14 @@ let unpatches: (() => void)[] = [];
 
 export default {
   onLoad: () => {
-    // 1. Sidebar Entry
+    // 1. Sidebar Entry (Bemmo Tab)
     try { 
       unpatchSidebar = patchSidebar(); 
     } catch (e) { 
       logger.error("Sidebar failed", e); 
     }
 
-    // 2. Nitro Spoof (Themes/Gradients)
+    // 2. Nitro Spoof (Unlocks Themes/Gradients)
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
         if (user) user.premiumType = 2; 
@@ -1729,56 +1718,57 @@ export default {
       logger.error("Nitro failed", e); 
     }
 
-    // 3. Video Quest & Orb Spoofer
+    // 3. Video Quest Ghost Watcher
+    // This starts the heartbeats to satisfy the server for rewards
     try {
       const videoUnpatch = patchVideoQuests();
-      if (videoUnpatch) unpatches.push(videoUnpatch);
-      
-      const OrbStore = findByStoreName("OrbStore") || findByStoreName("QuestStore");
-      if (OrbStore) {
-        unpatches.push(after("getOrbBalance", OrbStore, () => 99999));
+      if (typeof videoUnpatch === "function") {
+        unpatches.push(videoUnpatch);
+        logger.log("Bemmo: Video Quest Spoofer active");
       }
-      logger.log("Bemmo: Quests & Orbs patched");
     } catch (e) { 
-      logger.error("Quest/Orb patch failed", e); 
+      logger.error("Quest patch failed", e); 
     }
 
-    // 4. Copy Message ID & Other Services
+    // 4. Services (Copy ID, RPC, Logger)
     try {
-      CopyMessageID.onLoad?.(); // Initialize Copy Message ID logic
+      CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
-      if (storage.logging?.enabled) startLogger();
+      
+      if (storage.logging?.enabled) {
+        startLogger();
+      }
     } catch (e) {
       logger.error("Service initialization failed", e);
     }
 
-    logger.log("Bemmo Plugin fully loaded.");
+    logger.log("Bemmo Plugin: Fully loaded.");
   },
 
   onUnload: () => {
-    // 1. Unregister Commands
+    // 1. Unregister All Slash Commands
     for (const unregister of commands) unregister();
 
-    // 2. Kill all active patches
+    // 2. Kill All Active Patcher Hooks
     for (const unpatch of unpatches) {
       if (typeof unpatch === "function") unpatch();
     }
     unpatches = [];
 
-    // 3. Emergency Prison Release (Stop the loop)
+    // 3. Emergency Prison Release (Stop the GC Loop)
     if (prisonState.interval) {
       clearInterval(prisonState.interval);
       prisonState.active = false;
     }
 
-    // 4. Stop Other Services
+    // 4. Cleanup UI and Background Services
     if (typeof unpatchSidebar === "function") unpatchSidebar();
     
-    CopyMessageID.onUnload?.(); // Cleanup Copy Message ID
+    CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
     stopLogger();
 
-    logger.log("Plugin unloaded.");
+    logger.log("Bemmo Plugin: Unloaded.");
   },
 
   settings: Settings,
