@@ -20,11 +20,15 @@ const {
   ToastAndroid,
 } = ReactNative;
 
+// Safer component extraction to prevent the "undefined" error
 const Forms = UiForms || {};
-const { FormRow } = Forms as any;
-const FormSlider = (General as any)?.FormSlider ?? (Forms as any)?.FormSlider;
+const { FormRow, FormDivider } = Forms as any;
+// Try to find the slider in General or Forms
+const FormSlider = (General as any)?.FormSlider ?? (Forms as any)?.Slider ?? (General as any)?.Slider;
 
-// --- Storage Logic ---
+/* =========================
+   STORAGE INITIALIZATION
+========================= */
 if (!Array.isArray(storage.words) || storage.words.length !== 10) {
   storage.words = Array(10).fill("");
 }
@@ -81,8 +85,7 @@ export default function Settings() {
     }).start();
   }, [selectedPage]);
 
-  const translateX =
-    containerWidth > 0
+  const translateX = containerWidth > 0
       ? slideAnim.interpolate({
           inputRange: [0, 1, 2, 3],
           outputRange: [0, -containerWidth, -containerWidth * 2, -containerWidth * 3],
@@ -106,12 +109,13 @@ export default function Settings() {
   };
 
   /* =========================
-     MAIN PAGE (RESTORED)
+     MAIN PAGE (ORDER FIXED)
   ========================= */
 
   const renderMainPage = () => (
     <>
       <Header />
+      {/* 1. Information */}
       <BetterTableRowGroup title="Information" icon={messageHeaderIcon} padding>
         <Text style={{ color: "#aaa" }}>
           Command list: /mcs, /msp, /log, /info, /nuke, /raid, /spam, /purge, /react, /pinger /userid,
@@ -119,6 +123,7 @@ export default function Settings() {
         </Text>
       </BetterTableRowGroup>
 
+      {/* 2. Mass Ping (Now strictly below Information) */}
       <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
         <Text style={{ color: "#aaa", marginBottom: 8 }}>
           Press the "Mass Selective Ping" button on user profiles.
@@ -131,6 +136,7 @@ export default function Settings() {
         />
       </BetterTableRowGroup>
 
+      {/* 3. Tools/Misc (Bottom row) */}
       <BetterTableRowGroup title="Tools/Misc">
         {FormRow && (
           <>
@@ -160,7 +166,7 @@ export default function Settings() {
   );
 
   /* =========================
-     VISUALS PAGE (NEW)
+     VISUALS PAGE
   ========================= */
 
   const renderVisualsPage = () => (
@@ -171,18 +177,24 @@ export default function Settings() {
         <TextInput
           style={inputStyle}
           value={storage.theme.backgroundUrl}
-          placeholder="https://..."
+          placeholder="https://i.imgur.com/image.png"
           onChangeText={(v) => (storage.theme.backgroundUrl = v)}
         />
         <View style={{ marginTop: 20 }}>
-          <Text style={{ color: "#fff" }}>Background Opacity: {Math.round(storage.theme.opacity * 100)}%</Text>
-          <FormSlider value={storage.theme.opacity} onValueChange={(v) => (storage.theme.opacity = v)} />
-          
-          <Text style={{ color: "#fff", marginTop: 15 }}>Blur Strength: {Math.round(storage.theme.blur)}px</Text>
-          <FormSlider value={storage.theme.blur} onValueChange={(v) => (storage.theme.blur = v)} range={{ min: 0, max: 20 }} />
+          {FormSlider ? (
+            <>
+              <Text style={{ color: "#fff" }}>Background Opacity: {Math.round(storage.theme.opacity * 100)}%</Text>
+              <FormSlider value={storage.theme.opacity} onValueChange={(v: number) => (storage.theme.opacity = v)} />
+              
+              <Text style={{ color: "#fff", marginTop: 15 }}>Blur Strength: {Math.round(storage.theme.blur)}px</Text>
+              <FormSlider value={storage.theme.blur} onValueChange={(v: number) => (storage.theme.blur = v)} range={{ min: 0, max: 20 }} />
 
-          <Text style={{ color: "#fff", marginTop: 15 }}>Chat Transparency: {Math.round(storage.theme.chatOpacity * 100)}%</Text>
-          <FormSlider value={storage.theme.chatOpacity} onValueChange={(v) => (storage.theme.chatOpacity = v)} />
+              <Text style={{ color: "#fff", marginTop: 15 }}>Chat Transparency: {Math.round(storage.theme.chatOpacity * 100)}%</Text>
+              <FormSlider value={storage.theme.chatOpacity} onValueChange={(v: number) => (storage.theme.chatOpacity = v)} />
+            </>
+          ) : (
+            <Text style={{ color: "#e74c3c" }}>Error: Slider component not found in this build.</Text>
+          )}
         </View>
       </BetterTableRowGroup>
       <View style={{ height: 20 }} />
@@ -197,7 +209,7 @@ export default function Settings() {
   );
 
   /* =========================
-     RAID PAGE (RESTORED)
+     RAID PAGE
   ========================= */
 
   const renderRaidMessagesPage = () => (
@@ -223,7 +235,7 @@ export default function Settings() {
   );
 
   /* =========================
-     MESSAGE LOGS PAGE (RESTORED)
+     MESSAGE LOGS PAGE
   ========================= */
 
   const renderMessageLogsPage = () => (
