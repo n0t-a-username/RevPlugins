@@ -145,7 +145,7 @@ export default function patchSidebar() {
   // Bemmo Configuration
   const tabs = {
     key: "BemmoPlugin",
-    icon: getAssetIDByName("SettingsIcon"),
+    icon: getAssetIDByName("emoji-negative"),
     title: () => "Bemmo",
     predicate: () => storage.sidebarEnabled !== false,
     page: Settings,
