@@ -84,8 +84,8 @@ commands.push(
         type: 3,
       },
       {
-        name: "message id",
-        displayname: "message id",
+        name: "message_id",
+        displayname: "message_id",
         description: "Steal the sticker from a specific message ID",
         required: false,
         type: 3,
@@ -643,8 +643,8 @@ commands.push(
     description: "Adds regional indicator reactions to spell a desired word",
     options: [
       {
-        name: "message id",
-        displayname: "message id",
+        name: "message_id",
+        displayname: "message_id",
         description: "Message ID to react to",
         required: true,
         type: 3,
