@@ -1630,56 +1630,52 @@ commands.push(
 );
 
 /* =========================
-   VIDEO QUEST SPOOFER
+   VIDEO QUEST & ORB SPOOFER
 ========================= */
 
 function patchVideoQuests() {
-  // 1. Target the 'QuestVideoPlayer' instead of the generic player
-  const QuestVideoPlayer = findByProps("useQuestVideoProgress");
-  
-  if (!QuestVideoPlayer) return () => {};
+  const QuestStore = findByStoreName("QuestStore");
+  const Dispatcher = findByProps("dispatch", "subscribe");
 
-  // 2. Patch the 'onProgress' hook
-  // This hook tells Discord: "The user is at X seconds in the video"
-  return after("useQuestVideoProgress", QuestVideoPlayer, (args, ret) => {
-    // We intercept the current time and multiply it
-    if (ret && typeof ret.currentTime === 'number') {
-      // We essentially 'warp' time by 16x
-      // Every 1 second of real time, we tell Discord 16 seconds have passed
-      const startTime = ret.startTime || Date.now();
-      const elapsed = (Date.now() - startTime) / 1000;
-      ret.currentTime = elapsed * 16; 
+  if (!QuestStore || !Dispatcher) return () => {};
+
+  // 1. Force the Store to report 'Completed' status for all active quests
+  const unpatchStore = after("getQuest", QuestStore, (args, ret) => {
+    if (ret && ret.userStatus) {
+      // Force the UI to show the 'Claim' button immediately
+      ret.userStatus.completedAt = new Date().toISOString();
+      ret.userStatus.progress = { 
+        ...ret.userStatus.progress,
+        WATCH_VIDEO: { value: 10000, target: 1 } 
+      };
     }
     return ret;
   });
-}
 
-function patchProfile() {
-  return after("getCurrentUser", UserStore, (_, user) => {
-    if (user) {
-      user.premiumType = 2; 
-      
-      // Nitro Badge
-      user.publicFlags = (user.publicFlags || 0) | 4194304;
-
-      // Fake "Premium Since" date (This makes the badge show up)
-      // Setting it to a date in the past makes the badge "older"
-      user.premiumSince = "2022-01-01T00:00:00.000000+00:00";
-      
-      // Fake "Guild Boost Since" date
-      // This adds the Booster Badge to your profile
-      user.premiumGuildSince = "2023-01-01T00:00:00.000000+00:00";
+  // 2. Intercept the "Video Start" event to instantly send a "Video End" event
+  const unpatchDispatch = after("dispatch", Dispatcher, (args) => {
+    const action = args[0];
+    if (action.type === "QUEST_VIDEO_STATE_UPDATE" && action.state === "PLAYING") {
+      // Spoof the 'Finished' signal 1 second after playing
+      setTimeout(() => {
+        Dispatcher.dispatch({
+          type: "QUEST_VIDEO_STATE_UPDATE",
+          questId: action.questId,
+          state: "COMPLETED",
+          timestamp: Date.now()
+        });
+      }, 1000);
     }
-    return user;
   });
+
+  return () => {
+    unpatchStore();
+    unpatchDispatch();
+  };
 }
-
-
-
 
 /* =========================
-   /* =========================
-   PLUGIN LIFECYCLE
+   PLUGIN LIFECYCLE (FINAL)
 ========================= */
 
 let unpatchSidebar: () => void;
@@ -1687,44 +1683,74 @@ let unpatches: (() => void)[] = [];
 
 export default {
   onLoad: () => {
-    // 1. Sidebar Bemmo Entry
-    try { unpatchSidebar = patchSidebar(); } catch (e) { logger.error("Sidebar failed", e); }
+    // 1. Sidebar Entry
+    try { 
+      unpatchSidebar = patchSidebar(); 
+    } catch (e) { 
+      logger.error("Sidebar failed", e); 
+    }
 
-    // 2. Nitro & Badge (The Essentials)
+    // 2. Nitro Spoof (Themes/Gradients)
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        if (user) {
-          user.premiumType = 2; 
-          user.publicFlags = (user.publicFlags || 0) | 4194304;
-          user.premiumSince = "2022-01-01T00:00:00.000Z";
-        }
+        if (user) user.premiumType = 2; 
         return user;
       }));
-    } catch (e) { logger.error("Nitro failed", e); }
+    } catch (e) { 
+      logger.error("Nitro failed", e); 
+    }
 
-    // 3. 2026 Video Quest Warp (16x Speed)
+    // 3. Video Quest & Orb Spoofer
     try {
-      const QuestVideo = findByProps("useQuestVideoProgress");
-      if (QuestVideo) {
-        unpatches.push(after("useQuestVideoProgress", QuestVideo, (args, ret) => {
-          if (ret) ret.playbackRate = 16; // Force internal logic to 16x
-          return ret;
-        }));
-        logger.log("Bemmo: Video Warp active");
+      const videoUnpatch = patchVideoQuests();
+      if (videoUnpatch) unpatches.push(videoUnpatch);
+      
+      const OrbStore = findByStoreName("OrbStore") || findByStoreName("QuestStore");
+      if (OrbStore) {
+        unpatches.push(after("getOrbBalance", OrbStore, () => 99999));
       }
-    } catch (e) { logger.error("Video Warp failed", e); }
+      logger.log("Bemmo: Quests & Orbs patched");
+    } catch (e) { 
+      logger.error("Quest/Orb patch failed", e); 
+    }
 
-    // 4. Start Services
-    RichPresence.startRichPresence();
-    logger.log("Bemmo Loaded. Orbs: 99,999 (Visual) | Video: 16x | Nitro: Active");
+    // 4. Copy Message ID & Other Services
+    try {
+      CopyMessageID.onLoad?.(); // Initialize Copy Message ID logic
+      RichPresence.startRichPresence();
+      if (storage.logging?.enabled) startLogger();
+    } catch (e) {
+      logger.error("Service initialization failed", e);
+    }
+
+    logger.log("Bemmo Plugin fully loaded.");
   },
 
   onUnload: () => {
-    for (const unpatch of unpatches) unpatch?.();
+    // 1. Unregister Commands
+    for (const unregister of commands) unregister();
+
+    // 2. Kill all active patches
+    for (const unpatch of unpatches) {
+      if (typeof unpatch === "function") unpatch();
+    }
     unpatches = [];
-    if (unpatchSidebar) unpatchSidebar();
+
+    // 3. Emergency Prison Release (Stop the loop)
+    if (prisonState.interval) {
+      clearInterval(prisonState.interval);
+      prisonState.active = false;
+    }
+
+    // 4. Stop Other Services
+    if (typeof unpatchSidebar === "function") unpatchSidebar();
     
+    CopyMessageID.onUnload?.(); // Cleanup Copy Message ID
     RichPresence.stopRichPresence();
+    stopLogger();
+
     logger.log("Plugin unloaded.");
-  }
+  },
+
+  settings: Settings,
 };
