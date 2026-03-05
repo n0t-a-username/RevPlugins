@@ -1629,92 +1629,78 @@ commands.push(
   })
 );
 
+// Persistent tracker for timestamps and intervals
+const questMap = new Map();
+
 function patchVideoQuests() {
   const QuestStore = findByStoreName("QuestStore");
   const Dispatcher = findByProps("dispatch", "subscribe");
-  const Toasts = findByProps("showToast");
+  const { showToast } = findByProps("showToast") || {};
 
   if (!QuestStore || !Dispatcher) return () => {};
 
-  const activeIntervals = new Map();
-
-  const startHeartbeat = (quest, duration) => {
-    if (activeIntervals.has(quest.id)) return;
-    
-    // Toast: Starting Quest
-    Toasts?.showToast(`Starting quest: ${quest.config?.messages?.questName || "Video Quest"}`);
-    
-    const start = Date.now();
-    const interval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - start) / 1000);
-      
-      if (elapsed >= duration) {
-        // Send final completion signal
-        Dispatcher.dispatch({
-          type: "QUEST_VIDEO_STATE_UPDATE",
-          questId: quest.id,
-          state: "COMPLETED",
-          currentTime: duration
-        });
-
-        // Toast: Quest Finished
-        Toasts?.showToast(`Quest finished: ${quest.config?.messages?.questName || "Video Quest"}`);
-        
-        clearInterval(interval);
-        activeIntervals.delete(quest.id);
-      } else {
-        // Regular heartbeat
-        Dispatcher.dispatch({
-          type: "QUEST_VIDEO_STATE_UPDATE",
-          questId: quest.id,
-          state: "PLAYING",
-          currentTime: elapsed
-        });
-      }
-    }, 15000);
-
-    activeIntervals.set(quest.id, interval);
-  };
-
-  // 1. Hook the Dispatcher to catch when quests are loaded or clicked
-  const unpatchDispatch = after("dispatch", Dispatcher, (args) => {
-    const [action] = args;
-    
-    // Check for work when quests load or user interacts
-    if (action.type === "QUESTS_FETCH_SUCCESS" || action.type === "QUEST_VIDEO_STATE_UPDATE") {
-      const quests = QuestStore.getQuests?.() || [];
-      quests.forEach(q => {
-        if (q.userStatus?.enrolledAt && !q.userStatus?.completedAt && q.config?.videoMetadata) {
-          startHeartbeat(q, q.config.videoMetadata.duration || 30);
-        }
-      });
-    }
-    return;
-  });
-
-  // 2. Visual Patch so the UI looks ready
+  // 1. UI Patch: Keeps the progress bar moving and enables the button
   const unpatchStore = after("getQuest", QuestStore, (args, ret) => {
-    if (ret && ret.userStatus && !ret.userStatus.completedAt && activeIntervals.has(ret.id)) {
-      // Show the progress bar as 100% so the 'Claim' button stays available
-      ret.userStatus.progress = { 
-        WATCH_VIDEO: { value: 100, target: 100 } 
-      };
+    if (ret && ret.userStatus && !ret.userStatus.completedAt && ret.config?.videoMetadata) {
+      const questId = ret.id;
+      const duration = ret.config.videoMetadata.duration || 30;
+
+      // START THE PROCESS
+      if (!questMap.has(questId)) {
+        const startTime = Date.now();
+        
+        // Toast: Starting
+        showToast?.(`Bemmo: Starting Quest (${duration}s)`);
+
+        // Heartbeat Loop (Satisfies the Server)
+        const interval = setInterval(() => {
+          const elapsed = (Date.now() - startTime) / 1000;
+          
+          if (elapsed >= duration) {
+            // Tell server we finished
+            Dispatcher.dispatch({
+              type: "QUEST_VIDEO_STATE_UPDATE",
+              questId: questId,
+              state: "COMPLETED",
+              currentTime: duration
+            });
+            // Toast: Finished
+            showToast?.(`Bemmo: Quest Ready to Claim!`);
+            clearInterval(interval);
+          } else {
+            // Periodic "I'm watching" signal
+            Dispatcher.dispatch({
+              type: "QUEST_VIDEO_STATE_UPDATE",
+              questId: questId,
+              state: "PLAYING",
+              currentTime: Math.floor(elapsed)
+            });
+          }
+        }, 15000); // 15s heartbeats
+
+        questMap.set(questId, { startTime, interval });
+      }
+
+      // Sync UI Progress
+      const data = questMap.get(questId);
+      const elapsedSeconds = (Date.now() - data.startTime) / 1000;
+
+      if (elapsedSeconds >= duration) {
+        ret.userStatus.progress = { WATCH_VIDEO: { value: duration, target: duration } };
+        ret.userStatus.completedAt = new Date().toISOString();
+      } else {
+        ret.userStatus.progress = { WATCH_VIDEO: { value: Math.floor(elapsedSeconds), target: duration } };
+      }
     }
     return ret;
   });
 
   return () => {
-    unpatchDispatch();
     unpatchStore();
-    activeIntervals.forEach(clearInterval);
-    activeIntervals.clear();
+    questMap.forEach(q => clearInterval(q.interval));
+    questMap.clear();
   };
 }
-
-
-
-
-
 
 
 /* =========================
