@@ -1631,57 +1631,74 @@ commands.push(
 
 function patchVideoQuests() {
   const QuestStore = findByStoreName("QuestStore");
-  // We need the internal API module to send the heartbeat
-  const { post } = findByProps("get", "post", "put");
+  const Dispatcher = findByProps("dispatch", "subscribe");
 
-  if (!QuestStore || !post) return () => {};
+  // Safety check: if these aren't found, the plugin won't crash
+  if (!QuestStore || !Dispatcher) return () => {};
 
   return after("getQuest", QuestStore, (args, ret) => {
-    // Check if it's a video quest we haven't finished
+    // Only target active video quests that aren't finished
     if (ret && ret.userStatus && !ret.userStatus.completedAt && ret.config?.videoMetadata) {
       const questId = ret.id;
       const duration = ret.config.videoMetadata.duration || 30;
 
-      // START THE GHOST WATCHER
-      if (!ret._bemmoActive) {
-        ret._bemmoActive = true;
+      // START THE GHOST WATCHER (Heartbeat simulation)
+      if (!ret._bemmoRunning) {
+        ret._bemmoRunning = true;
         ret._startTime = Date.now();
 
-        // Send a heartbeat every 20 seconds to keep the server happy
-        const interval = setInterval(async () => {
+        // Send an initial 'Playing' signal
+        Dispatcher.dispatch({
+          type: "QUEST_VIDEO_STATE_UPDATE",
+          questId: questId,
+          state: "PLAYING",
+          currentTime: 0
+        });
+
+        // Loop heartbeats every 10 seconds to satisfy the server's check
+        const interval = setInterval(() => {
           const elapsed = (Date.now() - ret._startTime) / 1000;
           
-          try {
-            await post({
-              url: `/quests/${questId}/video-progress`,
-              body: { 
-                current_time: Math.min(elapsed, duration),
-                state: elapsed >= duration ? "COMPLETED" : "PLAYING"
-              }
+          if (elapsed >= duration) {
+            // Signal completion to the server
+            Dispatcher.dispatch({
+              type: "QUEST_VIDEO_STATE_UPDATE",
+              questId: questId,
+              state: "COMPLETED",
+              currentTime: duration
             });
-            
-            if (elapsed >= duration) {
-              clearInterval(interval);
-              logger.log(`Bemmo: Quest ${questId} validated by server!`);
-            }
-          } catch (e) {
             clearInterval(interval);
+            logger.log(`Bemmo: Quest ${questId} validated.`);
+          } else {
+            // Standard "I am watching" heartbeat
+            Dispatcher.dispatch({
+              type: "QUEST_VIDEO_STATE_UPDATE",
+              questId: questId,
+              state: "PLAYING",
+              currentTime: Math.floor(elapsed)
+            });
           }
-        }, 20000); // 20-second heartbeats (Discord's standard)
+        }, 10000); 
       }
 
-      // Update UI so it looks correct while we wait
+      // Force the UI to show the progress moving
       const totalElapsed = (Date.now() - ret._startTime) / 1000;
       if (totalElapsed >= duration) {
-        ret.userStatus.progress = { WATCH_VIDEO: { value: duration, target: duration } };
+        ret.userStatus.progress = { 
+          WATCH_VIDEO: { value: duration, target: duration } 
+        };
         ret.userStatus.completedAt = new Date().toISOString();
       } else {
-        ret.userStatus.progress = { WATCH_VIDEO: { value: Math.floor(totalElapsed), target: duration } };
+        ret.userStatus.progress = { 
+          WATCH_VIDEO: { value: Math.floor(totalElapsed), target: duration } 
+        };
       }
     }
     return ret;
   });
 }
+
+
 
 
 
