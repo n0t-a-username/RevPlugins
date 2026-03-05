@@ -69,14 +69,6 @@ const getIconBase64 = async (url) => {
 
 
 
-// Inside your export default onLoad:
-applyTheme();
-storage.watch(() => applyTheme());
-
-// Inside your export default onUnload:
-document.getElementById("rn-plugin-theme")?.remove();
-
-
 // ---- /steal ----
 commands.push(
   registerCommand({
