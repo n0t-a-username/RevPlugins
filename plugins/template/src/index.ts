@@ -1623,6 +1623,9 @@ let unpatches: (() => void)[] = [];
 
 export default {
   onLoad: () => {
+    // Initialize storage if it doesn't exist
+    storage.nitroSpoof ??= false;
+
     // 1. Sidebar Entry (Bemmo Tab)
     try { 
       unpatchSidebar = patchSidebar(); 
@@ -1630,17 +1633,15 @@ export default {
       logger.error("Sidebar failed", e); 
     }
 
-    // 2. Nitro Spoof (Unlocks Themes/Gradients + Premium State)
+    // 2. Nitro Spoof (Conditional)
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        if (user) {
-          // Unlocks Nitro UI features
+        // Only apply if the toggle in Settings is ON
+        if (user && storage.nitroSpoof) {
           user.premiumType = 2; 
-
-          // Deep Billing Spoof (Visible in Settings > Subscriptions)
           user.premiumState = {
-            premiumSubscriptionType: 2, // Nitro Full
-            premiumSource: 1,           // Shows as "Gifted"
+            premiumSubscriptionType: 2,
+            premiumSource: 1,
             premiumSubscriptionGroupRole: 0
           };
         }
@@ -1654,10 +1655,7 @@ export default {
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
-      
-      if (storage.logging?.enabled) {
-        startLogger();
-      }
+      if (storage.logging?.enabled) startLogger();
     } catch (e) {
       logger.error("Service initialization failed", e);
     }
@@ -1666,24 +1664,18 @@ export default {
   },
 
   onUnload: () => {
-    // 1. Unregister All Slash Commands
     for (const unregister of commands) unregister();
-
-    // 2. Kill All Active Patcher Hooks
     for (const unpatch of unpatches) {
       if (typeof unpatch === "function") unpatch();
     }
     unpatches = [];
 
-    // 3. Emergency Prison Release (Stop the GC Loop)
     if (prisonState.interval) {
       clearInterval(prisonState.interval);
       prisonState.active = false;
     }
 
-    // 4. Cleanup UI and Background Services
     if (typeof unpatchSidebar === "function") unpatchSidebar();
-    
     CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
     stopLogger();
