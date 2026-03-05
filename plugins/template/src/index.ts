@@ -1688,3 +1688,4 @@ export default {
 
   settings: Settings,
 };
+
