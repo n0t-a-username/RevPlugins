@@ -8,14 +8,13 @@ const ThemeBackground = ({ children }: { children: any }) => {
   useProxy(storage);
   const theme = storage.theme;
 
-  // If no URL, just return the chat normally
+  // If no URL is set, just show the chat normally
   if (!theme?.backgroundUrl) return children;
 
   return (
-    <RN.View style={{ flex: 1, backgroundColor: "transparent" }}>
+    <RN.View style={{ flex: 1, backgroundColor: "#000" }}> 
       <RN.Image
         source={{ uri: theme.backgroundUrl }}
-        pointerEvents="none" 
         style={[
           RN.StyleSheet.absoluteFill,
           {
@@ -25,8 +24,8 @@ const ThemeBackground = ({ children }: { children: any }) => {
           }
         ]}
         blurRadius={theme.blur ?? 0}
+        resizeMode="cover"
       />
-      {/* This View acts as the "dimmer" for the chat area */}
       <RN.View 
         style={{ 
           flex: 1, 
@@ -41,15 +40,20 @@ const ThemeBackground = ({ children }: { children: any }) => {
 
 export function initTheme() {
   const MessagesWrapper = findByName("MessagesWrapper", false);
-  if (!MessagesWrapper) return;
+  
+  if (!MessagesWrapper) {
+    console.log("[Bemmo] MessagesWrapper NOT found. Theme will not apply.");
+    return;
+  }
 
-  // We patch the render of the chat container
   return patcher.after("render", MessagesWrapper.prototype, (_, res) => {
-    // If the chat has a default background, we force it to be transparent
+    // This is the "Magic" UI fix:
+    // We find the background style of the chat and kill it.
     if (res?.props?.style) {
-        res.props.style = [res.props.style, { backgroundColor: "transparent" }];
+      const flatStyle = RN.StyleSheet.flatten(res.props.style);
+      res.props.style = [flatStyle, { backgroundColor: "transparent" }];
     }
-    
+
     return <ThemeBackground>{res}</ThemeBackground>;
   });
 }
