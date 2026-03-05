@@ -80,102 +80,28 @@ function patchNitro() {
 }
 
 
-commands.push(
-  registerCommand({
-    name: "quest-bypass",
-    displayName: "quest-bypass",
-    description: "Accepts and completes a quest via its URL",
-    options: [
-      {
-        name: "url",
-        displayName: "url",
-        description: "The Discord Quest link",
-        required: true,
-        type: 3,
-      }
-    ],
-    applicationId: "-1",
-    inputType: 1,
-    type: 1,
-    execute: async (args, ctx) => {
-      const url = args.find(a => a.name === "url")?.value;
-      const currentUser = UserStore.getCurrentUser();
+function patchVideoQuests() {
+  // We search for the internal video player component
+  const VideoPlayer = findByProps("PlaybackStates", "VideoEvents");
+
+  return after("render", VideoPlayer?.prototype, (args, ret) => {
+    // Find the actual <video> element in the rendered UI
+    const videoElement = findInTree(ret, x => x?.type === "video");
+
+    if (videoElement) {
+      // 1. Force 16x speed (The maximum stable speed)
+      videoElement.props.playbackRate = 16;
       
-      const questIdMatch = url.match(/quests\/(\d+)/);
-      if (!questIdMatch) {
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-          channelId: ctx.channel.id, content: "❌ Invalid Quest URL." 
-        }), { author: currentUser }));
-        return;
-      }
+      // 2. Auto-mute so you can stay in VC or listen to music
+      videoElement.props.muted = true;
+      
+      // 3. Prevent the video from pausing if you switch tabs
+      videoElement.props.pauseOnUnfocus = false;
+    }
+    return ret;
+  });
+}
 
-      const questId = questIdMatch[1];
-
-      // Security header that tells Discord we are viewing this quest in the 'Quests' tab
-      const contextHeader = btoa(JSON.stringify({ location: "Quests" }));
-
-      try {
-        // 1. Enroll with Context
-        await HTTP.post({ 
-          url: `/quests/${questId}/enroll`,
-          headers: { "X-Context-Properties": contextHeader }
-        });
-
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-          channelId: ctx.channel.id, content: "✅ Enrolled! Detecting type..." 
-        }), { author: currentUser }));
-
-        // 2. Fetch Quest Details
-        const questData = await HTTP.get({ url: `/quests/${questId}` });
-        const isVideo = !!questData.body?.config?.video_metadata || !!questData.body?.config?.videoMetadata;
-
-        if (isVideo) {
-          // 3. Video Bypass (incremental steps to avoid 'Unknown Error' block)
-          const duration = 30; // Most video quests are 30s
-          
-          // Send mid-point then end-point
-          await HTTP.post({ url: `/quests/${questId}/video-progress`, body: { timestamp: duration / 2 } });
-          await sleep(1000);
-          await HTTP.post({ url: `/quests/${questId}/video-progress`, body: { timestamp: duration } });
-
-          receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-            channelId: ctx.channel.id, content: "⚡ **Video Bypass Successful!** Check your Gift Inventory." 
-          }), { author: currentUser }));
-        } else {
-          // 4. Game Heartbeat (Standard 15m)
-          receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-            channelId: ctx.channel.id, content: "🎮 **Game Quest:** Starting 15m heartbeat loop..." 
-          }), { author: currentUser }));
-          
-          let elapsed = 0;
-          const interval = setInterval(async () => {
-            elapsed += 30;
-            try {
-              await HTTP.post({ 
-                url: `/quests/${questId}/heartbeat`, 
-                body: { terminal: false },
-                headers: { "X-Context-Properties": contextHeader }
-              });
-              if (elapsed >= 900) {
-                clearInterval(interval);
-                await HTTP.post({ url: `/quests/${questId}/heartbeat`, body: { terminal: true } });
-                receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-                  channelId: ctx.channel.id, content: "✅ **Quest Complete!**" 
-                }), { author: currentUser }));
-              }
-            } catch { clearInterval(interval); }
-          }, 30000);
-        }
-      } catch (err) {
-        // Detailed error logging
-        const errMsg = err.response?.body?.message || err.message || "Discord rejected the request";
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-          channelId: ctx.channel.id, content: `⚠️ Error: ${errMsg}` 
-        }), { author: currentUser }));
-      }
-    },
-  })
-);
 
 
 
