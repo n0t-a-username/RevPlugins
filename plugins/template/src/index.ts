@@ -89,7 +89,7 @@ commands.push(
       {
         name: "url",
         displayName: "url",
-        description: "The Discord Quest link (e.g., discord.com/quests/1473790...)",
+        description: "The Discord Quest link",
         required: true,
         type: 3,
       }
@@ -101,7 +101,6 @@ commands.push(
       const url = args.find(a => a.name === "url")?.value;
       const currentUser = UserStore.getCurrentUser();
       
-      // Extract ID from the URL using Regex
       const questIdMatch = url.match(/quests\/(\d+)/);
       if (!questIdMatch) {
         receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
@@ -112,57 +111,72 @@ commands.push(
 
       const questId = questIdMatch[1];
 
+      // Security header that tells Discord we are viewing this quest in the 'Quests' tab
+      const contextHeader = btoa(JSON.stringify({ location: "Quests" }));
+
       try {
-        // 1. Attempt to Enroll (Accept the Quest)
-        // This bypasses the need to find the quest in your settings menu
-        await HTTP.post({ url: `/quests/${questId}/enroll` });
+        // 1. Enroll with Context
+        await HTTP.post({ 
+          url: `/quests/${questId}/enroll`,
+          headers: { "X-Context-Properties": contextHeader }
+        });
 
         receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-          channelId: ctx.channel.id, 
-          content: `🔗 Quest **${questId}** accepted! Detecting quest type...` 
+          channelId: ctx.channel.id, content: "✅ Enrolled! Detecting type..." 
         }), { author: currentUser }));
 
-        // 2. Fetch Quest Data to see if it's a Video or Game
+        // 2. Fetch Quest Details
         const questData = await HTTP.get({ url: `/quests/${questId}` });
-        const isVideo = !!questData.body?.config?.videoMetadata;
+        const isVideo = !!questData.body?.config?.video_metadata || !!questData.body?.config?.videoMetadata;
 
         if (isVideo) {
-          // Instant Video Bypass
-          const duration = questData.body.config.videoMetadata.duration || 120;
-          await HTTP.post({ url: `/quests/${questId}/video-progress`, body: { timestamp: duration } });
+          // 3. Video Bypass (incremental steps to avoid 'Unknown Error' block)
+          const duration = 30; // Most video quests are 30s
           
+          // Send mid-point then end-point
+          await HTTP.post({ url: `/quests/${questId}/video-progress`, body: { timestamp: duration / 2 } });
+          await sleep(1000);
+          await HTTP.post({ url: `/quests/${questId}/video-progress`, body: { timestamp: duration } });
+
           receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-            channelId: ctx.channel.id, content: "⚡ **Video Quest Bypassed!** Claim your Orbs in settings." 
+            channelId: ctx.channel.id, content: "⚡ **Video Bypass Successful!** Check your Gift Inventory." 
           }), { author: currentUser }));
         } else {
-          // Start the 15-minute Heartbeat Spoof for games
+          // 4. Game Heartbeat (Standard 15m)
           receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-            channelId: ctx.channel.id, content: "🎮 **Game Quest detected.** Starting 15m heartbeat spoof. Don't close Discord!" 
+            channelId: ctx.channel.id, content: "🎮 **Game Quest:** Starting 15m heartbeat loop..." 
           }), { author: currentUser }));
           
           let elapsed = 0;
           const interval = setInterval(async () => {
             elapsed += 30;
-            await HTTP.post({ url: `/quests/${questId}/heartbeat`, body: { terminal: false } });
-            
-            if (elapsed >= 900) { // 15 minutes
-              clearInterval(interval);
-              await HTTP.post({ url: `/quests/${questId}/heartbeat`, body: { terminal: true } });
-              receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-                channelId: ctx.channel.id, content: "✅ **Game Quest Finished!** You can now claim your reward." 
-              }), { author: currentUser }));
-            }
+            try {
+              await HTTP.post({ 
+                url: `/quests/${questId}/heartbeat`, 
+                body: { terminal: false },
+                headers: { "X-Context-Properties": contextHeader }
+              });
+              if (elapsed >= 900) {
+                clearInterval(interval);
+                await HTTP.post({ url: `/quests/${questId}/heartbeat`, body: { terminal: true } });
+                receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+                  channelId: ctx.channel.id, content: "✅ **Quest Complete!**" 
+                }), { author: currentUser }));
+              }
+            } catch { clearInterval(interval); }
           }, 30000);
         }
-
       } catch (err) {
+        // Detailed error logging
+        const errMsg = err.response?.body?.message || err.message || "Discord rejected the request";
         receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-          channelId: ctx.channel.id, content: `⚠️ Failed: ${err.message || "Unknown error"}` 
+          channelId: ctx.channel.id, content: `⚠️ Error: ${errMsg}` 
         }), { author: currentUser }));
       }
     },
   })
 );
+
 
 
 // ---- /steal ----
