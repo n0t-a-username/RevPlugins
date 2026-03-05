@@ -22,8 +22,6 @@ const {
 const Forms = UiForms || {};
 const { FormRow } = Forms as any;
 
-// --- Advanced Slider Discovery ---
-// This checks every possible export location used by Discord/Vendetta builds
 const FormSlider = 
   (General as any)?.FormSlider || 
   (Forms as any)?.FormSlider || 
@@ -44,14 +42,14 @@ if (typeof storage.eventGiveawayPing !== "string") {
 if (!Array.isArray(storage.messageLogs)) {
   storage.messageLogs = [];
 }
-if (!storage.theme) {
-  storage.theme = {
-    backgroundUrl: "",
-    blur: 0,
-    opacity: 1,
-    chatOpacity: 1
-  };
-}
+
+// Ensure theme object exists with proper defaults for sliders
+storage.theme ??= {
+  backgroundUrl: "",
+  blur: 0,
+  opacity: 1,
+  chatOpacity: 0.8
+};
 
 const inputStyle = {
   backgroundColor: "#222",
@@ -176,7 +174,8 @@ export default function Settings() {
               <FormSlider 
                 value={storage.theme.opacity} 
                 onValueChange={(v: number) => (storage.theme.opacity = v)} 
-                initialValue={storage.theme.opacity}
+                minimumValue={0}
+                maximumValue={1}
               />
               
               <Text style={{ color: "#fff", marginTop: 15 }}>Blur Strength: {Math.round(storage.theme.blur)}px</Text>
@@ -192,10 +191,12 @@ export default function Settings() {
               <FormSlider 
                 value={storage.theme.chatOpacity} 
                 onValueChange={(v: number) => (storage.theme.chatOpacity = v)} 
+                minimumValue={0}
+                maximumValue={1}
               />
             </>
           ) : (
-            <Text style={{ color: "#ff4444" }}>No compatible Slider component found. Use a text input?</Text>
+            <Text style={{ color: "#ff4444" }}>No compatible Slider component found.</Text>
           )}
         </View>
       </BetterTableRowGroup>
@@ -210,8 +211,6 @@ export default function Settings() {
     </>
   );
 
-  // ... (renderRaidMessagesPage and renderMessageLogsPage stay the same)
-  
   const renderRaidMessagesPage = () => (
     <>
       <Header />
