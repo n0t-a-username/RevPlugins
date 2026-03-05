@@ -1639,40 +1639,37 @@ function patchVideoQuests() {
 
   if (!QuestStore || !Dispatcher) return () => {};
 
-  // 1. Force the Store to report 'Completed' status for all active quests
-  const unpatchStore = after("getQuest", QuestStore, (args, ret) => {
-    if (ret && ret.userStatus) {
-      // Force the UI to show the 'Claim' button immediately
-      ret.userStatus.completedAt = new Date().toISOString();
-      ret.userStatus.progress = { 
-        ...ret.userStatus.progress,
-        WATCH_VIDEO: { value: 10000, target: 1 } 
-      };
+  return after("getQuest", QuestStore, (args, ret) => {
+    // Only target video quests that haven't been completed yet
+    if (ret && ret.config?.configVersion === 2 && ret.userStatus && !ret.userStatus.completedAt) {
+      const questId = ret.id;
+      const targetSeconds = ret.config.videoMetadata?.duration || 30;
+      
+      // Start a "Server-Safe" timer the moment the quest is viewed
+      if (!ret._bemmoTimer) {
+        ret._bemmoTimer = Date.now();
+        logger.log(`Quest ${questId}: Starting ${targetSeconds}s server-side wait...`);
+      }
+
+      const elapsed = (Date.now() - ret._bemmoTimer) / 1000;
+
+      if (elapsed >= targetSeconds) {
+        // Only after the real time has passed do we spoof the completion
+        ret.userStatus.progress = { 
+          WATCH_VIDEO: { value: targetSeconds, target: targetSeconds } 
+        };
+        ret.userStatus.completedAt = new Date().toISOString();
+      } else {
+        // Show progress so you know it's working
+        ret.userStatus.progress = { 
+          WATCH_VIDEO: { value: Math.floor(elapsed), target: targetSeconds } 
+        };
+      }
     }
     return ret;
   });
-
-  // 2. Intercept the "Video Start" event to instantly send a "Video End" event
-  const unpatchDispatch = after("dispatch", Dispatcher, (args) => {
-    const action = args[0];
-    if (action.type === "QUEST_VIDEO_STATE_UPDATE" && action.state === "PLAYING") {
-      // Spoof the 'Finished' signal 1 second after playing
-      setTimeout(() => {
-        Dispatcher.dispatch({
-          type: "QUEST_VIDEO_STATE_UPDATE",
-          questId: action.questId,
-          state: "COMPLETED",
-          timestamp: Date.now()
-        });
-      }, 1000);
-    }
-  });
-
-  return () => {
-    unpatchStore();
-    unpatchDispatch();
-  };
 }
+
 
 /* =========================
    PLUGIN LIFECYCLE (FINAL)
