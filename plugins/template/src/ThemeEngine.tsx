@@ -1,6 +1,6 @@
 import { patcher } from "@vendetta";
 import { findByName } from "@vendetta/metro";
-import { ReactNative as RN } from "@vendetta/metro/common";
+import { ReactNative as RN, React } from "@vendetta/metro/common"; // Add React here
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 
