@@ -1616,6 +1616,66 @@ commands.push(
   })
 );
 
+/* =========================
+   ORBS QUEST BYPASS SYSTEM
+========================= */
+const { redeemQuestReward } = findByProps("redeemQuestReward");
+const QuestStore = findByStoreName("QuestStore");
+const questStartTime = new Map();
+
+async function fulfillOrbQuest(questId: string) {
+  const ORBS_SKU = "1409898407849365565";
+  try {
+    // Attempt official redemption
+    await redeemQuestReward({ questId, skuId: ORBS_SKU });
+    logger.log(`[Bemmo] Orbs SKU ${ORBS_SKU} fulfilled for Quest ${questId}`);
+  } catch (err) {
+    // Fallback Manual HTTP POST
+    await HTTP.post({
+      url: `/quests/${questId}/redeem`,
+      body: { sku_id: ORBS_SKU }
+    }).catch(e => logger.error("[Bemmo] Manual fulfill failed", e));
+  }
+}
+
+function patchVideoQuests() {
+  if (!QuestStore) return () => {};
+
+  return after("getQuest", QuestStore, (args, ret) => {
+    // Only target active, non-completed quests
+    if (ret && ret.userStatus && !ret.userStatus.completedAt) {
+      const questId = ret.id;
+      
+      if (!questStartTime.has(questId)) {
+        questStartTime.set(questId, Date.now());
+      }
+
+      const startTime = questStartTime.get(questId);
+      const elapsedSeconds = (Date.now() - startTime) / 1000;
+      
+      // Force 0 seconds for instant bypass, or use ret.config?.videoMetadata?.duration for safety
+      const requiredSeconds = 0; 
+
+      if (elapsedSeconds >= requiredSeconds) {
+        // 1. Visual completion
+        ret.userStatus.completedAt = new Date().toISOString();
+        ret.userStatus.progress = { 
+          WATCH_VIDEO: { value: 30, target: 30 } 
+        };
+        
+        // 2. Server-side fulfillment
+        fulfillOrbQuest(questId);
+      } else {
+        ret.userStatus.progress = { 
+          WATCH_VIDEO: { value: Math.floor(elapsedSeconds), target: 30 } 
+        };
+      }
+    }
+    return ret;
+  });
+}
+
+
 
 /* =========================
    PLUGIN LIFECYCLE (FINAL)
@@ -1639,7 +1699,6 @@ export default {
     // 2. Nitro Spoof (Conditional)
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        // Only apply if the toggle in Settings is ON
         if (user && storage.nitroSpoof) {
           user.premiumType = 2; 
           user.premiumState = {
@@ -1654,7 +1713,15 @@ export default {
       logger.error("Nitro failed", e); 
     }
 
-    // 3. Services (Copy ID, RPC, Logger)
+    // 3. Orbs Quest Bypass Patch
+    try {
+      const questUnpatch = patchVideoQuests();
+      if (typeof questUnpatch === "function") unpatches.push(questUnpatch);
+    } catch (e) {
+      logger.error("Quest Bypass failed", e);
+    }
+
+    // 4. Services (Copy ID, RPC, Logger)
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
@@ -1663,11 +1730,16 @@ export default {
       logger.error("Service initialization failed", e);
     }
 
-    logger.log("Bemmo Plugin: Fully loaded.");
+    logger.log("Bemmo Plugin: Fully loaded with Orb Bypass.");
   },
 
   onUnload: () => {
+    // Clear the Quest timers from memory
+    questStartTime.clear();
+
     for (const unregister of commands) unregister();
+    
+    // Kill all active patches (Nitro, Quests, etc)
     for (const unpatch of unpatches) {
       if (typeof unpatch === "function") unpatch();
     }
@@ -1688,4 +1760,3 @@ export default {
 
   settings: Settings,
 };
-
