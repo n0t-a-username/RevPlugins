@@ -1616,6 +1616,10 @@ commands.push(
   })
 );
 
+const QuestStore = findByStoreName("QuestStore");
+const { redeemQuestReward } = findByProps("redeemQuestReward") || {};
+
+
 /* =========================
    ORBS QUEST BYPASS SYSTEM
 ========================= */
@@ -1624,10 +1628,10 @@ const questStartTime = new Map();
 async function fulfillOrbQuest(questId: string) {
   const ORBS_SKU = "1409898407849365565";
   try {
-    // Uses the 'redeemQuestReward' and 'HTTP' you already declared at the top
+    // Check if the internal redeemer exists, otherwise use raw HTTP
     if (typeof redeemQuestReward === "function") {
       await redeemQuestReward({ questId, skuId: ORBS_SKU });
-    } else {
+    } else if (HTTP?.post) {
       await HTTP.post({
         url: `/quests/${questId}/redeem`,
         body: { sku_id: ORBS_SKU }
@@ -1639,16 +1643,12 @@ async function fulfillOrbQuest(questId: string) {
   }
 }
 
-
-
-
-
 /* =========================
    PLUGIN LIFECYCLE (FINAL)
 ========================= */
 
 let unpatches: (() => void)[] = [];
-let unpatchSidebar: () => void;
+let unpatchSidebar: any;
 
 export default {
   onLoad: () => {
@@ -1656,7 +1656,6 @@ export default {
     try { storage.nitroSpoof ??= false; } catch(e) {}
 
     // 2. Nitro Spoof Patch
-    // No 'const UserStore' here; it's already at the top of your file
     if (UserStore) {
       try {
         unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
@@ -1670,19 +1669,21 @@ export default {
     }
 
     // 3. Orbs Quest Bypass
-    // No 'const QuestStore' here; it's already at the top of your file
     if (QuestStore) {
       try {
         unpatches.push(after("getQuest", QuestStore, (args, ret) => {
+          // Check if quest exists and isn't finished
           if (ret?.userStatus && !ret.userStatus.completedAt) {
             const qId = ret.id;
-            if (!questStartTime.has(qId)) questStartTime.set(qId, Date.now());
             
-            // Bypass logic: Force completed state
+            // Mark start time for this specific quest
+            if (!questStartTime.has(qId)) questStartTime.set(qId, Date.now());
+
+            // Bypass logic: Immediately tell the UI it's done
             ret.userStatus.completedAt = new Date().toISOString();
             ret.userStatus.progress = { WATCH_VIDEO: { value: 30, target: 30 } };
-            
-            // Call the helper
+
+            // Send the actual claim request to Discord
             fulfillOrbQuest(qId);
           }
           return ret;
@@ -1691,24 +1692,37 @@ export default {
     }
 
     // 4. Sidebar & Services
-    try { unpatchSidebar = patchSidebar?.(); } catch(e) {}
+    try { 
+       unpatchSidebar = patchSidebar(); 
+    } catch(e) { logger.error("Sidebar Fail", e); }
+
     try { 
       CopyMessageID?.onLoad?.(); 
       RichPresence?.startRichPresence();
-    } catch(e) {}
+      if (storage.logging?.enabled) startLogger();
+    } catch(e) { logger.error("Services Fail", e); }
 
     logger.log("Bemmo: Plugin Started.");
   },
 
   onUnload: () => {
+    // Cleanup
     questStartTime.clear();
+    
+    // Unregister Commands
+    for (const unreg of commands) unreg();
+
+    // Remove Patches
     for (const unpatch of unpatches) {
       try { unpatch?.(); } catch (e) {}
     }
     unpatches = [];
-    
+
+    // Stop Services
     if (typeof unpatchSidebar === "function") unpatchSidebar();
     RichPresence?.stopRichPresence();
+    stopLogger(true);
+
     logger.log("Bemmo: Unloaded.");
   },
   settings: Settings
