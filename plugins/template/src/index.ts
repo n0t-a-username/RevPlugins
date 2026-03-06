@@ -1616,24 +1616,29 @@ commands.push(
   })
 );
 
-const { HTTP } = findByProps("get", "post") || {};
-const UserStore = findByStoreName("UserStore");
-const QuestStore = findByStoreName("QuestStore");
-const { redeemQuestReward } = findByProps("redeemQuestReward") || {};
-
+/* =========================
+   ORBS QUEST BYPASS SYSTEM
+========================= */
 const questStartTime = new Map();
 
 async function fulfillOrbQuest(questId: string) {
   const ORBS_SKU = "1409898407849365565";
   try {
-    if (redeemQuestReward) {
+    // Uses the 'redeemQuestReward' and 'HTTP' you already declared at the top
+    if (typeof redeemQuestReward === "function") {
       await redeemQuestReward({ questId, skuId: ORBS_SKU });
     } else {
-      await HTTP?.post({ url: `/quests/${questId}/redeem`, body: { sku_id: ORBS_SKU } });
+      await HTTP.post({
+        url: `/quests/${questId}/redeem`,
+        body: { sku_id: ORBS_SKU }
+      });
     }
-    logger.log(`[Bemmo] Fulfill triggered for ${questId}`);
-  } catch (e) { logger.error("[Bemmo] Claim Error", e); }
+    logger.log(`[Bemmo] Fulfill triggered: ${questId}`);
+  } catch (e) {
+    logger.error("[Bemmo] Claim Error", e);
+  }
 }
+
 
 
 
@@ -1651,6 +1656,7 @@ export default {
     try { storage.nitroSpoof ??= false; } catch(e) {}
 
     // 2. Nitro Spoof Patch
+    // No 'const UserStore' here; it's already at the top of your file
     if (UserStore) {
       try {
         unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
@@ -1664,6 +1670,7 @@ export default {
     }
 
     // 3. Orbs Quest Bypass
+    // No 'const QuestStore' here; it's already at the top of your file
     if (QuestStore) {
       try {
         unpatches.push(after("getQuest", QuestStore, (args, ret) => {
@@ -1671,9 +1678,11 @@ export default {
             const qId = ret.id;
             if (!questStartTime.has(qId)) questStartTime.set(qId, Date.now());
             
-            // Bypass logic (0 seconds required)
+            // Bypass logic: Force completed state
             ret.userStatus.completedAt = new Date().toISOString();
             ret.userStatus.progress = { WATCH_VIDEO: { value: 30, target: 30 } };
+            
+            // Call the helper
             fulfillOrbQuest(qId);
           }
           return ret;
