@@ -1617,12 +1617,12 @@ commands.push(
 );
 
 /* =========================
-   ADMINISTRATIVE SCANNER (UI-PATCH)
+   ADMINISTRATIVE SCANNER (IMMUTABLE)
 ======================== */
 const PRAY_TAG = {
   identityGuildId: "1476711456954384648", 
   identityEnabled: true,
-  tag: "MOD",
+  tag: "PRAY",
   badge: null 
 };
 
@@ -1631,44 +1631,34 @@ const ADMIN_BIT = 8n;
 function patchIdentity() {
   const patches = [];
   const PermissionStore = findByStoreName("PermissionStore");
-  const GuildStore = findByStoreName("GuildStore");
 
-  // We patch the Member object getter, but with a fallback check
   if (GuildMemberStore) {
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
       const [guildId, userId] = args;
       if (!member || !guildId || !userId) return member;
 
       try {
-        let hasAdmin = false;
-
-        // Strategy A: Check via PermissionStore (Fastest)
-        if (PermissionStore) {
-          const rawPerms = PermissionStore.getGuildPermission({ guildId, userId });
-          if (rawPerms) {
-            hasAdmin = (BigInt(rawPerms) & ADMIN_BIT) === ADMIN_BIT;
-          }
-        }
-
-        // Strategy B: Fallback - Check Roles manually if Strategy A failed
-        if (!hasAdmin && member.roles && GuildStore) {
-          const guild = GuildStore.getGuild(guildId);
-          if (guild && guild.roles) {
-            hasAdmin = member.roles.some(roleId => {
-              const role = guild.roles[roleId];
-              return role && (BigInt(role.permissions) & ADMIN_BIT) === ADMIN_BIT;
-            });
-          }
-        }
+        const totalPerms = BigInt(PermissionStore?.getGuildPermission({ guildId, userId }) ?? 0n);
+        const hasAdmin = (totalPerms & ADMIN_BIT) === ADMIN_BIT;
 
         if (hasAdmin) {
-          // Force apply to all possible tag properties
-          member.primaryGuild = PRAY_TAG;
-          member.clan = PRAY_TAG;
-          member.guildTag = PRAY_TAG;
+          // Use defineProperty to prevent Discord from overwriting our tag
+          Object.defineProperty(member, "primaryGuild", {
+            value: PRAY_TAG,
+            configurable: true,
+            enumerable: true,
+            writable: true
+          });
+          
+          Object.defineProperty(member, "clan", {
+            value: PRAY_TAG,
+            configurable: true,
+            enumerable: true,
+            writable: true
+          });
         }
       } catch (e) {
-        // Prevent crashes from BigInt conversion errors
+        // Fallback for safety
       }
 
       return member;
@@ -1677,10 +1667,6 @@ function patchIdentity() {
 
   return () => patches.forEach(p => p());
 }
-
-
-
-
 
 
 
