@@ -1616,155 +1616,76 @@ commands.push(
   })
 );
 
-/* =========================
-   ORBS VISUAL SPOOFER
-========================= */
-function patchOrbsBalance() {
-  if (!InventoryStore) return;
-
-  // Intercepts the reward balance request for the UI
-  return after("getRewardBalance", InventoryStore, (args, ret) => {
-    // 1409898407849365565 is the standard SKU for Orbs
-    if (args[0] === "1409898407849365565" || !args[0]) {
-      return 9999; // The number that will show in your UI
-    }
-    return ret;
-  });
-}
-
-
-const QuestStore = findByStoreName("QuestStore");
-const { redeemQuestReward } = findByProps("redeemQuestReward") || {};
-
 
 /* =========================
-   ORBS MANUAL BYPASS SYSTEM
+   PLUGIN LIFECYCLE (FINAL)
 ========================= */
-const questStartTime = new Map();
-const questProcessing = new Set();
-const { acceptQuest } = findByProps("acceptQuest") || {};
 
-async function fulfillOrbQuest(questId: string) {
-  const ORBS_SKU = "1409898407849365565";
-  try {
-    // 1. Ensure quest is accepted
-    if (typeof acceptQuest === "function") await acceptQuest(questId);
-    
-    // 2. Wait 2 seconds for state to sync on server
-    await sleep(2000); 
-
-    // 3. Attempt Redemption
-    if (typeof redeemQuestReward === "function") {
-      await redeemQuestReward({ questId, skuId: ORBS_SKU });
-    } else {
-      await HTTP.post({
-        url: `/quests/${questId}/redeem`,
-        body: { sku_id: ORBS_SKU }
-      });
-    }
-    logger.log(`[Bemmo] Server-side claim sent for ${questId}`);
-  } catch (e) { 
-    logger.error("[Bemmo] Claim Error", e); 
-  }
-}
-
-function patchVideoQuests() {
-  if (!QuestStore) return;
-
-  return after("getQuest", QuestStore, (args, ret) => {
-    // Only target active, uncompleted quests
-    if (ret?.userStatus && !ret.userStatus.completedAt) {
-      const qId = ret.id;
-
-      if (!questStartTime.has(qId)) {
-        questStartTime.set(qId, Date.now());
-      }
-
-      const elapsed = (Date.now() - questStartTime.get(qId)) / 1000;
-
-      // Only return the "Finished" flag after a short delay
-      if (elapsed >= 2.5) {
-        ret.userStatus.completedAt = new Date().toISOString();
-        ret.userStatus.progress = { WATCH_VIDEO: { value: 30, target: 30 } };
-
-        // Trigger fulfillment once per quest
-        if (!questProcessing.has(qId)) {
-          questProcessing.add(qId);
-          fulfillOrbQuest(qId);
-        }
-      } else {
-        // Show artificial progress while waiting
-        ret.userStatus.progress = { WATCH_VIDEO: { value: Math.floor(elapsed), target: 30 } };
-      }
-    }
-    return ret;
-  });
-}
-
-/* =========================
-   PLUGIN LIFECYCLE (UPDATED)
-========================= */
+let unpatchSidebar: () => void;
 let unpatches: (() => void)[] = [];
-let unpatchSidebar: any;
 
 export default {
   onLoad: () => {
-    try { storage.nitroSpoof ??= false; } catch(e) {}
+    // Initialize storage if it doesn't exist
+    storage.nitroSpoof ??= false;
 
-    // 1. Nitro Spoof Patch
-    if (UserStore) {
-      try {
-        unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-          if (user && storage.nitroSpoof) {
-            user.premiumType = 2;
-            user.premiumState = { premiumSubscriptionType: 2, premiumSource: 1, premiumSubscriptionGroupRole: 0 };
-          }
-          return user;
-        }));
-      } catch (e) { logger.error("Nitro Fail", e); }
+    // 1. Sidebar Entry (Bemmo Tab)
+    try { 
+      unpatchSidebar = patchSidebar(); 
+    } catch (e) { 
+      logger.error("Sidebar failed", e); 
     }
 
-    // 2. Orbs Balance Visual Spoof
+    // 2. Nitro Spoof (Conditional)
     try {
-      const balancePatch = patchOrbsBalance();
-      if (balancePatch) unpatches.push(balancePatch);
-    } catch (e) { logger.error("Orbs Spoof Fail", e); }
+      unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
+        // Only apply if the toggle in Settings is ON
+        if (user && storage.nitroSpoof) {
+          user.premiumType = 2; 
+          user.premiumState = {
+            premiumSubscriptionType: 2,
+            premiumSource: 1,
+            premiumSubscriptionGroupRole: 2
+          };
+        }
+        return user;
+      }));
+    } catch (e) { 
+      logger.error("Nitro failed", e); 
+    }
 
-    // 3. Orbs Quest Patch (Manual Delay Mode)
+    // 3. Services (Copy ID, RPC, Logger)
     try {
-      const qPatch = patchVideoQuests();
-      if (qPatch) unpatches.push(qPatch);
-    } catch (e) { logger.error("Quest Patch Fail", e); }
-
-    // 4. Sidebar & Services
-    try { unpatchSidebar = patchSidebar?.(); } catch(e) {}
-    try { 
-      CopyMessageID?.onLoad?.(); 
-      RichPresence?.startRichPresence();
+      CopyMessageID.onLoad?.(); 
+      RichPresence.startRichPresence();
       if (storage.logging?.enabled) startLogger();
-    } catch(e) {}
+    } catch (e) {
+      logger.error("Service initialization failed", e);
+    }
 
-    logger.log("Bemmo: Plugin Started with Visual Orbs Spoof.");
+    logger.log("Bemmo Plugin: Fully loaded.");
   },
 
   onUnload: () => {
-    questStartTime.clear();
-    questProcessing.clear();
-
-    for (const unreg of commands) {
-      try { unreg(); } catch(e) {}
-    }
-
+    for (const unregister of commands) unregister();
     for (const unpatch of unpatches) {
-      try { unpatch?.(); } catch (e) {}
+      if (typeof unpatch === "function") unpatch();
     }
     unpatches = [];
 
-    if (typeof unpatchSidebar === "function") unpatchSidebar();
-    RichPresence?.stopRichPresence();
-    stopLogger(true);
+    if (prisonState.interval) {
+      clearInterval(prisonState.interval);
+      prisonState.active = false;
+    }
 
-    logger.log("Bemmo: Unloaded.");
+    if (typeof unpatchSidebar === "function") unpatchSidebar();
+    CopyMessageID.onUnload?.(); 
+    RichPresence.stopRichPresence();
+    stopLogger();
+
+    logger.log("Bemmo Plugin: Unloaded.");
   },
-  settings: Settings
+
+  settings: Settings,
 };
+
