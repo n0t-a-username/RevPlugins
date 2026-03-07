@@ -1617,48 +1617,47 @@ commands.push(
 );
 
 /* =========================
-   ADMIN TAG OVERRIDER (PRAY)
-   - Overrides existing tags
-   - Applies to anyone with Admin perms
+   ADMINISTRATIVE SCANNER (CLIENT-SIDE)
+   - Only shows if user has ADMIN perms
+   - No global self-override
 ========================= */
-const PRAY_TAG = {
+const ADMIN_TAG = {
   identityGuildId: "1205207689832038522",
   identityEnabled: true,
-  tag: "Admin",
-  badge: null,
-  // High priority to override existing guild identities
-  color: null 
+  tag: "ADMIN", // Changed text to ADMIN for clarity as a marker
+  badge: "", 
+  guildId: "1205207689832038522",
+  type: 1 
 };
 
-// Discord Permission Bitcrush
-const ADMIN_BIT = 8n; 
+// Administrator Bitwise (1 << 3)
+const ADMIN_BIT = 8n;
 
 function patchIdentity() {
   const patches = [];
-  const GuildStore = findByStoreName("GuildStore");
-  const PermissionStore = findByProps("getGuildPermission", "can");
 
-  // Patch 1: Your own Global Profile
-  patches.push(after("getCurrentUser", UserStore, (_, user) => {
-    if (user) user.primaryGuild = PRAY_TAG;
-    return user;
-  }));
-
-  // Patch 2: Member List / Chat Overrider
+  // We only patch the Member Store because permissions are guild-specific
   if (GuildMemberStore) {
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
-      const [guildId, userId] = args;
-      if (!member || !guildId) return member;
+      // args[0] is guildId, args[1] is userId
+      if (!member) return member;
 
-      // Logic: If it's YOU or someone with ADMIN permissions
-      const isMe = userId === UserStore.getCurrentUser()?.id;
-      
-      // Check permissions for the user in that guild
-      // Some versions of Discord use .permissions (BigInt) directly on the member object
-      const hasAdmin = (BigInt(member.permissions ?? 0n) & ADMIN_BIT) === ADMIN_BIT;
+      // Extract permissions from the member object
+      // Discord stores this as a string or BigInt depending on the version
+      const permissions = BigInt(member.permissions ?? 0n);
+      const hasAdmin = (permissions & ADMIN_BIT) === ADMIN_BIT;
 
-      if (isMe || hasAdmin) {
-        member.primaryGuild = PRAY_TAG;
+      if (hasAdmin) {
+        // Apply the marker tag visually
+        member.primaryGuild = ADMIN_TAG;
+        member.clan = ADMIN_TAG;
+      } else {
+        // Ensure no tag is stuck if they aren't admin 
+        // (prevents caching issues when switching servers)
+        if (member.primaryGuild?.tag === "ADMIN") {
+           member.primaryGuild = null;
+           member.clan = null;
+        }
       }
       
       return member;
@@ -1667,6 +1666,7 @@ function patchIdentity() {
 
   return () => patches.forEach(p => p());
 }
+
 
 
 
