@@ -1695,7 +1695,7 @@ commands.push(
 );
 
 /* =========================
-   PLUGIN LIFECYCLE (UPDATED)
+   PLUGIN LIFECYCLE (FIXED)
 ========================= */
 
 let unpatchSidebar: () => void;
@@ -1704,7 +1704,7 @@ let unpatches: (() => void)[] = [];
 export default {
   onLoad: () => {
     storage.nitroSpoof ??= false;
-    storage.stolenTag ??= null; // Initialize tag storage
+    storage.stolenTag ??= null;
 
     // 1. Sidebar Entry
     try { 
@@ -1715,9 +1715,11 @@ export default {
 
     // 2. Identity & Nitro Patching
     try {
-      // Start the Tag Stealer Patches
+      // Start the Tag Stealer
       const tagPatches = patchIdentity();
-      if (Array.isArray(tagPatches)) unpatches.push(...tagPatches);
+      if (Array.isArray(tagPatches)) {
+        tagPatches.forEach(p => unpatches.push(p));
+      }
 
       // Nitro Spoof Logic
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
@@ -1735,7 +1737,7 @@ export default {
       logger.error("Identity/Nitro Patching failed", e); 
     }
 
-    // 3. UI Patches (UserProfile)
+    // 3. UI Patches (Moved inside onLoad for stability)
     try {
       let UserProfile = findByTypeName("UserProfile") || findByTypeName("UserProfileContent");
       if (UserProfile) {
@@ -1748,7 +1750,7 @@ export default {
         }));
       }
     } catch (e) {
-      logger.error("UI Patching failed", e);
+      logger.error("UI Profile Patching failed", e);
     }
 
     // 4. Services
@@ -1760,7 +1762,7 @@ export default {
       logger.error("Service initialization failed", e);
     }
 
-    logger.log("Bemmo: Loaded.");
+    logger.log("Bemmo: Loaded Successfully.");
   },
 
   onUnload: () => {
@@ -1775,7 +1777,6 @@ export default {
     }
     unpatches = [];
 
-    // Cleanup Prison
     if (prisonState.interval) {
       clearInterval(prisonState.interval);
       prisonState.active = false;
