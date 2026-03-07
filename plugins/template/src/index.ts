@@ -1616,9 +1616,87 @@ commands.push(
   })
 );
 
+// ---- /steal-tag ----
+commands.push(
+  registerCommand({
+    name: "steal-tag",
+    displayName: "steal-tag",
+    description: "Steals a user's clan/guild tag (Client-side)",
+    options: [
+      {
+        name: "user",
+        displayName: "user",
+        description: "The user to steal the tag from",
+        required: false,
+        type: 3, // String for ID/Mention
+      },
+      {
+        name: "remove",
+        displayName: "remove",
+        description: "Set to true to reset your tag",
+        required: false,
+        type: 5, // Boolean
+      }
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const userInput = args.find(a => a.name === "user")?.value;
+      const shouldRemove = args.find(a => a.name === "remove")?.value ?? false;
+      const currentUser = UserStore.getCurrentUser();
+
+      // 1. Handle Removal
+      if (shouldRemove) {
+        storage.stolenTag = null;
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
+          channelId: ctx.channel.id,
+          content: "✅ Your clan tag has been reset (Reload required to fully clear cache)."
+        }), { author: currentUser }));
+        return;
+      }
+
+      // 2. Resolve User
+      const userId = userInput?.replace(/[<@!>]/g, "");
+      if (!userId) return;
+
+      try {
+        // Fetch profile to get the 'primary_guild' data
+        const res = await HTTP.get({ url: `/users/${userId}/profile` });
+        const primaryGuild = res.body?.primary_guild;
+
+        if (!primaryGuild) {
+          receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
+            channelId: ctx.channel.id,
+            content: "❌ This user doesn't have a primary guild tag to steal."
+          }), { author: currentUser }));
+          return;
+        }
+
+        // 3. Store in plugin storage
+        storage.stolenTag = {
+          identityGuildId: primaryGuild.identity_guild_id,
+          identityEnabled: true,
+          tag: primaryGuild.tag,
+          badge: primaryGuild.badge
+        };
+
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
+          channelId: ctx.channel.id,
+          content: `🧬 Successfully stole tag: **[${primaryGuild.tag}]**`
+        }), { author: currentUser }));
+
+      } catch (err) {
+        logger.error("Failed to steal tag:", err);
+      }
+    },
+  })
+);
+
+
 
 /* =========================
-   PLUGIN LIFECYCLE (FINAL)
+   PLUGIN LIFECYCLE (UPDATED)
 ========================= */
 
 let unpatchSidebar: () => void;
@@ -1628,6 +1706,7 @@ export default {
   onLoad: () => {
     // Initialize storage if it doesn't exist
     storage.nitroSpoof ??= false;
+    storage.stolenTag ??= null; // Initialize the tag storage
 
     // 1. Sidebar Entry (Bemmo Tab)
     try { 
@@ -1636,11 +1715,13 @@ export default {
       logger.error("Sidebar failed", e); 
     }
 
-    // 2. Nitro Spoof (Conditional)
+    // 2. Nitro Spoof Patch
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        // Only apply if the toggle in Settings is ON
-        if (user && storage.nitroSpoof) {
+        if (!user) return user;
+
+        // Apply Nitro Spoof
+        if (storage.nitroSpoof) {
           user.premiumType = 2; 
           user.premiumState = {
             premiumSubscriptionType: 2,
@@ -1648,10 +1729,21 @@ export default {
             premiumSubscriptionGroupRole: 0
           };
         }
+
+        // Apply Stolen Tag (Client-Side)
+        if (storage.stolenTag) {
+          user.primaryGuild = {
+            identityGuildId: storage.stolenTag.identityGuildId,
+            identityEnabled: true,
+            tag: storage.stolenTag.tag,
+            badge: storage.stolenTag.badge
+          };
+        }
+
         return user;
       }));
     } catch (e) { 
-      logger.error("Nitro failed", e); 
+      logger.error("UserStore patches failed", e); 
     }
 
     // 3. Services (Copy ID, RPC, Logger)
@@ -1663,21 +1755,28 @@ export default {
       logger.error("Service initialization failed", e);
     }
 
-    logger.log("Bemmo Plugin: Fully loaded.");
+    logger.log("Bemmo Plugin: Fully loaded with Tag Stealer.");
   },
 
   onUnload: () => {
-    for (const unregister of commands) unregister();
+    // Unregister all commands
+    for (const unregister of commands) {
+      if (typeof unregister === "function") unregister();
+    }
+    
+    // Remove all patches
     for (const unpatch of unpatches) {
       if (typeof unpatch === "function") unpatch();
     }
     unpatches = [];
 
+    // Cleanup prison intervals
     if (prisonState.interval) {
       clearInterval(prisonState.interval);
       prisonState.active = false;
     }
 
+    // Cleanup other services
     if (typeof unpatchSidebar === "function") unpatchSidebar();
     CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
@@ -1688,4 +1787,3 @@ export default {
 
   settings: Settings,
 };
-
