@@ -1622,9 +1622,9 @@ commands.push(
    - Custom Server ID
 ========================= */
 const PRAY_TAG = {
-  identityGuildId: "1476711456954384648", // Your requested ID
+  identityGuildId: "1205207689832038522", // Your requested ID
   identityEnabled: true,
-  tag: "MOD",
+  tag: "Admin",
   badge: null // Setting this to null removes the icon/guild badge
 };
 
