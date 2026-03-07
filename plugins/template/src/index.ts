@@ -1618,12 +1618,14 @@ commands.push(
 
 /* =========================
    SERVER TAG SPOOFER (PRAY)
+   - No Icon (Badge: null)
+   - Custom Server ID
 ========================= */
 const PRAY_TAG = {
-  identityGuildId: "1385106683080085565",
+  identityGuildId: "1476711456954384648", // Your requested ID
   identityEnabled: true,
-  tag: "PRAY",
-  badge: "723f9e19e5a65a7ee484a517b159e3cf"
+  tag: "MOD",
+  badge: null // Setting this to null removes the icon/guild badge
 };
 
 function patchIdentity() {
@@ -1631,7 +1633,9 @@ function patchIdentity() {
   
   // Patch 1: The Global User Object (Profile/Settings)
   patches.push(after("getCurrentUser", UserStore, (_, user) => {
-    if (user) user.primaryGuild = PRAY_TAG;
+    if (user) {
+      user.primaryGuild = PRAY_TAG;
+    }
     return user;
   }));
 
@@ -1639,7 +1643,7 @@ function patchIdentity() {
   if (GuildMemberStore) {
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
       const me = UserStore.getCurrentUser();
-      // args[1] is the UserID in Vendetta's getMember patch
+      // args[1] is the UserID. If it's us, apply the tag.
       if (member && me && args[1] === me.id) {
         member.primaryGuild = PRAY_TAG;
       }
@@ -1652,8 +1656,9 @@ function patchIdentity() {
 
 
 
+
 /* =========================
-   PLUGIN LIFECYCLE (UPDATED)
+   PLUGIN LIFECYCLE (FINAL)
 ========================= */
 
 let unpatchSidebar: () => void;
@@ -1672,7 +1677,7 @@ export default {
 
     // 2. Identity & Nitro Patching
     try {
-      // Initialize the [PRAY] Tag
+      // Initialize the Clean [PRAY] Tag
       const tagUnpatch = patchIdentity();
       if (tagUnpatch) unpatches.push(tagUnpatch);
 
@@ -1701,26 +1706,22 @@ export default {
       logger.error("Service initialization failed", e);
     }
 
-    logger.log("Bemmo: Loaded with [PRAY] Tag and Nitro Spoof.");
+    logger.log("Bemmo: Loaded with Clean [PRAY] Tag.");
   },
 
   onUnload: () => {
-    // Unregister all commands
     for (const unregister of commands) unregister();
     
-    // Kill all active patches (Nitro, Tag, etc)
     for (const unpatch of unpatches) {
       if (typeof unpatch === "function") unpatch();
     }
     unpatches = [];
 
-    // Clean up Prison interval
     if (prisonState.interval) {
       clearInterval(prisonState.interval);
       prisonState.active = false;
     }
 
-    // Unload services
     if (typeof unpatchSidebar === "function") unpatchSidebar();
     CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
