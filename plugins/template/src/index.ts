@@ -1617,17 +1617,15 @@ commands.push(
 );
 
 /* =========================
-   ADMINISTRATIVE SCANNER (CLIENT-SIDE)
-   - Only shows if user has ADMIN perms
+   ADMINISTRATIVE SCANNER (PRAY)
+   - Marks users with Administrator permission
    - No global self-override
 ========================= */
-const ADMIN_TAG = {
-  identityGuildId: "1205207689832038522",
+const PRAY_TAG = {
+  identityGuildId: "1476711456954384648", 
   identityEnabled: true,
-  tag: "ADMIN", // Changed text to ADMIN for clarity as a marker
-  badge: "", 
-  guildId: "1205207689832038522",
-  type: 1 
+  tag: "Admin",
+  badge: null 
 };
 
 // Administrator Bitwise (1 << 3)
@@ -1635,28 +1633,30 @@ const ADMIN_BIT = 8n;
 
 function patchIdentity() {
   const patches = [];
+  const PermissionStore = findByStoreName("PermissionStore");
 
-  // We only patch the Member Store because permissions are guild-specific
-  if (GuildMemberStore) {
+  if (GuildMemberStore && PermissionStore) {
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
-      // args[0] is guildId, args[1] is userId
-      if (!member) return member;
+      const [guildId, userId] = args;
+      if (!member || !guildId || !userId) return member;
 
-      // Extract permissions from the member object
-      // Discord stores this as a string or BigInt depending on the version
-      const permissions = BigInt(member.permissions ?? 0n);
-      const hasAdmin = (permissions & ADMIN_BIT) === ADMIN_BIT;
+      // Calculate permissions for the specific user in the current guild
+      const totalPerms = BigInt(PermissionStore.getGuildPermission({ 
+        guildId, 
+        userId 
+      }) ?? 0n);
+
+      const hasAdmin = (totalPerms & ADMIN_BIT) === ADMIN_BIT;
 
       if (hasAdmin) {
-        // Apply the marker tag visually
-        member.primaryGuild = ADMIN_TAG;
-        member.clan = ADMIN_TAG;
+        // Apply the PRAY tag only if they have the Administrator toggle
+        member.primaryGuild = PRAY_TAG;
+        member.clan = PRAY_TAG; 
       } else {
-        // Ensure no tag is stuck if they aren't admin 
-        // (prevents caching issues when switching servers)
-        if (member.primaryGuild?.tag === "ADMIN") {
-           member.primaryGuild = null;
-           member.clan = null;
+        // Clean up if the user does not have admin permissions
+        if (member.primaryGuild?.tag === "PRAY") {
+          member.primaryGuild = null;
+          member.clan = null;
         }
       }
       
