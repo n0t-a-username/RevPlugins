@@ -1617,57 +1617,43 @@ commands.push(
 );
 
 /* =========================
-   ADMINISTRATIVE SCANNER (PRAY)
-   - Uses member's internal bitfield
+   SERVER TAG SPOOFER (PRAY)
    - No Icon (Badge: null)
+   - Custom Server ID
 ========================= */
 const PRAY_TAG = {
-  identityGuildId: "1476711456954384648", 
+  identityGuildId: "1186664648989220914", // Your requested ID
   identityEnabled: true,
-  tag: "PRAY",
-  badge: null 
+  tag: "Join",
+  badge: null // Setting this to null removes the icon/guild badge
 };
-
-// Administrator Bit (8n)
-const ADMIN_BIT = 8n;
 
 function patchIdentity() {
   const patches = [];
+  
+  // Patch 1: The Global User Object (Profile/Settings)
+  patches.push(after("getCurrentUser", UserStore, (_, user) => {
+    if (user) {
+      user.primaryGuild = PRAY_TAG;
+    }
+    return user;
+  }));
 
+  // Patch 2: The Member Store (Chat & Member List)
   if (GuildMemberStore) {
-    // We patch getMember because it's the source of truth for the UI
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
-      if (!member) return member;
-
-      try {
-        // Discord stores the permissions bitfield on the member object itself.
-        // It's often a string or a number depending on the client version.
-        const perms = member.permissions;
-        
-        if (perms) {
-          const hasAdmin = (BigInt(perms) & ADMIN_BIT) === ADMIN_BIT;
-
-          if (hasAdmin) {
-            // Use Object.assign to ensure the properties aren't just "added" 
-            // but actually occupy the primary slots Discord looks for.
-            member.primaryGuild = PRAY_TAG;
-            member.clan = PRAY_TAG;
-          } else if (member.primaryGuild?.tag === "PRAY") {
-            // Cleanup to avoid "bleeding" tags when permissions change
-            member.primaryGuild = null;
-            member.clan = null;
-          }
-        }
-      } catch (e) {
-        // Silent catch for unexpected data types
+      const me = UserStore.getCurrentUser();
+      // args[1] is the UserID. If it's us, apply the tag.
+      if (member && me && args[1] === me.id) {
+        member.primaryGuild = PRAY_TAG;
       }
-
       return member;
     }));
   }
 
   return () => patches.forEach(p => p());
 }
+
 
 
 
