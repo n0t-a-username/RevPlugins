@@ -1617,47 +1617,50 @@ commands.push(
 );
 
 /* =========================
-   ADMINISTRATIVE SCANNER (PRAY)
-   - Marks users with Administrator permission
-   - No global self-override
+   ADMINISTRATIVE SCANNER (SAFE VERSION)
 ========================= */
 const PRAY_TAG = {
   identityGuildId: "1476711456954384648", 
   identityEnabled: true,
-  tag: "Admin",
+  tag: "PRAY",
   badge: null 
 };
 
-// Administrator Bitwise (1 << 3)
 const ADMIN_BIT = 8n;
 
 function patchIdentity() {
   const patches = [];
+  
+  // Metro can sometimes fail to find these on first try
   const PermissionStore = findByStoreName("PermissionStore");
 
   if (GuildMemberStore && PermissionStore) {
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
-      const [guildId, userId] = args;
-      if (!member || !guildId || !userId) return member;
+      try {
+        const [guildId, userId] = args;
+        
+        // Safety: If no member, no guild, or PermissionStore is missing, skip
+        if (!member || !guildId || !userId || !PermissionStore) return member;
 
-      // Calculate permissions for the specific user in the current guild
-      const totalPerms = BigInt(PermissionStore.getGuildPermission({ 
-        guildId, 
-        userId 
-      }) ?? 0n);
+        // Safely fetch permissions
+        const rawPerms = PermissionStore.getGuildPermission({ guildId, userId });
+        if (rawPerms === undefined || rawPerms === null) return member;
 
-      const hasAdmin = (totalPerms & ADMIN_BIT) === ADMIN_BIT;
+        const totalPerms = BigInt(rawPerms);
+        const hasAdmin = (totalPerms & ADMIN_BIT) === ADMIN_BIT;
 
-      if (hasAdmin) {
-        // Apply the PRAY tag only if they have the Administrator toggle
-        member.primaryGuild = PRAY_TAG;
-        member.clan = PRAY_TAG; 
-      } else {
-        // Clean up if the user does not have admin permissions
-        if (member.primaryGuild?.tag === "PRAY") {
-          member.primaryGuild = null;
-          member.clan = null;
+        if (hasAdmin) {
+          member.primaryGuild = PRAY_TAG;
+          member.clan = PRAY_TAG; 
+        } else {
+          // Only clear if it was a PRAY tag to avoid flickering
+          if (member.primaryGuild?.tag === "PRAY") {
+            member.primaryGuild = null;
+            member.clan = null;
+          }
         }
+      } catch (err) {
+        // Silent catch to prevent Discord crash
       }
       
       return member;
