@@ -1616,6 +1616,23 @@ commands.push(
   })
 );
 
+/* =========================
+   ORBS VISUAL SPOOFER
+========================= */
+function patchOrbsBalance() {
+  if (!InventoryStore) return;
+
+  // Intercepts the reward balance request for the UI
+  return after("getRewardBalance", InventoryStore, (args, ret) => {
+    // 1409898407849365565 is the standard SKU for Orbs
+    if (args[0] === "1409898407849365565" || !args[0]) {
+      return 9999; // The number that will show in your UI
+    }
+    return ret;
+  });
+}
+
+
 const QuestStore = findByStoreName("QuestStore");
 const { redeemQuestReward } = findByProps("redeemQuestReward") || {};
 
@@ -1685,7 +1702,7 @@ function patchVideoQuests() {
 }
 
 /* =========================
-   PLUGIN LIFECYCLE (FIXED)
+   PLUGIN LIFECYCLE (UPDATED)
 ========================= */
 let unpatches: (() => void)[] = [];
 let unpatchSidebar: any;
@@ -1707,13 +1724,19 @@ export default {
       } catch (e) { logger.error("Nitro Fail", e); }
     }
 
-    // 2. Orbs Quest Patch (Manual Delay Mode)
+    // 2. Orbs Balance Visual Spoof
+    try {
+      const balancePatch = patchOrbsBalance();
+      if (balancePatch) unpatches.push(balancePatch);
+    } catch (e) { logger.error("Orbs Spoof Fail", e); }
+
+    // 3. Orbs Quest Patch (Manual Delay Mode)
     try {
       const qPatch = patchVideoQuests();
       if (qPatch) unpatches.push(qPatch);
     } catch (e) { logger.error("Quest Patch Fail", e); }
 
-    // 3. Sidebar & Services
+    // 4. Sidebar & Services
     try { unpatchSidebar = patchSidebar?.(); } catch(e) {}
     try { 
       CopyMessageID?.onLoad?.(); 
@@ -1721,7 +1744,7 @@ export default {
       if (storage.logging?.enabled) startLogger();
     } catch(e) {}
 
-    logger.log("Bemmo: Plugin Started.");
+    logger.log("Bemmo: Plugin Started with Visual Orbs Spoof.");
   },
 
   onUnload: () => {
