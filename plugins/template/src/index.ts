@@ -1616,42 +1616,31 @@ commands.push(
   })
 );
 
-// Persistent storage for your tag settings
-storage.tagConfig ??= {
-  text: null,
-  showBadge: false
-};
-
-const BADGE_HASH = "b772fd1b5a40060341e4bf2d6f8e3fbb";
-const FIXED_GUILD_ID = "1205207689832038522";
-
-function getActiveTag() {
-  // If no text is set, return null so no tag shows up
-  if (!storage.tagConfig.text) return null;
-
-  return {
-    identityGuildId: FIXED_GUILD_ID,
-    identityEnabled: true,
-    tag: storage.tagConfig.text,
-    badge: storage.tagConfig.showBadge ? BADGE_HASH : null
-  };
-}
+/* =========================
+   IDENTITY STEALER LOGIC
+========================= */
+storage.stolenTag ??= null;
 
 function patchIdentity() {
   const patches = [];
   
-  patches.push(after("getCurrentUser", UserStore, (_, user) => {
-    const tag = getActiveTag();
-    if (user && tag) user.primaryGuild = tag;
+  const applyStolenTag = (user) => {
+    if (user && storage.stolenTag) {
+      user.primaryGuild = storage.stolenTag;
+      user.clan = storage.stolenTag; // Support for newer 'Clan' UI
+    }
     return user;
-  }));
+  };
 
+  // Patch 1: Your Profile
+  patches.push(after("getCurrentUser", UserStore, (_, user) => applyStolenTag(user)));
+
+  // Patch 2: Member List/Chat
   if (GuildMemberStore) {
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
       const me = UserStore.getCurrentUser();
-      const tag = getActiveTag();
-      if (member && me && args[1] === me.id && tag) {
-        member.primaryGuild = tag;
+      if (member && me && args[1] === me.id) {
+        applyStolenTag(member);
       }
       return member;
     }));
@@ -1662,40 +1651,69 @@ function patchIdentity() {
 
 commands.push(
   registerCommand({
-    name: "tag",
-    displayName: "tag",
-    description: "Set your custom client-side tag",
+    name: "steal-tag",
+    displayName: "steal-tag",
+    description: "Steal a guild tag from another user",
     options: [
       {
-        name: "text",
-        displayName: "text",
-        description: "The text for your tag (Leave blank to remove)",
-        required: true,
-        type: 3,
+        name: "user",
+        displayName: "user",
+        description: "The user to steal the tag from",
+        required: false,
+        type: 6, // USER type
       },
       {
-        name: "badge",
-        displayName: "badge",
-        description: "Show the guild icon badge next to the text?",
-        required: true,
-        type: 5,
+        name: "remove",
+        displayName: "remove",
+        description: "Remove your stolen tag?",
+        required: false,
+        type: 5, // BOOLEAN type
       }
     ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: (args, ctx) => {
-      const text = args.find(a => a.name === "text")?.value;
-      const showBadge = args.find(a => a.name === "badge")?.value;
+      const userId = args.find(a => a.name === "user")?.value;
+      const remove = args.find(a => a.name === "remove")?.value;
 
-      storage.tagConfig.text = text;
-      storage.tagConfig.showBadge = showBadge;
+      if (remove) {
+        storage.stolenTag = null;
+        return receiveMessage(ctx.channel.id, createBotMessage({
+          channelId: ctx.channel.id,
+          content: "🗑️ Stolen tag removed."
+        }));
+      }
 
-      const currentUser = UserStore.getCurrentUser();
-      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-        channelId: ctx.channel.id,
-        content: `✅ **Tag updated:** [${text}] | **Badge:** ${showBadge ? "Enabled" : "Disabled"}`
-      }), { author: currentUser }));
+      if (!userId) {
+        return receiveMessage(ctx.channel.id, createBotMessage({
+          channelId: ctx.channel.id,
+          content: "❌ Please specify a user or use `remove: true`."
+        }));
+      }
+
+      // Fetch the target member from the store
+      const target = GuildMemberStore.getMember(ctx.guild.id, userId);
+      const tagData = target?.primaryGuild || target?.clan;
+
+      if (tagData && tagData.tag) {
+        storage.stolenTag = {
+          identityGuildId: tagData.identityGuildId || tagData.guildId,
+          identityEnabled: true,
+          tag: tagData.tag,
+          badge: tagData.badge
+        };
+
+        receiveMessage(ctx.channel.id, createBotMessage({
+          channelId: ctx.channel.id,
+          content: `✅ Stole tag **[${tagData.tag}]** from <@${userId}>!`
+        }));
+      } else {
+        receiveMessage(ctx.channel.id, createBotMessage({
+          channelId: ctx.channel.id,
+          content: "❌ That user doesn't have a visible guild tag to steal."
+        }));
+      }
     },
   })
 );
@@ -1703,7 +1721,6 @@ commands.push(
 /* =========================
    PLUGIN LIFECYCLE
 ========================= */
-
 let unpatchSidebar: () => void;
 let unpatches: (() => void)[] = [];
 
@@ -1711,10 +1728,8 @@ export default {
   onLoad: () => {
     storage.nitroSpoof ??= false;
 
-    // 1. Sidebar Entry
     try { unpatchSidebar = patchSidebar(); } catch (e) { logger.error(e); }
 
-    // 2. Identity & Nitro
     try {
       const tagUnpatch = patchIdentity();
       if (tagUnpatch) unpatches.push(tagUnpatch);
@@ -1728,27 +1743,20 @@ export default {
       }));
     } catch (e) { logger.error(e); }
 
-    // 3. Services
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
-      if (storage.logging?.enabled) startLogger();
     } catch (e) { logger.error(e); }
 
-    logger.log("Bemmo: Loaded.");
+    logger.log("Bemmo: Tag Stealer Loaded.");
   },
 
   onUnload: () => {
     for (const unregister of commands) unregister();
     for (const unpatch of unpatches) { if (typeof unpatch === "function") unpatch(); }
     unpatches = [];
-
-    if (prisonState.interval) { clearInterval(prisonState.interval); prisonState.active = false; }
     if (typeof unpatchSidebar === "function") unpatchSidebar();
-    CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
-    stopLogger();
-
     logger.log("Bemmo: Unloaded.");
   },
 
