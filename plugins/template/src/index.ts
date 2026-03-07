@@ -1616,9 +1616,44 @@ commands.push(
   })
 );
 
+/* =========================
+   SERVER TAG SPOOFER (PRAY)
+========================= */
+const PRAY_TAG = {
+  identityGuildId: "1385106683080085565",
+  identityEnabled: true,
+  tag: "PRAY",
+  badge: "723f9e19e5a65a7ee484a517b159e3cf"
+};
+
+function patchIdentity() {
+  const patches = [];
+  
+  // Patch 1: The Global User Object (Profile/Settings)
+  patches.push(after("getCurrentUser", UserStore, (_, user) => {
+    if (user) user.primaryGuild = PRAY_TAG;
+    return user;
+  }));
+
+  // Patch 2: The Member Store (Chat & Member List)
+  if (GuildMemberStore) {
+    patches.push(after("getMember", GuildMemberStore, (args, member) => {
+      const me = UserStore.getCurrentUser();
+      // args[1] is the UserID in Vendetta's getMember patch
+      if (member && me && args[1] === me.id) {
+        member.primaryGuild = PRAY_TAG;
+      }
+      return member;
+    }));
+  }
+
+  return () => patches.forEach(p => p());
+}
+
+
 
 /* =========================
-   PLUGIN LIFECYCLE (FINAL)
+   PLUGIN LIFECYCLE (UPDATED)
 ========================= */
 
 let unpatchSidebar: () => void;
@@ -1626,20 +1661,23 @@ let unpatches: (() => void)[] = [];
 
 export default {
   onLoad: () => {
-    // Initialize storage if it doesn't exist
     storage.nitroSpoof ??= false;
 
-    // 1. Sidebar Entry (Bemmo Tab)
+    // 1. Sidebar Entry
     try { 
       unpatchSidebar = patchSidebar(); 
     } catch (e) { 
       logger.error("Sidebar failed", e); 
     }
 
-    // 2. Nitro Spoof (Conditional)
+    // 2. Identity & Nitro Patching
     try {
+      // Initialize the [PRAY] Tag
+      const tagUnpatch = patchIdentity();
+      if (tagUnpatch) unpatches.push(tagUnpatch);
+
+      // Nitro Spoof Logic
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        // Only apply if the toggle in Settings is ON
         if (user && storage.nitroSpoof) {
           user.premiumType = 2; 
           user.premiumState = {
@@ -1651,7 +1689,7 @@ export default {
         return user;
       }));
     } catch (e) { 
-      logger.error("Nitro failed", e); 
+      logger.error("User Patching failed", e); 
     }
 
     // 3. Services (Copy ID, RPC, Logger)
@@ -1663,27 +1701,32 @@ export default {
       logger.error("Service initialization failed", e);
     }
 
-    logger.log("Bemmo Plugin: Fully loaded.");
+    logger.log("Bemmo: Loaded with [PRAY] Tag and Nitro Spoof.");
   },
 
   onUnload: () => {
+    // Unregister all commands
     for (const unregister of commands) unregister();
+    
+    // Kill all active patches (Nitro, Tag, etc)
     for (const unpatch of unpatches) {
       if (typeof unpatch === "function") unpatch();
     }
     unpatches = [];
 
+    // Clean up Prison interval
     if (prisonState.interval) {
       clearInterval(prisonState.interval);
       prisonState.active = false;
     }
 
+    // Unload services
     if (typeof unpatchSidebar === "function") unpatchSidebar();
     CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
     stopLogger();
 
-    logger.log("Bemmo Plugin: Unloaded.");
+    logger.log("Bemmo: Unloaded.");
   },
 
   settings: Settings,
