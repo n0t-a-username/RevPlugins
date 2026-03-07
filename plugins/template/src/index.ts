@@ -1617,8 +1617,10 @@ commands.push(
 );
 
 /* =========================
-   ADMINISTRATIVE SCANNER (IMMUTABLE)
-======================== */
+   ADMINISTRATIVE SCANNER (PRAY)
+   - Uses member's internal bitfield
+   - No Icon (Badge: null)
+========================= */
 const PRAY_TAG = {
   identityGuildId: "1476711456954384648", 
   identityEnabled: true,
@@ -1626,39 +1628,38 @@ const PRAY_TAG = {
   badge: null 
 };
 
+// Administrator Bit (8n)
 const ADMIN_BIT = 8n;
 
 function patchIdentity() {
   const patches = [];
-  const PermissionStore = findByStoreName("PermissionStore");
 
   if (GuildMemberStore) {
+    // We patch getMember because it's the source of truth for the UI
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
-      const [guildId, userId] = args;
-      if (!member || !guildId || !userId) return member;
+      if (!member) return member;
 
       try {
-        const totalPerms = BigInt(PermissionStore?.getGuildPermission({ guildId, userId }) ?? 0n);
-        const hasAdmin = (totalPerms & ADMIN_BIT) === ADMIN_BIT;
+        // Discord stores the permissions bitfield on the member object itself.
+        // It's often a string or a number depending on the client version.
+        const perms = member.permissions;
+        
+        if (perms) {
+          const hasAdmin = (BigInt(perms) & ADMIN_BIT) === ADMIN_BIT;
 
-        if (hasAdmin) {
-          // Use defineProperty to prevent Discord from overwriting our tag
-          Object.defineProperty(member, "primaryGuild", {
-            value: PRAY_TAG,
-            configurable: true,
-            enumerable: true,
-            writable: true
-          });
-          
-          Object.defineProperty(member, "clan", {
-            value: PRAY_TAG,
-            configurable: true,
-            enumerable: true,
-            writable: true
-          });
+          if (hasAdmin) {
+            // Use Object.assign to ensure the properties aren't just "added" 
+            // but actually occupy the primary slots Discord looks for.
+            member.primaryGuild = PRAY_TAG;
+            member.clan = PRAY_TAG;
+          } else if (member.primaryGuild?.tag === "PRAY") {
+            // Cleanup to avoid "bleeding" tags when permissions change
+            member.primaryGuild = null;
+            member.clan = null;
+          }
         }
       } catch (e) {
-        // Fallback for safety
+        // Silent catch for unexpected data types
       }
 
       return member;
