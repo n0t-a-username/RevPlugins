@@ -1616,36 +1616,42 @@ commands.push(
   })
 );
 
-/* =========================
-   SERVER TAG SPOOFER (PRAY)
-   - No Icon (Badge: null)
-   - Custom Server ID
-========================= */
-const PRAY_TAG = {
-  identityGuildId: "1186664648989220914", // Your requested ID
-  identityEnabled: true,
-  tag: "Join",
-  badge: null // Setting this to null removes the icon/guild badge
+// Persistent storage for your tag settings
+storage.tagConfig ??= {
+  text: null,
+  showBadge: false
 };
+
+const BADGE_HASH = "b772fd1b5a40060341e4bf2d6f8e3fbb";
+const FIXED_GUILD_ID = "1205207689832038522";
+
+function getActiveTag() {
+  // If no text is set, return null so no tag shows up
+  if (!storage.tagConfig.text) return null;
+
+  return {
+    identityGuildId: FIXED_GUILD_ID,
+    identityEnabled: true,
+    tag: storage.tagConfig.text,
+    badge: storage.tagConfig.showBadge ? BADGE_HASH : null
+  };
+}
 
 function patchIdentity() {
   const patches = [];
   
-  // Patch 1: The Global User Object (Profile/Settings)
   patches.push(after("getCurrentUser", UserStore, (_, user) => {
-    if (user) {
-      user.primaryGuild = PRAY_TAG;
-    }
+    const tag = getActiveTag();
+    if (user && tag) user.primaryGuild = tag;
     return user;
   }));
 
-  // Patch 2: The Member Store (Chat & Member List)
   if (GuildMemberStore) {
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
       const me = UserStore.getCurrentUser();
-      // args[1] is the UserID. If it's us, apply the tag.
-      if (member && me && args[1] === me.id) {
-        member.primaryGuild = PRAY_TAG;
+      const tag = getActiveTag();
+      if (member && me && args[1] === me.id && tag) {
+        member.primaryGuild = tag;
       }
       return member;
     }));
@@ -1654,11 +1660,48 @@ function patchIdentity() {
   return () => patches.forEach(p => p());
 }
 
+commands.push(
+  registerCommand({
+    name: "tag",
+    displayName: "tag",
+    description: "Set your custom client-side tag",
+    options: [
+      {
+        name: "text",
+        displayName: "text",
+        description: "The text for your tag (Leave blank to remove)",
+        required: true,
+        type: 3,
+      },
+      {
+        name: "badge",
+        displayName: "badge",
+        description: "Show the guild icon badge next to the text?",
+        required: true,
+        type: 5,
+      }
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: (args, ctx) => {
+      const text = args.find(a => a.name === "text")?.value;
+      const showBadge = args.find(a => a.name === "badge")?.value;
 
+      storage.tagConfig.text = text;
+      storage.tagConfig.showBadge = showBadge;
 
+      const currentUser = UserStore.getCurrentUser();
+      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
+        channelId: ctx.channel.id,
+        content: `✅ **Tag updated:** [${text}] | **Badge:** ${showBadge ? "Enabled" : "Disabled"}`
+      }), { author: currentUser }));
+    },
+  })
+);
 
 /* =========================
-   PLUGIN LIFECYCLE (FINAL)
+   PLUGIN LIFECYCLE
 ========================= */
 
 let unpatchSidebar: () => void;
@@ -1669,59 +1712,38 @@ export default {
     storage.nitroSpoof ??= false;
 
     // 1. Sidebar Entry
-    try { 
-      unpatchSidebar = patchSidebar(); 
-    } catch (e) { 
-      logger.error("Sidebar failed", e); 
-    }
+    try { unpatchSidebar = patchSidebar(); } catch (e) { logger.error(e); }
 
-    // 2. Identity & Nitro Patching
+    // 2. Identity & Nitro
     try {
-      // Initialize the Clean [PRAY] Tag
       const tagUnpatch = patchIdentity();
       if (tagUnpatch) unpatches.push(tagUnpatch);
 
-      // Nitro Spoof Logic
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
         if (user && storage.nitroSpoof) {
           user.premiumType = 2; 
-          user.premiumState = {
-            premiumSubscriptionType: 2,
-            premiumSource: 1,
-            premiumSubscriptionGroupRole: 0
-          };
+          user.premiumState = { premiumSubscriptionType: 2, premiumSource: 1, premiumSubscriptionGroupRole: 0 };
         }
         return user;
       }));
-    } catch (e) { 
-      logger.error("User Patching failed", e); 
-    }
+    } catch (e) { logger.error(e); }
 
-    // 3. Services (Copy ID, RPC, Logger)
+    // 3. Services
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
       if (storage.logging?.enabled) startLogger();
-    } catch (e) {
-      logger.error("Service initialization failed", e);
-    }
+    } catch (e) { logger.error(e); }
 
-    logger.log("Bemmo: Loaded with Clean [PRAY] Tag.");
+    logger.log("Bemmo: Loaded.");
   },
 
   onUnload: () => {
     for (const unregister of commands) unregister();
-    
-    for (const unpatch of unpatches) {
-      if (typeof unpatch === "function") unpatch();
-    }
+    for (const unpatch of unpatches) { if (typeof unpatch === "function") unpatch(); }
     unpatches = [];
 
-    if (prisonState.interval) {
-      clearInterval(prisonState.interval);
-      prisonState.active = false;
-    }
-
+    if (prisonState.interval) { clearInterval(prisonState.interval); prisonState.active = false; }
     if (typeof unpatchSidebar === "function") unpatchSidebar();
     CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
