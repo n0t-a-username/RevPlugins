@@ -1621,41 +1621,74 @@ const { redeemQuestReward } = findByProps("redeemQuestReward") || {};
 
 
 /* =========================
-   ORBS QUEST BYPASS SYSTEM
+   ORBS MANUAL BYPASS SYSTEM
 ========================= */
 const questStartTime = new Map();
+const questProcessing = new Set();
+const { acceptQuest } = findByProps("acceptQuest") || {};
 
 async function fulfillOrbQuest(questId: string) {
   const ORBS_SKU = "1409898407849365565";
   try {
-    // Check if the internal redeemer exists, otherwise use raw HTTP
+    if (typeof acceptQuest === "function") await acceptQuest(questId);
+    await sleep(2000); // Wait for state to sync
+
     if (typeof redeemQuestReward === "function") {
       await redeemQuestReward({ questId, skuId: ORBS_SKU });
-    } else if (HTTP?.post) {
+    } else {
       await HTTP.post({
         url: `/quests/${questId}/redeem`,
         body: { sku_id: ORBS_SKU }
       });
     }
-    logger.log(`[Bemmo] Fulfill triggered: ${questId}`);
-  } catch (e) {
-    logger.error("[Bemmo] Claim Error", e);
-  }
+    logger.log(`[Bemmo] Server-side claim sent for ${questId}`);
+  } catch (e) { logger.error("[Bemmo] Claim Error", e); }
 }
 
-/* =========================
-   PLUGIN LIFECYCLE (FINAL)
-========================= */
+function patchVideoQuests() {
+  if (!QuestStore) return;
 
+  return after("getQuest", QuestStore, (args, ret) => {
+    if (ret?.userStatus && !ret.userStatus.completedAt) {
+      const qId = ret.id;
+
+      if (!questStartTime.has(qId)) {
+        questStartTime.set(qId, Date.now());
+      }
+
+      const elapsed = (Date.now() - questStartTime.get(qId)) / 1000;
+
+      // Only return the "Finished" flag after ~2.5 seconds
+      if (elapsed >= 2.5) {
+        ret.userStatus.completedAt = new Date().toISOString();
+        ret.userStatus.progress = { WATCH_VIDEO: { value: 30, target: 30 } };
+
+        // Trigger fulfillment once
+        if (!questProcessing.has(qId)) {
+          questProcessing.add(qId);
+          fulfillOrbQuest(qId);
+        }
+      } else {
+        // Show progress to the UI while waiting
+        ret.userStatus.progress = { WATCH_VIDEO: { value: Math.floor(elapsed), target: 30 } };
+      }
+    }
+    return ret;
+  });
+}
+
+
+/* =========================
+   PLUGIN LIFECYCLE (FIXED)
+========================= */
 let unpatches: (() => void)[] = [];
 let unpatchSidebar: any;
 
 export default {
   onLoad: () => {
-    // 1. Initial Storage Setup
     try { storage.nitroSpoof ??= false; } catch(e) {}
 
-    // 2. Nitro Spoof Patch
+    // 1. Nitro Spoof Patch
     if (UserStore) {
       try {
         unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
@@ -1668,49 +1701,32 @@ export default {
       } catch (e) { logger.error("Nitro Fail", e); }
     }
 
-    // 3. Orbs Quest Bypass
-    if (QuestStore) {
-      try {
-        unpatches.push(after("getQuest", QuestStore, (args, ret) => {
-          // Check if quest exists and isn't finished
-          if (ret?.userStatus && !ret.userStatus.completedAt) {
-            const qId = ret.id;
-            
-            // Mark start time for this specific quest
-            if (!questStartTime.has(qId)) questStartTime.set(qId, Date.now());
+    // 2. Orbs Quest Patch (Manual Mode)
+    try {
+      const qPatch = patchVideoQuests();
+      if (qPatch) unpatches.push(qPatch);
+    } catch (e) { logger.error("Quest Patch Fail", e); }
 
-            // Bypass logic: Immediately tell the UI it's done
-            ret.userStatus.completedAt = new Date().toISOString();
-            ret.userStatus.progress = { WATCH_VIDEO: { value: 30, target: 30 } };
-
-            // Send the actual claim request to Discord
-            fulfillOrbQuest(qId);
-          }
-          return ret;
-        }));
-      } catch (e) { logger.error("Quest Patch Fail", e); }
-    }
-
-    // 4. Sidebar & Services
-    try { 
-       unpatchSidebar = patchSidebar(); 
-    } catch(e) { logger.error("Sidebar Fail", e); }
-
+    // 3. Sidebar & Services
+    try { unpatchSidebar = patchSidebar?.(); } catch(e) {}
     try { 
       CopyMessageID?.onLoad?.(); 
       RichPresence?.startRichPresence();
       if (storage.logging?.enabled) startLogger();
-    } catch(e) { logger.error("Services Fail", e); }
+    } catch(e) {}
 
     logger.log("Bemmo: Plugin Started.");
   },
 
   onUnload: () => {
-    // Cleanup
+    // Cleanup Memory
     questStartTime.clear();
-    
+    questProcessing.clear();
+
     // Unregister Commands
-    for (const unreg of commands) unreg();
+    for (const unreg of commands) {
+      try { unreg(); } catch(e) {}
+    }
 
     // Remove Patches
     for (const unpatch of unpatches) {
@@ -1718,7 +1734,6 @@ export default {
     }
     unpatches = [];
 
-    // Stop Services
     if (typeof unpatchSidebar === "function") unpatchSidebar();
     RichPresence?.stopRichPresence();
     stopLogger(true);
