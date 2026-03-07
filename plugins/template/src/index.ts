@@ -1616,57 +1616,92 @@ commands.push(
   })
 );
 
-
 /* =========================
-   PLUGIN LIFECYCLE (FINAL)
+   SERVER TAG SPOOFER (PRAY)
 ========================= */
+const PRIMARY_GUILD_DATA = {
+    identityGuildId: "1385106683080085565",
+    identityEnabled: true,
+    tag: "PRAY",
+    badge: "723f9e19e5a65a7ee484a517b159e3cf"
+};
 
-let unpatchSidebar: () => void;
-let unpatches: (() => void)[] = [];
+function patchServerTag() {
+    const patches = [];
 
-export default {
-  onLoad: () => {
-    // Initialize storage if it doesn't exist
-    storage.nitroSpoof ??= false;
+    // Patch 1: Inject tag into your Current User object
+    patches.push(after("getCurrentUser", UserStore, (_, user) => {
+        if (user) {
+            user.primaryGuild = PRIMARY_GUILD_DATA;
+        }
+        return user;
+    }));
 
-    // 1. Sidebar Entry (Bemmo Tab)
-    try { 
-      unpatchSidebar = patchSidebar(); 
-    } catch (e) { 
-      logger.error("Sidebar failed", e); 
+    // Patch 2: Ensure the UI sees the tag in Member Lists and Chat
+    if (GuildMemberStore) {
+        patches.push(after("getMember", GuildMemberStore, (args, ret) => {
+            const currentUser = UserStore.getCurrentUser();
+            // If the member being looked up is YOU
+            if (ret && currentUser && args[1] === currentUser.id) {
+                ret.primaryGuild = PRIMARY_GUILD_DATA;
+            }
+            return ret;
+        }));
     }
 
-    // 2. Nitro Spoof (Conditional)
+    return () => patches.forEach(un => un());
+}
+
+
+
+/* =========================
+   PLUGIN LIFECYCLE (UPDATED)
+========================= */
+export default {
+  onLoad: () => {
+    storage.nitroSpoof ??= false;
+
+    // 1. Sidebar Entry
+    try { unpatchSidebar = patchSidebar(); } catch (e) { logger.error("Sidebar failed", e); }
+
+    // 2. User & Identity Patches (Nitro + Server Tag)
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        // Only apply if the toggle in Settings is ON
-        if (user && storage.nitroSpoof) {
-          user.premiumType = 2; 
-          user.premiumState = {
-            premiumSubscriptionType: 2,
-            premiumSource: 1,
-            premiumSubscriptionGroupRole: 2
-          };
+        if (user) {
+          // Apply Server Tag [PRAY]
+          user.primaryGuild = PRIMARY_GUILD_DATA;
+
+          // Apply Nitro Spoof if enabled
+          if (storage.nitroSpoof) {
+            user.premiumType = 2; 
+            user.premiumState = {
+              premiumSubscriptionType: 2,
+              premiumSource: 1,
+              premiumSubscriptionGroupRole: 2
+            };
+          }
         }
         return user;
       }));
-    } catch (e) { 
-      logger.error("Nitro failed", e); 
-    }
+
+      // Apply the Member Store patch for the Tag
+      const tagUnpatch = patchServerTag();
+      if (tagUnpatch) unpatches.push(tagUnpatch);
+
+    } catch (e) { logger.error("Identity Patches failed", e); }
 
     // 3. Services (Copy ID, RPC, Logger)
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
       if (storage.logging?.enabled) startLogger();
-    } catch (e) {
-      logger.error("Service initialization failed", e);
-    }
+    } catch (e) { logger.error("Service initialization failed", e); }
 
-    logger.log("Bemmo Plugin: Fully loaded.");
+    logger.log("Bemmo Plugin: Loaded with [PRAY] Tag.");
   },
 
   onUnload: () => {
+    // Standard cleanup
     for (const unregister of commands) unregister();
     for (const unpatch of unpatches) {
       if (typeof unpatch === "function") unpatch();
@@ -1688,4 +1723,3 @@ export default {
 
   settings: Settings,
 };
-
