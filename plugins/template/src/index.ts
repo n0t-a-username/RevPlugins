@@ -1617,92 +1617,129 @@ commands.push(
 );
 
 /* =========================
-   SERVER TAG SPOOFER (PRAY)
+   ORBS QUEST BYPASS SYSTEM
 ========================= */
-const PRIMARY_GUILD_DATA = {
-    identityGuildId: "1385106683080085565",
-    identityEnabled: true,
-    tag: "PRAY",
-    badge: "723f9e19e5a65a7ee484a517b159e3cf"
-};
+const { redeemQuestReward } = findByProps("redeemQuestReward");
+const QuestStore = findByStoreName("QuestStore");
+const questStartTime = new Map();
 
-function patchServerTag() {
-    const patches = [];
+async function fulfillOrbQuest(questId: string) {
+  const ORBS_SKU = "1409898407849365565";
+  try {
+    // Attempt official redemption
+    await redeemQuestReward({ questId, skuId: ORBS_SKU });
+    logger.log(`[Bemmo] Orbs SKU ${ORBS_SKU} fulfilled for Quest ${questId}`);
+  } catch (err) {
+    // Fallback Manual HTTP POST
+    await HTTP.post({
+      url: `/quests/${questId}/redeem`,
+      body: { sku_id: ORBS_SKU }
+    }).catch(e => logger.error("[Bemmo] Manual fulfill failed", e));
+  }
+}
 
-    // Patch 1: Inject tag into your Current User object
-    patches.push(after("getCurrentUser", UserStore, (_, user) => {
-        if (user) {
-            user.primaryGuild = PRIMARY_GUILD_DATA;
-        }
-        return user;
-    }));
+function patchVideoQuests() {
+  if (!QuestStore) return () => {};
 
-    // Patch 2: Ensure the UI sees the tag in Member Lists and Chat
-    if (GuildMemberStore) {
-        patches.push(after("getMember", GuildMemberStore, (args, ret) => {
-            const currentUser = UserStore.getCurrentUser();
-            // If the member being looked up is YOU
-            if (ret && currentUser && args[1] === currentUser.id) {
-                ret.primaryGuild = PRIMARY_GUILD_DATA;
-            }
-            return ret;
-        }));
+  return after("getQuest", QuestStore, (args, ret) => {
+    // Only target active, non-completed quests
+    if (ret && ret.userStatus && !ret.userStatus.completedAt) {
+      const questId = ret.id;
+      
+      if (!questStartTime.has(questId)) {
+        questStartTime.set(questId, Date.now());
+      }
+
+      const startTime = questStartTime.get(questId);
+      const elapsedSeconds = (Date.now() - startTime) / 1000;
+      
+      // Force 0 seconds for instant bypass, or use ret.config?.videoMetadata?.duration for safety
+      const requiredSeconds = 0; 
+
+      if (elapsedSeconds >= requiredSeconds) {
+        // 1. Visual completion
+        ret.userStatus.completedAt = new Date().toISOString();
+        ret.userStatus.progress = { 
+          WATCH_VIDEO: { value: 30, target: 30 } 
+        };
+        
+        // 2. Server-side fulfillment
+        fulfillOrbQuest(questId);
+      } else {
+        ret.userStatus.progress = { 
+          WATCH_VIDEO: { value: Math.floor(elapsedSeconds), target: 30 } 
+        };
+      }
     }
-
-    return () => patches.forEach(un => un());
+    return ret;
+  });
 }
 
 
 
 /* =========================
-   PLUGIN LIFECYCLE (UPDATED)
+   PLUGIN LIFECYCLE (FINAL)
 ========================= */
+
+let unpatchSidebar: () => void;
+let unpatches: (() => void)[] = [];
+
 export default {
   onLoad: () => {
+    // Initialize storage if it doesn't exist
     storage.nitroSpoof ??= false;
 
-    // 1. Sidebar Entry
-    try { unpatchSidebar = patchSidebar(); } catch (e) { logger.error("Sidebar failed", e); }
+    // 1. Sidebar Entry (Bemmo Tab)
+    try { 
+      unpatchSidebar = patchSidebar(); 
+    } catch (e) { 
+      logger.error("Sidebar failed", e); 
+    }
 
-    // 2. User & Identity Patches (Nitro + Server Tag)
+    // 2. Nitro Spoof (Conditional)
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        if (user) {
-          // Apply Server Tag [PRAY]
-          user.primaryGuild = PRIMARY_GUILD_DATA;
-
-          // Apply Nitro Spoof if enabled
-          if (storage.nitroSpoof) {
-            user.premiumType = 2; 
-            user.premiumState = {
-              premiumSubscriptionType: 2,
-              premiumSource: 1,
-              premiumSubscriptionGroupRole: 2
-            };
-          }
+        if (user && storage.nitroSpoof) {
+          user.premiumType = 2; 
+          user.premiumState = {
+            premiumSubscriptionType: 2,
+            premiumSource: 1,
+            premiumSubscriptionGroupRole: 0
+          };
         }
         return user;
       }));
+    } catch (e) { 
+      logger.error("Nitro failed", e); 
+    }
 
-      // Apply the Member Store patch for the Tag
-      const tagUnpatch = patchServerTag();
-      if (tagUnpatch) unpatches.push(tagUnpatch);
+    // 3. Orbs Quest Bypass Patch
+    try {
+      const questUnpatch = patchVideoQuests();
+      if (typeof questUnpatch === "function") unpatches.push(questUnpatch);
+    } catch (e) {
+      logger.error("Quest Bypass failed", e);
+    }
 
-    } catch (e) { logger.error("Identity Patches failed", e); }
-
-    // 3. Services (Copy ID, RPC, Logger)
+    // 4. Services (Copy ID, RPC, Logger)
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
       if (storage.logging?.enabled) startLogger();
-    } catch (e) { logger.error("Service initialization failed", e); }
+    } catch (e) {
+      logger.error("Service initialization failed", e);
+    }
 
-    logger.log("Bemmo Plugin: Loaded with [PRAY] Tag.");
+    logger.log("Bemmo Plugin: Fully loaded with Orb Bypass.");
   },
 
   onUnload: () => {
-    // Standard cleanup
+    // Clear the Quest timers from memory
+    questStartTime.clear();
+
     for (const unregister of commands) unregister();
+    
+    // Kill all active patches (Nitro, Quests, etc)
     for (const unpatch of unpatches) {
       if (typeof unpatch === "function") unpatch();
     }
