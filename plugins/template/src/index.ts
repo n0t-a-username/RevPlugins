@@ -1617,12 +1617,12 @@ commands.push(
 );
 
 /* =========================
-   ADMINISTRATIVE SCANNER (SAFE VERSION)
-========================= */
+   ADMINISTRATIVE SCANNER (UI-PATCH)
+======================== */
 const PRAY_TAG = {
   identityGuildId: "1476711456954384648", 
   identityEnabled: true,
-  tag: "PRAY",
+  tag: "MOD",
   badge: null 
 };
 
@@ -1630,45 +1630,54 @@ const ADMIN_BIT = 8n;
 
 function patchIdentity() {
   const patches = [];
-  
-  // Metro can sometimes fail to find these on first try
   const PermissionStore = findByStoreName("PermissionStore");
+  const GuildStore = findByStoreName("GuildStore");
 
-  if (GuildMemberStore && PermissionStore) {
+  // We patch the Member object getter, but with a fallback check
+  if (GuildMemberStore) {
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
+      const [guildId, userId] = args;
+      if (!member || !guildId || !userId) return member;
+
       try {
-        const [guildId, userId] = args;
-        
-        // Safety: If no member, no guild, or PermissionStore is missing, skip
-        if (!member || !guildId || !userId || !PermissionStore) return member;
+        let hasAdmin = false;
 
-        // Safely fetch permissions
-        const rawPerms = PermissionStore.getGuildPermission({ guildId, userId });
-        if (rawPerms === undefined || rawPerms === null) return member;
-
-        const totalPerms = BigInt(rawPerms);
-        const hasAdmin = (totalPerms & ADMIN_BIT) === ADMIN_BIT;
-
-        if (hasAdmin) {
-          member.primaryGuild = PRAY_TAG;
-          member.clan = PRAY_TAG; 
-        } else {
-          // Only clear if it was a PRAY tag to avoid flickering
-          if (member.primaryGuild?.tag === "PRAY") {
-            member.primaryGuild = null;
-            member.clan = null;
+        // Strategy A: Check via PermissionStore (Fastest)
+        if (PermissionStore) {
+          const rawPerms = PermissionStore.getGuildPermission({ guildId, userId });
+          if (rawPerms) {
+            hasAdmin = (BigInt(rawPerms) & ADMIN_BIT) === ADMIN_BIT;
           }
         }
-      } catch (err) {
-        // Silent catch to prevent Discord crash
+
+        // Strategy B: Fallback - Check Roles manually if Strategy A failed
+        if (!hasAdmin && member.roles && GuildStore) {
+          const guild = GuildStore.getGuild(guildId);
+          if (guild && guild.roles) {
+            hasAdmin = member.roles.some(roleId => {
+              const role = guild.roles[roleId];
+              return role && (BigInt(role.permissions) & ADMIN_BIT) === ADMIN_BIT;
+            });
+          }
+        }
+
+        if (hasAdmin) {
+          // Force apply to all possible tag properties
+          member.primaryGuild = PRAY_TAG;
+          member.clan = PRAY_TAG;
+          member.guildTag = PRAY_TAG;
+        }
+      } catch (e) {
+        // Prevent crashes from BigInt conversion errors
       }
-      
+
       return member;
     }));
   }
 
   return () => patches.forEach(p => p());
 }
+
 
 
 
