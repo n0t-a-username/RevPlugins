@@ -1621,77 +1621,54 @@ commands.push(
   registerCommand({
     name: "steal-tag",
     displayName: "steal-tag",
-    description: "Steals a user's clan/guild tag (Client-side)",
+    description: "Steals a user's clan tag (Client-sided)",
     options: [
-      {
-        name: "user",
-        displayName: "user",
-        description: "The user to steal the tag from",
-        required: false,
-        type: 3, // String for ID/Mention
-      },
-      {
-        name: "remove",
-        displayName: "remove",
-        description: "Set to true to reset your tag",
-        required: false,
-        type: 5, // Boolean
-      }
+      { name: "user", displayName: "user", description: "User to steal from", required: false, type: 3 },
+      { name: "remove", displayName: "remove", description: "Reset your tag", required: false, type: 5 }
     ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: async (args, ctx) => {
       const userInput = args.find(a => a.name === "user")?.value;
-      const shouldRemove = args.find(a => a.name === "remove")?.value ?? false;
+      const shouldRemove = args.find(a => a.name === "remove")?.value;
       const currentUser = UserStore.getCurrentUser();
 
-      // 1. Handle Removal
       if (shouldRemove) {
         storage.stolenTag = null;
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-          channelId: ctx.channel.id,
-          content: "✅ Your clan tag has been reset (Reload required to fully clear cache)."
-        }), { author: currentUser }));
-        return;
+        return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "✅ Tag cleared." }));
       }
 
-      // 2. Resolve User
       const userId = userInput?.replace(/[<@!>]/g, "");
       if (!userId) return;
 
       try {
-        // Fetch profile to get the 'primary_guild' data
+        // Fetching the profile is the ONLY way to get the primary_guild data
         const res = await HTTP.get({ url: `/users/${userId}/profile` });
-        const primaryGuild = res.body?.primary_guild;
+        const clan = res.body?.primary_guild;
 
-        if (!primaryGuild) {
-          receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-            channelId: ctx.channel.id,
-            content: "❌ This user doesn't have a primary guild tag to steal."
-          }), { author: currentUser }));
-          return;
+        if (!clan) {
+          return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "❌ User has no tag." }));
         }
 
-        // 3. Store in plugin storage
+        // Save to storage so the lifecycle patch can use it
         storage.stolenTag = {
-          identityGuildId: primaryGuild.identity_guild_id,
-          identityEnabled: true,
-          tag: primaryGuild.tag,
-          badge: primaryGuild.badge
+          tag: clan.tag,
+          badge: clan.badge,
+          identityGuildId: clan.identity_guild_id
         };
 
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-          channelId: ctx.channel.id,
-          content: `🧬 Successfully stole tag: **[${primaryGuild.tag}]**`
-        }), { author: currentUser }));
-
+        receiveMessage(ctx.channel.id, createBotMessage({ 
+          channelId: ctx.channel.id, 
+          content: `🧬 Stolen: **[${clan.tag}]**. You may need to switch channels to see the update.` 
+        }));
       } catch (err) {
-        logger.error("Failed to steal tag:", err);
+        logger.error("Steal-tag failed", err);
       }
     },
   })
 );
+
 
 
 
