@@ -1626,16 +1626,17 @@ function patchIdentity() {
   
   const applyStolenTag = (user) => {
     if (user && storage.stolenTag) {
+      // Use the exact structure you requested
       user.primaryGuild = storage.stolenTag;
-      user.clan = storage.stolenTag; // Support for newer 'Clan' UI
+      user.clan = storage.stolenTag; 
     }
     return user;
   };
 
-  // Patch 1: Your Profile
+  // Patch Profile & Global Identity
   patches.push(after("getCurrentUser", UserStore, (_, user) => applyStolenTag(user)));
 
-  // Patch 2: Member List/Chat
+  // Patch Member List (using args[1] as UserID)
   if (GuildMemberStore) {
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
       const me = UserStore.getCurrentUser();
@@ -1649,25 +1650,28 @@ function patchIdentity() {
   return () => patches.forEach(p => p());
 }
 
+/* =========================
+   /STEAL-TAG COMMAND
+========================= */
 commands.push(
   registerCommand({
     name: "steal-tag",
     displayName: "steal-tag",
-    description: "Steal a guild tag from another user",
+    description: "Steal a guild tag from another user or remove your current one",
     options: [
       {
         name: "user",
         displayName: "user",
         description: "The user to steal the tag from",
         required: false,
-        type: 6, // USER type
+        type: 6, // User select
       },
       {
         name: "remove",
         displayName: "remove",
-        description: "Remove your stolen tag?",
+        description: "Set to true to clear your stolen tag",
         required: false,
-        type: 5, // BOOLEAN type
+        type: 5, // Boolean
       }
     ],
     applicationId: "-1",
@@ -1676,51 +1680,53 @@ commands.push(
     execute: (args, ctx) => {
       const userId = args.find(a => a.name === "user")?.value;
       const remove = args.find(a => a.name === "remove")?.value;
+      const currentUser = UserStore.getCurrentUser();
 
       if (remove) {
         storage.stolenTag = null;
-        return receiveMessage(ctx.channel.id, createBotMessage({
+        return receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
           channelId: ctx.channel.id,
-          content: "🗑️ Stolen tag removed."
-        }));
+          content: "🗑️ **Stolen tag removed.** Your identity is now back to normal."
+        }), { author: currentUser }));
       }
 
       if (!userId) {
-        return receiveMessage(ctx.channel.id, createBotMessage({
+        return receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
           channelId: ctx.channel.id,
-          content: "❌ Please specify a user or use `remove: true`."
-        }));
+          content: "⚠️ Please mention a user or use `remove: true`."
+        }), { author: currentUser }));
       }
 
-      // Fetch the target member from the store
       const target = GuildMemberStore.getMember(ctx.guild.id, userId);
       const tagData = target?.primaryGuild || target?.clan;
 
       if (tagData && tagData.tag) {
+        // Save using your requested object structure
         storage.stolenTag = {
-          identityGuildId: tagData.identityGuildId || tagData.guildId,
+          identityGuildId: tagData.identityGuildId || tagData.guildId || "",
           identityEnabled: true,
           tag: tagData.tag,
-          badge: tagData.badge
+          badge: tagData.badge || ""
         };
 
-        receiveMessage(ctx.channel.id, createBotMessage({
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
           channelId: ctx.channel.id,
-          content: `✅ Stole tag **[${tagData.tag}]** from <@${userId}>!`
-        }));
+          content: `✅ **Identity Hijacked!** Stole \`[${tagData.tag}]\` from <@${userId}>.`
+        }), { author: currentUser }));
       } else {
-        receiveMessage(ctx.channel.id, createBotMessage({
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
           channelId: ctx.channel.id,
           content: "❌ That user doesn't have a visible guild tag to steal."
-        }));
+        }), { author: currentUser }));
       }
     },
   })
 );
 
 /* =========================
-   PLUGIN LIFECYCLE
+   PLUGIN LIFECYCLE (FINAL)
 ========================= */
+
 let unpatchSidebar: () => void;
 let unpatches: (() => void)[] = [];
 
@@ -1728,35 +1734,86 @@ export default {
   onLoad: () => {
     storage.nitroSpoof ??= false;
 
-    try { unpatchSidebar = patchSidebar(); } catch (e) { logger.error(e); }
+    // 1. Sidebar Entry
+    try { 
+      unpatchSidebar = patchSidebar(); 
+    } catch (e) { 
+      logger.error("Sidebar failed", e); 
+    }
 
+    // 2. Identity & Nitro Patching
     try {
+      // Start the Tag Stealer
       const tagUnpatch = patchIdentity();
       if (tagUnpatch) unpatches.push(tagUnpatch);
 
+      // Nitro Spoof Logic
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
         if (user && storage.nitroSpoof) {
           user.premiumType = 2; 
-          user.premiumState = { premiumSubscriptionType: 2, premiumSource: 1, premiumSubscriptionGroupRole: 0 };
+          user.premiumState = {
+            premiumSubscriptionType: 2,
+            premiumSource: 1,
+            premiumSubscriptionGroupRole: 0
+          };
         }
         return user;
       }));
-    } catch (e) { logger.error(e); }
+    } catch (e) { 
+      logger.error("User Identity Patching failed", e); 
+    }
 
+    // 3. UI Patches (Safe Initialization)
+    try {
+      let UserProfile = findByTypeName("UserProfile") || findByTypeName("UserProfileContent");
+      if (UserProfile) {
+        unpatches.push(after("type", UserProfile, (args, ret) => {
+          const profileSections = ret?.props?.children;
+          const userId = args[0]?.userId ?? args[0]?.user?.id;
+          if (profileSections && userId) {
+            profileSections.push(React.createElement(GiveawaySection, { userId }));
+          }
+        }));
+      }
+    } catch (e) {
+      logger.error("UI Patching failed", e);
+    }
+
+    // 4. Services
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
-    } catch (e) { logger.error(e); }
+      if (storage.logging?.enabled) startLogger();
+    } catch (e) {
+      logger.error("Service initialization failed", e);
+    }
 
-    logger.log("Bemmo: Tag Stealer Loaded.");
+    logger.log("Bemmo: Loaded with Tag Stealer.");
   },
 
   onUnload: () => {
-    for (const unregister of commands) unregister();
-    for (const unpatch of unpatches) { if (typeof unpatch === "function") unpatch(); }
+    // Unregister all commands
+    for (const unregister of commands) {
+      if (typeof unregister === "function") unregister();
+    }
+    
+    // Kill all patches
+    for (const unpatch of unpatches) {
+      if (typeof unpatch === "function") unpatch();
+    }
     unpatches = [];
+
+    // Cleanup Prison
+    if (prisonState.interval) {
+      clearInterval(prisonState.interval);
+      prisonState.active = false;
+    }
+
     if (typeof unpatchSidebar === "function") unpatchSidebar();
+    CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
+    stopLogger();
+
     logger.log("Bemmo: Unloaded.");
   },
 
