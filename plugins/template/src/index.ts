@@ -1630,9 +1630,13 @@ const { acceptQuest } = findByProps("acceptQuest") || {};
 async function fulfillOrbQuest(questId: string) {
   const ORBS_SKU = "1409898407849365565";
   try {
+    // 1. Ensure quest is accepted
     if (typeof acceptQuest === "function") await acceptQuest(questId);
-    await sleep(2000); // Wait for state to sync
+    
+    // 2. Wait 2 seconds for state to sync on server
+    await sleep(2000); 
 
+    // 3. Attempt Redemption
     if (typeof redeemQuestReward === "function") {
       await redeemQuestReward({ questId, skuId: ORBS_SKU });
     } else {
@@ -1642,13 +1646,16 @@ async function fulfillOrbQuest(questId: string) {
       });
     }
     logger.log(`[Bemmo] Server-side claim sent for ${questId}`);
-  } catch (e) { logger.error("[Bemmo] Claim Error", e); }
+  } catch (e) { 
+    logger.error("[Bemmo] Claim Error", e); 
+  }
 }
 
 function patchVideoQuests() {
   if (!QuestStore) return;
 
   return after("getQuest", QuestStore, (args, ret) => {
+    // Only target active, uncompleted quests
     if (ret?.userStatus && !ret.userStatus.completedAt) {
       const qId = ret.id;
 
@@ -1658,25 +1665,24 @@ function patchVideoQuests() {
 
       const elapsed = (Date.now() - questStartTime.get(qId)) / 1000;
 
-      // Only return the "Finished" flag after ~2.5 seconds
+      // Only return the "Finished" flag after a short delay
       if (elapsed >= 2.5) {
         ret.userStatus.completedAt = new Date().toISOString();
         ret.userStatus.progress = { WATCH_VIDEO: { value: 30, target: 30 } };
 
-        // Trigger fulfillment once
+        // Trigger fulfillment once per quest
         if (!questProcessing.has(qId)) {
           questProcessing.add(qId);
           fulfillOrbQuest(qId);
         }
       } else {
-        // Show progress to the UI while waiting
+        // Show artificial progress while waiting
         ret.userStatus.progress = { WATCH_VIDEO: { value: Math.floor(elapsed), target: 30 } };
       }
     }
     return ret;
   });
 }
-
 
 /* =========================
    PLUGIN LIFECYCLE (FIXED)
@@ -1701,7 +1707,7 @@ export default {
       } catch (e) { logger.error("Nitro Fail", e); }
     }
 
-    // 2. Orbs Quest Patch (Manual Mode)
+    // 2. Orbs Quest Patch (Manual Delay Mode)
     try {
       const qPatch = patchVideoQuests();
       if (qPatch) unpatches.push(qPatch);
@@ -1719,16 +1725,13 @@ export default {
   },
 
   onUnload: () => {
-    // Cleanup Memory
     questStartTime.clear();
     questProcessing.clear();
 
-    // Unregister Commands
     for (const unreg of commands) {
       try { unreg(); } catch(e) {}
     }
 
-    // Remove Patches
     for (const unpatch of unpatches) {
       try { unpatch?.(); } catch (e) {}
     }
