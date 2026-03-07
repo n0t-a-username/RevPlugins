@@ -1617,42 +1617,57 @@ commands.push(
 );
 
 /* =========================
-   SERVER TAG SPOOFER (PRAY)
-   - No Icon (Badge: null)
-   - Custom Server ID
+   ADMIN TAG OVERRIDER (PRAY)
+   - Overrides existing tags
+   - Applies to anyone with Admin perms
 ========================= */
 const PRAY_TAG = {
-  identityGuildId: "1205207689832038522", // Your requested ID
+  identityGuildId: "1205207689832038522",
   identityEnabled: true,
   tag: "Admin",
-  badge: null // Setting this to null removes the icon/guild badge
+  badge: null,
+  // High priority to override existing guild identities
+  color: null 
 };
+
+// Discord Permission Bitcrush
+const ADMIN_BIT = 8n; 
 
 function patchIdentity() {
   const patches = [];
-  
-  // Patch 1: The Global User Object (Profile/Settings)
+  const GuildStore = findByStoreName("GuildStore");
+  const PermissionStore = findByProps("getGuildPermission", "can");
+
+  // Patch 1: Your own Global Profile
   patches.push(after("getCurrentUser", UserStore, (_, user) => {
-    if (user) {
-      user.primaryGuild = PRAY_TAG;
-    }
+    if (user) user.primaryGuild = PRAY_TAG;
     return user;
   }));
 
-  // Patch 2: The Member Store (Chat & Member List)
+  // Patch 2: Member List / Chat Overrider
   if (GuildMemberStore) {
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
-      const me = UserStore.getCurrentUser();
-      // args[1] is the UserID. If it's us, apply the tag.
-      if (member && me && args[1] === me.id) {
+      const [guildId, userId] = args;
+      if (!member || !guildId) return member;
+
+      // Logic: If it's YOU or someone with ADMIN permissions
+      const isMe = userId === UserStore.getCurrentUser()?.id;
+      
+      // Check permissions for the user in that guild
+      // Some versions of Discord use .permissions (BigInt) directly on the member object
+      const hasAdmin = (BigInt(member.permissions ?? 0n) & ADMIN_BIT) === ADMIN_BIT;
+
+      if (isMe || hasAdmin) {
         member.primaryGuild = PRAY_TAG;
       }
+      
       return member;
     }));
   }
 
   return () => patches.forEach(p => p());
 }
+
 
 
 
