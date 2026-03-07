@@ -1696,7 +1696,7 @@ commands.push(
 
 
 /* =========================
-   PLUGIN LIFECYCLE (UPDATED)
+   PLUGIN LIFECYCLE (STABLE)
 ========================= */
 
 let unpatchSidebar: () => void;
@@ -1704,85 +1704,74 @@ let unpatches: (() => void)[] = [];
 
 export default {
   onLoad: () => {
-    // Initialize storage if it doesn't exist
     storage.nitroSpoof ??= false;
-    storage.stolenTag ??= null; // Initialize the tag storage
+    storage.stolenTag ??= null; 
 
-    // 1. Sidebar Entry (Bemmo Tab)
+    // 1. Sidebar Entry
     try { 
       unpatchSidebar = patchSidebar(); 
     } catch (e) { 
       logger.error("Sidebar failed", e); 
     }
 
-    // 2. Nitro Spoof Patch
+    // 2. Stable User Patch
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
         if (!user) return user;
 
-        // Apply Nitro Spoof
-        if (storage.nitroSpoof) {
-          user.premiumType = 2; 
-          user.premiumState = {
-            premiumSubscriptionType: 2,
-            premiumSource: 1,
-            premiumSubscriptionGroupRole: 0
-          };
+        // We use a getter/proxy approach to avoid constant re-triggering 
+        // if the store expects a specific object reference.
+        
+        // NITRO SPOOF
+        if (storage.nitroSpoof && user.premiumType !== 2) {
+          user.premiumType = 2;
         }
 
-        // Apply Stolen Tag (Client-Side)
+        // STOLEN TAG
         if (storage.stolenTag) {
-          user.primaryGuild = {
+          // Discord uses 'primaryGuild' (CamelCase) in the JS objects 
+          // but 'primary_guild' (snake_case) in the API. 
+          // We set both to be safe for different UI components.
+          const tagData = {
             identityGuildId: storage.stolenTag.identityGuildId,
             identityEnabled: true,
             tag: storage.stolenTag.tag,
             badge: storage.stolenTag.badge
           };
+          
+          user.primaryGuild = tagData;
+          user.primary_guild = tagData; 
         }
 
         return user;
       }));
     } catch (e) { 
-      logger.error("UserStore patches failed", e); 
+      logger.error("UserStore patch failed", e); 
     }
 
-    // 3. Services (Copy ID, RPC, Logger)
+    // 3. Other Services
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
       if (storage.logging?.enabled) startLogger();
     } catch (e) {
-      logger.error("Service initialization failed", e);
+      logger.error("Service init failed", e);
     }
 
-    logger.log("Bemmo Plugin: Fully loaded with Tag Stealer.");
+    logger.log("Bemmo Plugin: Loaded successfully.");
   },
 
   onUnload: () => {
-    // Unregister all commands
-    for (const unregister of commands) {
-      if (typeof unregister === "function") unregister();
-    }
-    
-    // Remove all patches
-    for (const unpatch of unpatches) {
-      if (typeof unpatch === "function") unpatch();
-    }
+    unpatches.forEach(u => typeof u === "function" && u());
     unpatches = [];
+    commands.forEach(u => typeof u === "function" && u());
 
-    // Cleanup prison intervals
-    if (prisonState.interval) {
-      clearInterval(prisonState.interval);
-      prisonState.active = false;
-    }
-
-    // Cleanup other services
+    if (prisonState.interval) clearInterval(prisonState.interval);
     if (typeof unpatchSidebar === "function") unpatchSidebar();
+    
     CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
     stopLogger();
-
-    logger.log("Bemmo Plugin: Unloaded.");
   },
 
   settings: Settings,
