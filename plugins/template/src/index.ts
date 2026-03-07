@@ -1621,58 +1621,40 @@ commands.push(
 ========================= */
 storage.stolenTag ??= null;
 
+const applyStolenTag = (obj) => {
+  if (obj && storage.stolenTag) {
+    obj.primaryGuild = storage.stolenTag;
+    obj.clan = storage.stolenTag;
+  }
+  return obj;
+};
+
 function patchIdentity() {
-  const patches = [];
+  const p = [];
   
-  const applyStolenTag = (user) => {
-    if (user && storage.stolenTag) {
-      // Use the exact structure you requested
-      user.primaryGuild = storage.stolenTag;
-      user.clan = storage.stolenTag; 
-    }
-    return user;
-  };
+  // Patch 1: Your Profile
+  p.push(after("getCurrentUser", UserStore, (_, user) => applyStolenTag(user)));
 
-  // Patch Profile & Global Identity
-  patches.push(after("getCurrentUser", UserStore, (_, user) => applyStolenTag(user)));
-
-  // Patch Member List (using args[1] as UserID)
+  // Patch 2: Member List & Chat
   if (GuildMemberStore) {
-    patches.push(after("getMember", GuildMemberStore, (args, member) => {
+    p.push(after("getMember", GuildMemberStore, (args, member) => {
       const me = UserStore.getCurrentUser();
-      if (member && me && args[1] === me.id) {
-        applyStolenTag(member);
-      }
+      if (member && me && args[1] === me.id) applyStolenTag(member);
       return member;
     }));
   }
-
-  return () => patches.forEach(p => p());
+  return p;
 }
 
-/* =========================
-   /STEAL-TAG COMMAND
-========================= */
+// ---- /steal-tag ----
 commands.push(
   registerCommand({
     name: "steal-tag",
     displayName: "steal-tag",
-    description: "Steal a guild tag from another user or remove your current one",
+    description: "Steal a guild tag or remove your current one",
     options: [
-      {
-        name: "user",
-        displayName: "user",
-        description: "The user to steal the tag from",
-        required: false,
-        type: 6, // User select
-      },
-      {
-        name: "remove",
-        displayName: "remove",
-        description: "Set to true to clear your stolen tag",
-        required: false,
-        type: 5, // Boolean
-      }
+      { name: "user", displayName: "user", description: "User to steal from", required: false, type: 6 },
+      { name: "remove", displayName: "remove", description: "Clear stolen tag?", required: false, type: 5 }
     ],
     applicationId: "-1",
     inputType: 1,
@@ -1684,24 +1666,15 @@ commands.push(
 
       if (remove) {
         storage.stolenTag = null;
-        return receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-          channelId: ctx.channel.id,
-          content: "🗑️ **Stolen tag removed.** Your identity is now back to normal."
-        }), { author: currentUser }));
-      }
-
-      if (!userId) {
-        return receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-          channelId: ctx.channel.id,
-          content: "⚠️ Please mention a user or use `remove: true`."
+        return receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+          channelId: ctx.channel.id, content: "🗑️ Stolen tag removed." 
         }), { author: currentUser }));
       }
 
       const target = GuildMemberStore.getMember(ctx.guild.id, userId);
       const tagData = target?.primaryGuild || target?.clan;
 
-      if (tagData && tagData.tag) {
-        // Save using your requested object structure
+      if (tagData?.tag) {
         storage.stolenTag = {
           identityGuildId: tagData.identityGuildId || tagData.guildId || "",
           identityEnabled: true,
@@ -1709,14 +1682,12 @@ commands.push(
           badge: tagData.badge || ""
         };
 
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-          channelId: ctx.channel.id,
-          content: `✅ **Identity Hijacked!** Stole \`[${tagData.tag}]\` from <@${userId}>.`
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+          channelId: ctx.channel.id, content: `✅ Stole **[${tagData.tag}]** from <@${userId}>!` 
         }), { author: currentUser }));
       } else {
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({
-          channelId: ctx.channel.id,
-          content: "❌ That user doesn't have a visible guild tag to steal."
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+          channelId: ctx.channel.id, content: "❌ No tag found on that user." 
         }), { author: currentUser }));
       }
     },
@@ -1724,7 +1695,7 @@ commands.push(
 );
 
 /* =========================
-   PLUGIN LIFECYCLE (FINAL)
+   PLUGIN LIFECYCLE (UPDATED)
 ========================= */
 
 let unpatchSidebar: () => void;
@@ -1733,6 +1704,7 @@ let unpatches: (() => void)[] = [];
 export default {
   onLoad: () => {
     storage.nitroSpoof ??= false;
+    storage.stolenTag ??= null; // Initialize tag storage
 
     // 1. Sidebar Entry
     try { 
@@ -1743,9 +1715,9 @@ export default {
 
     // 2. Identity & Nitro Patching
     try {
-      // Start the Tag Stealer
-      const tagUnpatch = patchIdentity();
-      if (tagUnpatch) unpatches.push(tagUnpatch);
+      // Start the Tag Stealer Patches
+      const tagPatches = patchIdentity();
+      if (Array.isArray(tagPatches)) unpatches.push(...tagPatches);
 
       // Nitro Spoof Logic
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
@@ -1760,10 +1732,10 @@ export default {
         return user;
       }));
     } catch (e) { 
-      logger.error("User Identity Patching failed", e); 
+      logger.error("Identity/Nitro Patching failed", e); 
     }
 
-    // 3. UI Patches (Safe Initialization)
+    // 3. UI Patches (UserProfile)
     try {
       let UserProfile = findByTypeName("UserProfile") || findByTypeName("UserProfileContent");
       if (UserProfile) {
@@ -1788,16 +1760,16 @@ export default {
       logger.error("Service initialization failed", e);
     }
 
-    logger.log("Bemmo: Loaded with Tag Stealer.");
+    logger.log("Bemmo: Loaded.");
   },
 
   onUnload: () => {
-    // Unregister all commands
+    // Unregister Commands
     for (const unregister of commands) {
       if (typeof unregister === "function") unregister();
     }
     
-    // Kill all patches
+    // Kill All Patches
     for (const unpatch of unpatches) {
       if (typeof unpatch === "function") unpatch();
     }
