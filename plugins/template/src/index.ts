@@ -1617,8 +1617,52 @@ commands.push(
 );
 
 
-// ---- /steal-tag (318 Contextual Scraper) ----
-// ---- /steal-tag (318 Anti-Hang Version) ----
+// 1. Initialize Storage
+storage.tagConfig ??= { text: null, badge: null, guildId: null };
+
+// 2. Helper function (Must be defined before patchIdentity calls it)
+function getActiveTag() {
+  if (!storage.tagConfig?.text) return null;
+
+  return {
+    identityGuildId: storage.tagConfig.guildId,
+    identityEnabled: true,
+    tag: storage.tagConfig.text,
+    badge: storage.tagConfig.badge
+  };
+}
+
+// 3. The Patcher
+function patchIdentity() {
+  const patches = [];
+  
+  // Patch UserStore
+  patches.push(after("getCurrentUser", UserStore, (_, user) => {
+    const tag = getActiveTag();
+    if (user && tag) {
+        user.primaryGuild = tag;
+        user.primary_guild = tag;
+    }
+    return user;
+  }));
+
+  // Patch Member list
+  if (GuildMemberStore) {
+    patches.push(after("getMember", GuildMemberStore, (args, member) => {
+      const me = UserStore.getCurrentUser();
+      const tag = getActiveTag();
+      if (member && me && args[1] === me.id && tag) {
+        member.primaryGuild = tag;
+        member.primary_guild = tag;
+      }
+      return member;
+    }));
+  }
+
+  return () => patches.forEach(p => p());
+}
+
+
 const registerStealCommand = () => {
   return registerCommand({
     name: "steal-tag",
@@ -1643,20 +1687,10 @@ const registerStealCommand = () => {
       const userId = userInput?.replace(/[<@!>]/g, "");
       if (!userId) return;
 
-      receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "⌛ Fetching... (Requesting API)" }));
+      receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "⌛ Fetching profile..." }));
 
       try {
-        // Use a timeout to prevent the 'Infinite Loading' bug
-        const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), 5000);
-
-        const res = await HTTP.get({ 
-          url: `/users/${userId}/profile?guild_id=${ctx.guild_id || ""}`,
-          timeout: 5000,
-          signal: controller.signal
-        });
-        
-        clearTimeout(id);
+        const res = await HTTP.get({ url: `/users/${userId}/profile?guild_id=${ctx.guild_id || ""}` });
         const body = res.body;
 
         const clan = body?.clan 
@@ -1665,10 +1699,7 @@ const registerStealCommand = () => {
                   || body?.user_profile?.primary_guild;
 
         if (!clan?.tag) {
-          return receiveMessage(ctx.channel.id, createBotMessage({ 
-            channelId: ctx.channel.id, 
-            content: "❌ No tag data found. The API returned a response, but the tag field was empty." 
-          }));
+          return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "❌ No tag found." }));
         }
 
         storage.tagConfig = {
@@ -1683,39 +1714,12 @@ const registerStealCommand = () => {
         }));
 
       } catch (err) {
-        const errorMsg = err.name === 'AbortError' ? "🛑 Request Timed Out (API is too slow)" : "🛑 API Error: " + err.message;
-        receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: errorMsg }));
+        logger.error("Steal-tag error", err);
       }
     },
   });
 };
 
-function patchIdentity() {
-  const patches = [];
-  
-  patches.push(after("getCurrentUser", UserStore, (_, user) => {
-    const tag = getActiveTag();
-    if (user && tag) {
-        user.primaryGuild = tag;
-        user.primary_guild = tag; // Important for message list tags
-    }
-    return user;
-  }));
-
-  if (GuildMemberStore) {
-    patches.push(after("getMember", GuildMemberStore, (args, member) => {
-      const me = UserStore.getCurrentUser();
-      const tag = getActiveTag();
-      if (member && me && args[1] === me.id && tag) {
-        member.primaryGuild = tag;
-        member.primary_guild = tag;
-      }
-      return member;
-    }));
-  }
-
-  return () => patches.forEach(p => p());
-}
 
 
 /* =========================
