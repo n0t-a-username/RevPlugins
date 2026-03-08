@@ -1770,29 +1770,31 @@ const registerStealCommand = () => {
     },
   });
 };
-
-// Ensure storage is initialized globally
+// 1. Initialize Storage Globals
 storage.tagConfig ??= { text: null, badge: null, guildId: null };
+storage.nitroSpoof ??= false;
+storage.logging ??= { enabled: false };
 
-function getActiveTag() {
+// 2. Helper Logic for Tags
+const getActiveTag = () => {
   if (!storage.tagConfig?.text) return null;
-
   return {
     identityGuildId: storage.tagConfig.guildId,
     identityEnabled: true,
     tag: storage.tagConfig.text,
     badge: storage.tagConfig.badge
   };
-}
+};
 
-function patchIdentity() {
+// 3. The Identity Patcher
+const patchIdentity = () => {
   const patches = [];
   
   patches.push(after("getCurrentUser", UserStore, (_, user) => {
     const tag = getActiveTag();
     if (user && tag) {
-        user.primaryGuild = tag;
-        user.primary_guild = tag; // Map to both for 318 compatibility
+      user.primaryGuild = tag;
+      user.primary_guild = tag;
     }
     return user;
   }));
@@ -1808,28 +1810,89 @@ function patchIdentity() {
       return member;
     }));
   }
-
   return () => patches.forEach(p => p());
-}
+};
 
-/* =========================
-   PLUGIN LIFECYCLE
-========================= */
+// 4. The Steal Command
+const registerStealCommand = () => {
+  return registerCommand({
+    name: "steal-tag",
+    displayName: "steal-tag",
+    description: "Steal any tag (Clan or Verified)",
+    options: [
+      { name: "user", displayName: "user", description: "The user to steal from", required: false, type: 3 },
+      { name: "remove", displayName: "remove", description: "Reset your tag", required: false, type: 5 }
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const userInput = args.find(a => a.name === "user")?.value;
+      const shouldRemove = args.find(a => a.name === "remove")?.value;
+
+      if (shouldRemove) {
+        storage.tagConfig = { text: null, badge: null, guildId: null };
+        return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "✅ Tag cleared." }));
+      }
+
+      const userId = userInput?.replace(/[<@!>]/g, "");
+      if (!userId) return;
+
+      receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "⌛ Fetching profile..." }));
+
+      try {
+        const profileActions = findByProps("fetchProfile");
+        const profile = await profileActions.fetchProfile(userId, { 
+          guildId: ctx.guild_id, 
+          withMutualGuilds: false 
+        });
+
+        const clan = profile?.clan 
+                  || profile?.guild_member?.primary_guild 
+                  || profile?.user_profile?.primary_guild 
+                  || profile?.primary_guild;
+
+        if (!clan?.tag) {
+          return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "❌ No tag found on this profile." }));
+        }
+
+        storage.tagConfig = {
+          text: clan.tag,
+          badge: clan.badge || clan.badge_hash,
+          guildId: clan.identity_guild_id || clan.identity_guildId || clan.guild_id
+        };
+
+        return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: `🧬 **Copied:** [${clan.tag}]` }));
+      } catch (err) {
+        logger.error("Steal-tag error", err);
+        return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "🛑 Fetch failed." }));
+      }
+    },
+  });
+};
+
+// 5. Full Lifecycle Export
 let unpatchSidebar: () => void;
 let unpatches: (() => void)[] = [];
 let commandUnpatch: () => void;
 
 export default {
   onLoad: () => {
-    storage.tagConfig ??= { text: null, badge: null, guildId: null };
-    storage.nitroSpoof ??= false;
+    // 1. Sidebar Entry
+    try { 
+      unpatchSidebar = patchSidebar(); 
+    } catch (e) { 
+      logger.error("Sidebar patch failed", e); 
+    }
 
-    // Command Registration
+    // 2. Command Registration
     try { 
       commandUnpatch = registerStealCommand(); 
-    } catch (e) { logger.error("Command failed", e); }
+    } catch (e) { 
+      logger.error("Command registration failed", e); 
+    }
 
-    // Apply Patches
+    // 3. Identity & Nitro Injection
     try {
       if (UserStore) {
         const tagUnpatch = patchIdentity();
@@ -1838,23 +1901,53 @@ export default {
         unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
           if (user && storage.nitroSpoof) {
             user.premiumType = 2; 
-            user.premiumState = { premiumSubscriptionType: 2, premiumSource: 1, premiumSubscriptionGroupRole: 0 };
+            user.premiumState = { 
+              premiumSubscriptionType: 2, 
+              premiumSource: 1, 
+              premiumSubscriptionGroupRole: 0 
+            };
           }
           return user;
         }));
       }
-    } catch (e) { logger.error("Identity patch failed", e); }
+    } catch (e) { 
+      logger.error("Identity/Nitro patch failed", e); 
+    }
 
-    RichPresence.startRichPresence();
-    logger.log("Bemmo: System Online.");
+    // 4. Services
+    try {
+      CopyMessageID.onLoad?.(); 
+      RichPresence.startRichPresence();
+      if (storage.logging?.enabled) startLogger();
+    } catch (e) { 
+      logger.error("Service init failed", e); 
+    }
+
+    logger.log("Bemmo: Loaded.");
   },
 
   onUnload: () => {
+    // Clean up command
     if (typeof commandUnpatch === "function") commandUnpatch();
+    
+    // Clean up patches
     unpatches.forEach(u => u?.());
     unpatches = [];
+
+    // Clean up lifecycle components
+    if (typeof unpatchSidebar === "function") unpatchSidebar();
+    
+    // Check if prisonState exists before clearing (based on your previous snippets)
+    if (typeof prisonState !== 'undefined' && prisonState.interval) { 
+        clearInterval(prisonState.interval); 
+        prisonState.active = false; 
+    }
+
+    CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
-    logger.log("Bemmo: System Offline.");
+    stopLogger();
+
+    logger.log("Bemmo: Unloaded.");
   },
 
   settings: Settings,
