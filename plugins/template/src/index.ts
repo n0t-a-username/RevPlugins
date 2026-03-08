@@ -1617,15 +1617,8 @@ commands.push(
 );
 
 
-// Persistent storage for your tag settings
-storage.tagConfig ??= {
-  text: null,
-  badge: null,
-  guildId: null
-};
-
 function getActiveTag() {
-  if (!storage.tagConfig.text) return null;
+  if (!storage.tagConfig?.text) return null;
 
   return {
     identityGuildId: storage.tagConfig.guildId,
@@ -1638,22 +1631,19 @@ function getActiveTag() {
 function patchIdentity() {
   const patches = [];
   
-  // Patch the UserStore
   patches.push(after("getCurrentUser", UserStore, (_, user) => {
     const tag = getActiveTag();
     if (user && tag) {
         user.primaryGuild = tag;
-        user.primary_guild = tag; // Added for 318 compatibility
+        user.primary_guild = tag;
     }
     return user;
   }));
 
-  // Patch the Member list
   if (GuildMemberStore) {
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
       const me = UserStore.getCurrentUser();
       const tag = getActiveTag();
-      // args[1] is the userId in getMember
       if (member && me && args[1] === me.id && tag) {
         member.primaryGuild = tag;
       }
@@ -1665,12 +1655,12 @@ function patchIdentity() {
 }
 
 
-// ---- /steal-tag ----
+// ---- /steal-tag (318 ROBUST) ----
 commands.push(
   registerCommand({
     name: "steal-tag",
     displayName: "steal-tag",
-    description: "Steal a user's tag and badge (Client-sided)",
+    description: "Steal a user's tag and badge (Enhanced Scraping)",
     options: [
       { name: "user", displayName: "user", description: "The user to steal from", required: false, type: 3 },
       { name: "remove", displayName: "remove", description: "Reset your tag", required: false, type: 5 }
@@ -1693,29 +1683,36 @@ commands.push(
 
       try {
         const res = await HTTP.get({ url: `/users/${userId}/profile` });
-        const clan = res.body?.primary_guild;
+        const body = res.body;
 
-        if (!clan) {
-          return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "❌ No tag found on this user." }));
+        // Scrape logic: check primary_guild OR clan OR user_profile nested data
+        const clan = body?.primary_guild || body?.clan || body?.user_profile?.primary_guild;
+
+        if (!clan || !clan.tag) {
+          return receiveMessage(ctx.channel.id, createBotMessage({ 
+            channelId: ctx.channel.id, 
+            content: "❌ No tag found. They might have an identity but no active clan." 
+          }));
         }
 
-        // Dynamically save all data from the target
         storage.tagConfig = {
           text: clan.tag,
-          badge: clan.badge,
-          guildId: clan.identity_guild_id
+          badge: clan.badge || clan.badge_hash, // Some API versions use badge_hash
+          guildId: clan.identity_guild_id || clan.identity_guildId
         };
 
         receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
           channelId: ctx.channel.id, 
-          content: `🧬 **Stolen:** [${clan.tag}]\n> **Guild ID:** ${clan.identity_guild_id}` 
+          content: `🧬 **Stolen:** [${clan.tag}]\n> **Success:** Data synced to your local profile.` 
         }), { author: currentUser }));
+
       } catch (err) {
         logger.error("Steal-tag failed", err);
       }
     },
   })
 );
+
 
 
 /* =========================
