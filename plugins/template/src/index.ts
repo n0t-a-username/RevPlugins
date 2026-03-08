@@ -1617,8 +1617,109 @@ commands.push(
 );
 
 
+// Persistent storage for your tag settings
+storage.tagConfig ??= {
+  text: null,
+  badge: null,
+  guildId: null
+};
+
+function getActiveTag() {
+  if (!storage.tagConfig.text) return null;
+
+  return {
+    identityGuildId: storage.tagConfig.guildId,
+    identityEnabled: true,
+    tag: storage.tagConfig.text,
+    badge: storage.tagConfig.badge
+  };
+}
+
+function patchIdentity() {
+  const patches = [];
+  
+  // Patch the UserStore
+  patches.push(after("getCurrentUser", UserStore, (_, user) => {
+    const tag = getActiveTag();
+    if (user && tag) {
+        user.primaryGuild = tag;
+        user.primary_guild = tag; // Added for 318 compatibility
+    }
+    return user;
+  }));
+
+  // Patch the Member list
+  if (GuildMemberStore) {
+    patches.push(after("getMember", GuildMemberStore, (args, member) => {
+      const me = UserStore.getCurrentUser();
+      const tag = getActiveTag();
+      // args[1] is the userId in getMember
+      if (member && me && args[1] === me.id && tag) {
+        member.primaryGuild = tag;
+      }
+      return member;
+    }));
+  }
+
+  return () => patches.forEach(p => p());
+}
+
+
+// ---- /steal-tag ----
+commands.push(
+  registerCommand({
+    name: "steal-tag",
+    displayName: "steal-tag",
+    description: "Steal a user's tag and badge (Client-sided)",
+    options: [
+      { name: "user", displayName: "user", description: "The user to steal from", required: false, type: 3 },
+      { name: "remove", displayName: "remove", description: "Reset your tag", required: false, type: 5 }
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const userInput = args.find(a => a.name === "user")?.value;
+      const shouldRemove = args.find(a => a.name === "remove")?.value;
+      const currentUser = UserStore.getCurrentUser();
+
+      if (shouldRemove) {
+        storage.tagConfig = { text: null, badge: null, guildId: null };
+        return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "✅ Tag cleared." }));
+      }
+
+      const userId = userInput?.replace(/[<@!>]/g, "");
+      if (!userId) return;
+
+      try {
+        const res = await HTTP.get({ url: `/users/${userId}/profile` });
+        const clan = res.body?.primary_guild;
+
+        if (!clan) {
+          return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "❌ No tag found on this user." }));
+        }
+
+        // Dynamically save all data from the target
+        storage.tagConfig = {
+          text: clan.tag,
+          badge: clan.badge,
+          guildId: clan.identity_guild_id
+        };
+
+        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+          channelId: ctx.channel.id, 
+          content: `🧬 **Stolen:** [${clan.tag}]\n> **Guild ID:** ${clan.identity_guild_id}` 
+        }), { author: currentUser }));
+      } catch (err) {
+        logger.error("Steal-tag failed", err);
+      }
+    },
+  })
+);
+
+
 /* =========================
-   PLUGIN LIFECYCLE (FINAL)
+   PLUGIN LIFECYCLE
 ========================= */
 
 let unpatchSidebar: () => void;
@@ -1626,66 +1727,75 @@ let unpatches: (() => void)[] = [];
 
 export default {
   onLoad: () => {
-    // Initialize storage if it doesn't exist
     storage.nitroSpoof ??= false;
 
-    // 1. Sidebar Entry (Bemmo Tab)
+    // 1. Sidebar Entry
     try { 
       unpatchSidebar = patchSidebar(); 
     } catch (e) { 
-      logger.error("Sidebar failed", e); 
+      logger.error("Sidebar patch failed", e); 
     }
 
-    // 2. Nitro Spoof (Conditional)
+    // 2. Identity & Nitro (Boot Safety)
     try {
-      unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        // Only apply if the toggle in Settings is ON
-        if (user && storage.nitroSpoof) {
-          user.premiumType = 2; 
-          user.premiumState = {
-            premiumSubscriptionType: 2,
-            premiumSource: 1,
-            premiumSubscriptionGroupRole: 0
-          };
-        }
-        return user;
-      }));
+      // Ensure UserStore is ready before patching
+      if (UserStore) {
+        const tagUnpatch = patchIdentity();
+        if (tagUnpatch) unpatches.push(tagUnpatch);
+
+        unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
+          if (user && storage.nitroSpoof) {
+            user.premiumType = 2; 
+            user.premiumState = { 
+              premiumSubscriptionType: 2, 
+              premiumSource: 1, 
+              premiumSubscriptionGroupRole: 0 
+            };
+          }
+          return user;
+        }));
+      }
     } catch (e) { 
-      logger.error("Nitro failed", e); 
+      logger.error("Identity/Nitro patch failed", e); 
     }
 
-    // 3. Services (Copy ID, RPC, Logger)
+    // 3. Services
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
       if (storage.logging?.enabled) startLogger();
-    } catch (e) {
-      logger.error("Service initialization failed", e);
+    } catch (e) { 
+      logger.error("Service init failed", e); 
     }
 
-    logger.log("Bemmo Plugin: Fully loaded.");
+    logger.log("Bemmo: System Online.");
   },
 
   onUnload: () => {
-    for (const unregister of commands) unregister();
-    for (const unpatch of unpatches) {
-      if (typeof unpatch === "function") unpatch();
+    // Clean up commands
+    for (const unregister of commands) {
+        if (typeof unregister === "function") unregister();
+    }
+    
+    // Clean up patches
+    for (const unpatch of unpatches) { 
+        if (typeof unpatch === "function") unpatch(); 
     }
     unpatches = [];
 
-    if (prisonState.interval) {
-      clearInterval(prisonState.interval);
-      prisonState.active = false;
+    // Reset global states
+    if (prisonState.interval) { 
+        clearInterval(prisonState.interval); 
+        prisonState.active = false; 
     }
-
+    
     if (typeof unpatchSidebar === "function") unpatchSidebar();
     CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
     stopLogger();
 
-    logger.log("Bemmo Plugin: Unloaded.");
+    logger.log("Bemmo: System Offline.");
   },
 
   settings: Settings,
 };
-
