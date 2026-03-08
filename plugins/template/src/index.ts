@@ -1616,12 +1616,13 @@ commands.push(
   })
 );
 
+
 // ---- /steal-tag ----
 commands.push(
   registerCommand({
     name: "steal-tag",
     displayName: "steal-tag",
-    description: "Steals a user's clan tag (Client-sided)",
+    description: "Steal a user's clan tag (Client-sided)",
     options: [
       { name: "user", displayName: "user", description: "User to steal from", required: false, type: 3 },
       { name: "remove", displayName: "remove", description: "Reset your tag", required: false, type: 5 }
@@ -1632,7 +1633,6 @@ commands.push(
     execute: async (args, ctx) => {
       const userInput = args.find(a => a.name === "user")?.value;
       const shouldRemove = args.find(a => a.name === "remove")?.value;
-      const currentUser = UserStore.getCurrentUser();
 
       if (shouldRemove) {
         storage.stolenTag = null;
@@ -1643,7 +1643,6 @@ commands.push(
       if (!userId) return;
 
       try {
-        // Fetching the profile is the ONLY way to get the primary_guild data
         const res = await HTTP.get({ url: `/users/${userId}/profile` });
         const clan = res.body?.primary_guild;
 
@@ -1651,7 +1650,6 @@ commands.push(
           return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "❌ User has no tag." }));
         }
 
-        // Save to storage so the lifecycle patch can use it
         storage.stolenTag = {
           tag: clan.tag,
           badge: clan.badge,
@@ -1660,7 +1658,7 @@ commands.push(
 
         receiveMessage(ctx.channel.id, createBotMessage({ 
           channelId: ctx.channel.id, 
-          content: `🧬 Stolen: **[${clan.tag}]**. You may need to switch channels to see the update.` 
+          content: `🧬 Stolen: **[${clan.tag}]**. Restart Discord to apply.` 
         }));
       } catch (err) {
         logger.error("Steal-tag failed", err);
@@ -1672,76 +1670,88 @@ commands.push(
 
 
 /* =========================
-   PLUGIN LIFECYCLE (FINAL STABLE)
+   PLUGIN LIFECYCLE (318 STABLE)
 ========================= */
 
+const FluxDispatcher = findByProps("dispatch", "subscribe");
 let unpatchSidebar: () => void;
 let unpatches: (() => void)[] = [];
 
 export default {
   onLoad: () => {
     storage.nitroSpoof ??= false;
-    storage.stolenTag ??= null;
+    storage.stolenTag ??= null; // Initialize tag storage
 
-    try { unpatchSidebar = patchSidebar(); } catch (e) {}
-
-    // 1. Target the User object directly
-    // Instead of patching the Store (which is a loop), 
-    // we patch the actual 'User' object when it is retrieved.
-    try {
-      unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        if (!user) return user;
-
-        // Apply Nitro
-        if (storage.nitroSpoof) user.premiumType = 2;
-
-        // Apply Stolen Tag
-        if (storage.stolenTag) {
-          // We define these as non-enumerable to prevent Discord's 
-          // internal logic from getting confused during serialization.
-          Object.defineProperty(user, "primaryGuild", {
-            value: {
-              identityGuildId: storage.stolenTag.identityGuildId,
-              identityEnabled: true,
-              tag: storage.stolenTag.tag,
-              badge: storage.stolenTag.badge
-            },
-            configurable: true,
-            enumerable: true,
-            writable: true
-          });
-          
-          // Fallback for some components that use snake_case
-          user.primary_guild = user.primaryGuild;
-        }
-
-        return user;
-      }));
-    } catch (e) {
-      logger.error("User injection failed", e);
+    // 1. Sidebar Entry
+    try { 
+      unpatchSidebar = patchSidebar(); 
+    } catch (e) { 
+      logger.error("Sidebar failed", e); 
     }
 
-    // 2. Start Services
+    // 2. Safe Data Injection (Dispatcher Patch)
+    // This handles Nitro and the Stolen Tag without crashing 318
+    if (FluxDispatcher) {
+      unpatches.push(after("dispatch", FluxDispatcher, (args) => {
+        const [event] = args;
+
+        // CONNECTION_OPEN is when you first log in, USER_UPDATE is when your profile changes
+        if (event.type === "CONNECTION_OPEN" || event.type === "USER_UPDATE") {
+          const user = event.user || event.user_data;
+          const myId = UserStore.getCurrentUser()?.id;
+
+          if (user && (user.id === myId || event.type === "CONNECTION_OPEN")) {
+            // Apply Nitro Spoof
+            if (storage.nitroSpoof) {
+              user.premium_type = 2;
+            }
+
+            // Apply Stolen Tag
+            if (storage.stolenTag) {
+              user.primary_guild = {
+                identity_guild_id: storage.stolenTag.identityGuildId,
+                identity_enabled: true,
+                tag: storage.stolenTag.tag,
+                badge: storage.stolenTag.badge
+              };
+            }
+          }
+        }
+      }));
+    }
+
+    // 3. Services (Copy ID, RPC, Logger)
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
       if (storage.logging?.enabled) startLogger();
     } catch (e) {
-      logger.error("Service init failed", e);
+      logger.error("Service initialization failed", e);
     }
 
-    logger.log("Bemmo Plugin: Loaded.");
+    logger.log("Bemmo Plugin: Stable and Loaded.");
   },
 
   onUnload: () => {
-    unpatches.forEach(u => u?.());
+    // Unregister all commands
+    for (const unregister of commands) {
+      if (typeof unregister === "function") unregister();
+    }
+    
+    // Remove all patches
+    for (const unpatch of unpatches) {
+      if (typeof unpatch === "function") unpatch();
+    }
     unpatches = [];
-    commands.forEach(u => u?.());
+
+    // Cleanup
     if (prisonState.interval) clearInterval(prisonState.interval);
     if (typeof unpatchSidebar === "function") unpatchSidebar();
     CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
     stopLogger();
+
+    logger.log("Bemmo Plugin: Unloaded.");
   },
 
   settings: Settings,
