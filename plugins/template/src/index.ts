@@ -1617,49 +1617,8 @@ commands.push(
 );
 
 
-// ---- /set-tag ----
-commands.push(
-  registerCommand({
-    name: "set-tag",
-    displayName: "set-tag",
-    description: "Set a custom client-side clan tag",
-    options: [
-      { name: "tag", displayName: "tag", description: "The text for your tag (e.g. BEMMO)", required: false, type: 3 },
-      { name: "clear", displayName: "clear", description: "Remove your custom tag", required: false, type: 5 }
-    ],
-    applicationId: "-1",
-    inputType: 1,
-    type: 1,
-    execute: (args, ctx) => {
-      const tagText = args.find(a => a.name === "tag")?.value;
-      const shouldClear = args.find(a => a.name === "clear")?.value;
-      const currentUser = UserStore.getCurrentUser();
-
-      if (shouldClear) {
-        storage.customTag = null;
-        return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "✅ Custom tag cleared." }));
-      }
-
-      if (!tagText) return;
-
-      // Save the custom tag data
-      storage.customTag = {
-        tag: tagText,
-        badge: "b21af2358594301cf516073983286144", // Default Discord Badge icon
-        identityGuildId: "0",
-        identityEnabled: true
-      };
-
-      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
-        channelId: ctx.channel.id, 
-        content: `🏷️ Tag set to: **[${tagText}]**\n> *Note: You may need to restart Discord for it to appear everywhere.*` 
-      }), { author: currentUser }));
-    },
-  })
-);
-
 /* =========================
-   PLUGIN LIFECYCLE (CUSTOM TAG)
+   PLUGIN LIFECYCLE (FINAL)
 ========================= */
 
 let unpatchSidebar: () => void;
@@ -1667,50 +1626,64 @@ let unpatches: (() => void)[] = [];
 
 export default {
   onLoad: () => {
+    // Initialize storage if it doesn't exist
     storage.nitroSpoof ??= false;
-    storage.customTag ??= null;
 
-    try { unpatchSidebar = patchSidebar(); } catch (e) {}
-
-    // ---- THE SILENT INJECTION ----
-    // This patches the 'User' class directly so it doesn't loop
-    const User = findByProps("getUser", "getCurrentUser")?.getCurrentUser()?.constructor;
-    
-    if (User?.prototype) {
-      // We use a "getter" so it dynamically checks storage without crashing
-      Object.defineProperty(User.prototype, "primaryGuild", {
-        get() {
-          if (this.id === UserStore.getCurrentUser()?.id && storage.customTag) {
-            return storage.customTag;
-          }
-          return this._primaryGuild; // Fallback to original
-        },
-        set(val) { this._primaryGuild = val; },
-        configurable: true
-      });
+    // 1. Sidebar Entry (Bemmo Tab)
+    try { 
+      unpatchSidebar = patchSidebar(); 
+    } catch (e) { 
+      logger.error("Sidebar failed", e); 
     }
 
-    // 3. Other Services
-    CopyMessageID.onLoad?.(); 
-    RichPresence.startRichPresence();
-    if (storage.logging?.enabled) startLogger();
+    // 2. Nitro Spoof (Conditional)
+    try {
+      unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
+        // Only apply if the toggle in Settings is ON
+        if (user && storage.nitroSpoof) {
+          user.premiumType = 2; 
+          user.premiumState = {
+            premiumSubscriptionType: 2,
+            premiumSource: 1,
+            premiumSubscriptionGroupRole: 0
+          };
+        }
+        return user;
+      }));
+    } catch (e) { 
+      logger.error("Nitro failed", e); 
+    }
 
-    logger.log("Bemmo Custom Tag: Loaded.");
+    // 3. Services (Copy ID, RPC, Logger)
+    try {
+      CopyMessageID.onLoad?.(); 
+      RichPresence.startRichPresence();
+      if (storage.logging?.enabled) startLogger();
+    } catch (e) {
+      logger.error("Service initialization failed", e);
+    }
+
+    logger.log("Bemmo Plugin: Fully loaded.");
   },
 
   onUnload: () => {
-    unpatches.forEach(u => u?.());
-    commands.forEach(u => u?.());
-    
-    // Clean up the prototype patch
-    const User = findByProps("getUser", "getCurrentUser")?.getCurrentUser()?.constructor;
-    if (User?.prototype) {
-      delete User.prototype.primaryGuild;
+    for (const unregister of commands) unregister();
+    for (const unpatch of unpatches) {
+      if (typeof unpatch === "function") unpatch();
+    }
+    unpatches = [];
+
+    if (prisonState.interval) {
+      clearInterval(prisonState.interval);
+      prisonState.active = false;
     }
 
     if (typeof unpatchSidebar === "function") unpatchSidebar();
+    CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
     stopLogger();
+
+    logger.log("Bemmo Plugin: Unloaded.");
   },
 
   settings: Settings,
