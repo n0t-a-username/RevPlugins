@@ -1617,142 +1617,102 @@ commands.push(
 );
 
 
-// ---- /steal-tag ----
+// ---- /set-tag ----
 commands.push(
   registerCommand({
-    name: "steal-tag",
-    displayName: "steal-tag",
-    description: "Steal a user's clan tag (Client-sided)",
+    name: "set-tag",
+    displayName: "set-tag",
+    description: "Set a custom client-side clan tag",
     options: [
-      { name: "user", displayName: "user", description: "User to steal from", required: false, type: 3 },
-      { name: "remove", displayName: "remove", description: "Reset your tag", required: false, type: 5 }
+      { name: "tag", displayName: "tag", description: "The text for your tag (e.g. BEMMO)", required: false, type: 3 },
+      { name: "clear", displayName: "clear", description: "Remove your custom tag", required: false, type: 5 }
     ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
-    execute: async (args, ctx) => {
-      const userInput = args.find(a => a.name === "user")?.value;
-      const shouldRemove = args.find(a => a.name === "remove")?.value;
+    execute: (args, ctx) => {
+      const tagText = args.find(a => a.name === "tag")?.value;
+      const shouldClear = args.find(a => a.name === "clear")?.value;
+      const currentUser = UserStore.getCurrentUser();
 
-      if (shouldRemove) {
-        storage.stolenTag = null;
-        return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "✅ Tag cleared." }));
+      if (shouldClear) {
+        storage.customTag = null;
+        return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "✅ Custom tag cleared." }));
       }
 
-      const userId = userInput?.replace(/[<@!>]/g, "");
-      if (!userId) return;
+      if (!tagText) return;
 
-      try {
-        const res = await HTTP.get({ url: `/users/${userId}/profile` });
-        const clan = res.body?.primary_guild;
+      // Save the custom tag data
+      storage.customTag = {
+        tag: tagText,
+        badge: "b21af2358594301cf516073983286144", // Default Discord Badge icon
+        identityGuildId: "0",
+        identityEnabled: true
+      };
 
-        if (!clan) {
-          return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "❌ User has no tag." }));
-        }
-
-        storage.stolenTag = {
-          tag: clan.tag,
-          badge: clan.badge,
-          identityGuildId: clan.identity_guild_id
-        };
-
-        receiveMessage(ctx.channel.id, createBotMessage({ 
-          channelId: ctx.channel.id, 
-          content: `🧬 Stolen: **[${clan.tag}]**. Restart Discord to apply.` 
-        }));
-      } catch (err) {
-        logger.error("Steal-tag failed", err);
-      }
+      receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+        channelId: ctx.channel.id, 
+        content: `🏷️ Tag set to: **[${tagText}]**\n> *Note: You may need to restart Discord for it to appear everywhere.*` 
+      }), { author: currentUser }));
     },
   })
 );
 
-
-
 /* =========================
-   PLUGIN LIFECYCLE (318 STABLE)
+   PLUGIN LIFECYCLE (CUSTOM TAG)
 ========================= */
 
-const FluxDispatcher = findByProps("dispatch", "subscribe");
 let unpatchSidebar: () => void;
 let unpatches: (() => void)[] = [];
 
 export default {
   onLoad: () => {
     storage.nitroSpoof ??= false;
-    storage.stolenTag ??= null; // Initialize tag storage
+    storage.customTag ??= null;
 
-    // 1. Sidebar Entry
-    try { 
-      unpatchSidebar = patchSidebar(); 
-    } catch (e) { 
-      logger.error("Sidebar failed", e); 
-    }
+    try { unpatchSidebar = patchSidebar(); } catch (e) {}
 
-    // 2. Safe Data Injection (Dispatcher Patch)
-    // This handles Nitro and the Stolen Tag without crashing 318
-    if (FluxDispatcher) {
-      unpatches.push(after("dispatch", FluxDispatcher, (args) => {
-        const [event] = args;
-
-        // CONNECTION_OPEN is when you first log in, USER_UPDATE is when your profile changes
-        if (event.type === "CONNECTION_OPEN" || event.type === "USER_UPDATE") {
-          const user = event.user || event.user_data;
-          const myId = UserStore.getCurrentUser()?.id;
-
-          if (user && (user.id === myId || event.type === "CONNECTION_OPEN")) {
-            // Apply Nitro Spoof
-            if (storage.nitroSpoof) {
-              user.premium_type = 2;
-            }
-
-            // Apply Stolen Tag
-            if (storage.stolenTag) {
-              user.primary_guild = {
-                identity_guild_id: storage.stolenTag.identityGuildId,
-                identity_enabled: true,
-                tag: storage.stolenTag.tag,
-                badge: storage.stolenTag.badge
-              };
-            }
+    // ---- THE SILENT INJECTION ----
+    // This patches the 'User' class directly so it doesn't loop
+    const User = findByProps("getUser", "getCurrentUser")?.getCurrentUser()?.constructor;
+    
+    if (User?.prototype) {
+      // We use a "getter" so it dynamically checks storage without crashing
+      Object.defineProperty(User.prototype, "primaryGuild", {
+        get() {
+          if (this.id === UserStore.getCurrentUser()?.id && storage.customTag) {
+            return storage.customTag;
           }
-        }
-      }));
+          return this._primaryGuild; // Fallback to original
+        },
+        set(val) { this._primaryGuild = val; },
+        configurable: true
+      });
     }
 
-    // 3. Services (Copy ID, RPC, Logger)
-    try {
-      CopyMessageID.onLoad?.(); 
-      RichPresence.startRichPresence();
-      if (storage.logging?.enabled) startLogger();
-    } catch (e) {
-      logger.error("Service initialization failed", e);
-    }
+    // 3. Other Services
+    CopyMessageID.onLoad?.(); 
+    RichPresence.startRichPresence();
+    if (storage.logging?.enabled) startLogger();
 
-    logger.log("Bemmo Plugin: Stable and Loaded.");
+    logger.log("Bemmo Custom Tag: Loaded.");
   },
 
   onUnload: () => {
-    // Unregister all commands
-    for (const unregister of commands) {
-      if (typeof unregister === "function") unregister();
-    }
+    unpatches.forEach(u => u?.());
+    commands.forEach(u => u?.());
     
-    // Remove all patches
-    for (const unpatch of unpatches) {
-      if (typeof unpatch === "function") unpatch();
+    // Clean up the prototype patch
+    const User = findByProps("getUser", "getCurrentUser")?.getCurrentUser()?.constructor;
+    if (User?.prototype) {
+      delete User.prototype.primaryGuild;
     }
-    unpatches = [];
 
-    // Cleanup
-    if (prisonState.interval) clearInterval(prisonState.interval);
     if (typeof unpatchSidebar === "function") unpatchSidebar();
-    CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
     stopLogger();
-
-    logger.log("Bemmo Plugin: Unloaded.");
   },
 
   settings: Settings,
 };
+
