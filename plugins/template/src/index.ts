@@ -1624,7 +1624,7 @@ function getActiveTag() {
     identityGuildId: storage.tagConfig.guildId,
     identityEnabled: true,
     tag: storage.tagConfig.text,
-    badge: storage.tagConfig.badge
+    badge: storage.tagConfig.badge // Works for both normal and verified hashes
   };
 }
 
@@ -1634,6 +1634,7 @@ function patchIdentity() {
   patches.push(after("getCurrentUser", UserStore, (_, user) => {
     const tag = getActiveTag();
     if (user && tag) {
+        // 318 uses both depending on the UI component
         user.primaryGuild = tag;
         user.primary_guild = tag;
     }
@@ -1646,6 +1647,7 @@ function patchIdentity() {
       const tag = getActiveTag();
       if (member && me && args[1] === me.id && tag) {
         member.primaryGuild = tag;
+        member.primary_guild = tag;
       }
       return member;
     }));
@@ -1654,13 +1656,12 @@ function patchIdentity() {
   return () => patches.forEach(p => p());
 }
 
-
-// ---- /steal-tag (318 ROBUST) ----
+// ---- /steal-tag (Global & Verified Support) ----
 commands.push(
   registerCommand({
     name: "steal-tag",
     displayName: "steal-tag",
-    description: "Steal a user's tag and badge (Enhanced Scraping)",
+    description: "Steal any tag (Clan or Verified Server Tag)",
     options: [
       { name: "user", displayName: "user", description: "The user to steal from", required: false, type: 3 },
       { name: "remove", displayName: "remove", description: "Reset your tag", required: false, type: 5 }
@@ -1682,28 +1683,32 @@ commands.push(
       if (!userId) return;
 
       try {
-        const res = await HTTP.get({ url: `/users/${userId}/profile` });
+        // We add guild_id context to catch Verified Server Tags
+        const res = await HTTP.get({ url: `/users/${userId}/profile?guild_id=${ctx.guild_id || ""}` });
         const body = res.body;
 
-        // Scrape logic: check primary_guild OR clan OR user_profile nested data
-        const clan = body?.primary_guild || body?.clan || body?.user_profile?.primary_guild;
+        // Expanded Scrape: Checks Clan, Member Data, and Legacy Profile paths
+        const clan = body?.clan 
+                  || body?.guild_member?.primary_guild 
+                  || body?.primary_guild 
+                  || body?.user_profile?.primary_guild;
 
         if (!clan || !clan.tag) {
           return receiveMessage(ctx.channel.id, createBotMessage({ 
             channelId: ctx.channel.id, 
-            content: "❌ No tag found. They might have an identity but no active clan." 
+            content: "❌ No tag data found. (Try running this in the server where they have the tag visible)" 
           }));
         }
 
         storage.tagConfig = {
           text: clan.tag,
-          badge: clan.badge || clan.badge_hash, // Some API versions use badge_hash
-          guildId: clan.identity_guild_id || clan.identity_guildId
+          badge: clan.badge || clan.badge_hash,
+          guildId: clan.identity_guild_id || clan.identity_guildId || clan.guild_id
         };
 
         receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
           channelId: ctx.channel.id, 
-          content: `🧬 **Stolen:** [${clan.tag}]\n> **Success:** Data synced to your local profile.` 
+          content: `🧬 **Successfully Copied Tag:** [${clan.tag}]\n> **Type:** ${body?.guild_member ? "Verified/Server" : "Global Clan"}` 
         }), { author: currentUser }));
 
       } catch (err) {
