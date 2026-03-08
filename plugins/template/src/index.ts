@@ -1671,9 +1671,8 @@ commands.push(
 
 
 
-
 /* =========================
-   PLUGIN LIFECYCLE (STABLE)
+   PLUGIN LIFECYCLE (FINAL STABLE)
 ========================= */
 
 let unpatchSidebar: () => void;
@@ -1682,51 +1681,47 @@ let unpatches: (() => void)[] = [];
 export default {
   onLoad: () => {
     storage.nitroSpoof ??= false;
-    storage.stolenTag ??= null; 
+    storage.stolenTag ??= null;
 
-    // 1. Sidebar Entry
-    try { 
-      unpatchSidebar = patchSidebar(); 
-    } catch (e) { 
-      logger.error("Sidebar failed", e); 
-    }
+    try { unpatchSidebar = patchSidebar(); } catch (e) {}
 
-    // 2. Stable User Patch
+    // 1. Target the User object directly
+    // Instead of patching the Store (which is a loop), 
+    // we patch the actual 'User' object when it is retrieved.
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
         if (!user) return user;
 
-        // We use a getter/proxy approach to avoid constant re-triggering 
-        // if the store expects a specific object reference.
-        
-        // NITRO SPOOF
-        if (storage.nitroSpoof && user.premiumType !== 2) {
-          user.premiumType = 2;
-        }
+        // Apply Nitro
+        if (storage.nitroSpoof) user.premiumType = 2;
 
-        // STOLEN TAG
+        // Apply Stolen Tag
         if (storage.stolenTag) {
-          // Discord uses 'primaryGuild' (CamelCase) in the JS objects 
-          // but 'primary_guild' (snake_case) in the API. 
-          // We set both to be safe for different UI components.
-          const tagData = {
-            identityGuildId: storage.stolenTag.identityGuildId,
-            identityEnabled: true,
-            tag: storage.stolenTag.tag,
-            badge: storage.stolenTag.badge
-          };
+          // We define these as non-enumerable to prevent Discord's 
+          // internal logic from getting confused during serialization.
+          Object.defineProperty(user, "primaryGuild", {
+            value: {
+              identityGuildId: storage.stolenTag.identityGuildId,
+              identityEnabled: true,
+              tag: storage.stolenTag.tag,
+              badge: storage.stolenTag.badge
+            },
+            configurable: true,
+            enumerable: true,
+            writable: true
+          });
           
-          user.primaryGuild = tagData;
-          user.primary_guild = tagData; 
+          // Fallback for some components that use snake_case
+          user.primary_guild = user.primaryGuild;
         }
 
         return user;
       }));
-    } catch (e) { 
-      logger.error("UserStore patch failed", e); 
+    } catch (e) {
+      logger.error("User injection failed", e);
     }
 
-    // 3. Other Services
+    // 2. Start Services
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
@@ -1735,17 +1730,15 @@ export default {
       logger.error("Service init failed", e);
     }
 
-    logger.log("Bemmo Plugin: Loaded successfully.");
+    logger.log("Bemmo Plugin: Loaded.");
   },
 
   onUnload: () => {
-    unpatches.forEach(u => typeof u === "function" && u());
+    unpatches.forEach(u => u?.());
     unpatches = [];
-    commands.forEach(u => typeof u === "function" && u());
-
+    commands.forEach(u => u?.());
     if (prisonState.interval) clearInterval(prisonState.interval);
     if (typeof unpatchSidebar === "function") unpatchSidebar();
-    
     CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
     stopLogger();
