@@ -1617,48 +1617,9 @@ commands.push(
 );
 
 
-function getActiveTag() {
-  if (!storage.tagConfig?.text) return null;
-
-  return {
-    identityGuildId: storage.tagConfig.guildId,
-    identityEnabled: true,
-    tag: storage.tagConfig.text,
-    badge: storage.tagConfig.badge // Works for both normal and verified hashes
-  };
-}
-
-function patchIdentity() {
-  const patches = [];
-  
-  patches.push(after("getCurrentUser", UserStore, (_, user) => {
-    const tag = getActiveTag();
-    if (user && tag) {
-        // 318 uses both depending on the UI component
-        user.primaryGuild = tag;
-        user.primary_guild = tag;
-    }
-    return user;
-  }));
-
-  if (GuildMemberStore) {
-    patches.push(after("getMember", GuildMemberStore, (args, member) => {
-      const me = UserStore.getCurrentUser();
-      const tag = getActiveTag();
-      if (member && me && args[1] === me.id && tag) {
-        member.primaryGuild = tag;
-        member.primary_guild = tag;
-      }
-      return member;
-    }));
-  }
-
-  return () => patches.forEach(p => p());
-}
-
-// ---- /steal-tag (Global & Verified Support) ----
-commands.push(
-  registerCommand({
+// ---- /steal-tag (318 Contextual Scraper) ----
+const registerStealCommand = () => {
+  return registerCommand({
     name: "steal-tag",
     displayName: "steal-tag",
     description: "Steal any tag (Clan or Verified Server Tag)",
@@ -1682,12 +1643,15 @@ commands.push(
       const userId = userInput?.replace(/[<@!>]/g, "");
       if (!userId) return;
 
+      // Immediate feedback to confirm the command is running
+      receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "⌛ Fetching profile data..." }));
+
       try {
-        // We add guild_id context to catch Verified Server Tags
+        // Fetching with guild_id context is required for Verified Server Tags
         const res = await HTTP.get({ url: `/users/${userId}/profile?guild_id=${ctx.guild_id || ""}` });
         const body = res.body;
 
-        // Expanded Scrape: Checks Clan, Member Data, and Legacy Profile paths
+        // Scrape multiple possible locations for the tag/clan object
         const clan = body?.clan 
                   || body?.guild_member?.primary_guild 
                   || body?.primary_guild 
@@ -1696,7 +1660,7 @@ commands.push(
         if (!clan || !clan.tag) {
           return receiveMessage(ctx.channel.id, createBotMessage({ 
             channelId: ctx.channel.id, 
-            content: "❌ No tag data found. (Try running this in the server where they have the tag visible)" 
+            content: "❌ No tag found. Make sure you're in a server where their tag is visible." 
           }));
         }
 
@@ -1708,17 +1672,58 @@ commands.push(
 
         receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
           channelId: ctx.channel.id, 
-          content: `🧬 **Successfully Copied Tag:** [${clan.tag}]\n> **Type:** ${body?.guild_member ? "Verified/Server" : "Global Clan"}` 
+          content: `🧬 **Successfully Copied Tag:** [${clan.tag}]` 
         }), { author: currentUser }));
 
       } catch (err) {
         logger.error("Steal-tag failed", err);
       }
     },
-  })
-);
+  });
+};
 
+// Persistent storage initialization
+storage.tagConfig ??= { text: null, badge: null, guildId: null };
 
+function getActiveTag() {
+  if (!storage.tagConfig?.text) return null;
+
+  return {
+    identityGuildId: storage.tagConfig.guildId,
+    identityEnabled: true,
+    tag: storage.tagConfig.text,
+    badge: storage.tagConfig.badge
+  };
+}
+
+function patchIdentity() {
+  const patches = [];
+  
+  // Patch UserStore for Global Profile / Settings
+  patches.push(after("getCurrentUser", UserStore, (_, user) => {
+    const tag = getActiveTag();
+    if (user && tag) {
+        user.primaryGuild = tag;
+        user.primary_guild = tag;
+    }
+    return user;
+  }));
+
+  // Patch GuildMemberStore for Message List / Sidebar
+  if (GuildMemberStore) {
+    patches.push(after("getMember", GuildMemberStore, (args, member) => {
+      const me = UserStore.getCurrentUser();
+      const tag = getActiveTag();
+      if (member && me && args[1] === me.id && tag) {
+        member.primaryGuild = tag;
+        member.primary_guild = tag;
+      }
+      return member;
+    }));
+  }
+
+  return () => patches.forEach(p => p());
+}
 
 /* =========================
    PLUGIN LIFECYCLE
@@ -1726,21 +1731,22 @@ commands.push(
 
 let unpatchSidebar: () => void;
 let unpatches: (() => void)[] = [];
+let commandUnpatch: () => void;
 
 export default {
   onLoad: () => {
     storage.nitroSpoof ??= false;
 
-    // 1. Sidebar Entry
-    try { 
-      unpatchSidebar = patchSidebar(); 
-    } catch (e) { 
-      logger.error("Sidebar patch failed", e); 
-    }
+    // 1. Sidebar/Settings Tab
+    try { unpatchSidebar = patchSidebar(); } catch (e) { logger.error(e); }
 
-    // 2. Identity & Nitro (Boot Safety)
+    // 2. Command Registration
+    try { 
+      commandUnpatch = registerStealCommand(); 
+    } catch (e) { logger.error("Command registration failed", e); }
+
+    // 3. Identity & Nitro Injection
     try {
-      // Ensure UserStore is ready before patching
       if (UserStore) {
         const tagUnpatch = patchIdentity();
         if (tagUnpatch) unpatches.push(tagUnpatch);
@@ -1757,46 +1763,32 @@ export default {
           return user;
         }));
       }
-    } catch (e) { 
-      logger.error("Identity/Nitro patch failed", e); 
-    }
+    } catch (e) { logger.error(e); }
 
-    // 3. Services
+    // 4. Start Background Services
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
       if (storage.logging?.enabled) startLogger();
-    } catch (e) { 
-      logger.error("Service init failed", e); 
-    }
+    } catch (e) { logger.error(e); }
 
-    logger.log("Bemmo: System Online.");
+    logger.log("Bemmo: Loaded.");
   },
 
   onUnload: () => {
-    // Clean up commands
-    for (const unregister of commands) {
-        if (typeof unregister === "function") unregister();
-    }
-    
-    // Clean up patches
-    for (const unpatch of unpatches) { 
-        if (typeof unpatch === "function") unpatch(); 
-    }
+    // Clean up commands and patches
+    if (typeof commandUnpatch === "function") commandUnpatch();
+    unpatches.forEach(u => u?.());
     unpatches = [];
 
-    // Reset global states
-    if (prisonState.interval) { 
-        clearInterval(prisonState.interval); 
-        prisonState.active = false; 
-    }
-    
+    // Cleanup other modules
+    if (prisonState.interval) clearInterval(prisonState.interval);
     if (typeof unpatchSidebar === "function") unpatchSidebar();
     CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
     stopLogger();
 
-    logger.log("Bemmo: System Offline.");
+    logger.log("Bemmo: Unloaded.");
   },
 
   settings: Settings,
