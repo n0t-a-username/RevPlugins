@@ -1701,6 +1701,53 @@ const registerStealCommand = () => {
         if (!clan?.tag) {
           return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "❌ No tag found." }));
         }
+// ---- /steal-tag (318 Native Fetch) ----
+const registerStealCommand = () => {
+  return registerCommand({
+    name: "steal-tag",
+    displayName: "steal-tag",
+    description: "Steal any tag (Clan or Verified Server Tag)",
+    options: [
+      { name: "user", displayName: "user", description: "The user to steal from", required: false, type: 3 },
+      { name: "remove", displayName: "remove", description: "Reset your tag", required: false, type: 5 }
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: async (args, ctx) => {
+      const userInput = args.find(a => a.name === "user")?.value;
+      const shouldRemove = args.find(a => a.name === "remove")?.value;
+
+      if (shouldRemove) {
+        storage.tagConfig = { text: null, badge: null, guildId: null };
+        return receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "✅ Tag cleared." }));
+      }
+
+      const userId = userInput?.replace(/[<@!>]/g, "");
+      if (!userId) return;
+
+      receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "⌛ Fetching... (Using Native Fetch)" }));
+
+      try {
+        // Use the internal UserProfile actions to fetch the profile
+        // This is more stable than a raw HTTP.get which can hang
+        const profile = await findByProps("fetchProfile").fetchProfile(userId, { 
+          guildId: ctx.guild_id, 
+          withMutualGuilds: false 
+        });
+
+        // Search the returned object for Clan/Tag data
+        const clan = profile?.clan 
+                  || profile?.guild_member?.primary_guild 
+                  || profile?.user_profile?.primary_guild 
+                  || profile?.primary_guild;
+
+        if (!clan || !clan.tag) {
+          return receiveMessage(ctx.channel.id, createBotMessage({ 
+            channelId: ctx.channel.id, 
+            content: "❌ No tag found on this user." 
+          }));
+        }
 
         storage.tagConfig = {
           text: clan.tag,
@@ -1710,39 +1757,79 @@ const registerStealCommand = () => {
 
         return receiveMessage(ctx.channel.id, createBotMessage({ 
           channelId: ctx.channel.id, 
-          content: `🧬 **Copied:** [${clan.tag}]` 
+          content: `🧬 **Successfully Copied Tag:** [${clan.tag}]` 
         }));
 
       } catch (err) {
-        logger.error("Steal-tag error", err);
+        logger.error("Steal-tag failed", err);
+        return receiveMessage(ctx.channel.id, createBotMessage({ 
+          channelId: ctx.channel.id, 
+          content: "🛑 Fetch failed. The user might have a private profile or a fetch error occurred." 
+        }));
       }
     },
   });
 };
 
+// Ensure storage is initialized globally
+storage.tagConfig ??= { text: null, badge: null, guildId: null };
 
+function getActiveTag() {
+  if (!storage.tagConfig?.text) return null;
+
+  return {
+    identityGuildId: storage.tagConfig.guildId,
+    identityEnabled: true,
+    tag: storage.tagConfig.text,
+    badge: storage.tagConfig.badge
+  };
+}
+
+function patchIdentity() {
+  const patches = [];
+  
+  patches.push(after("getCurrentUser", UserStore, (_, user) => {
+    const tag = getActiveTag();
+    if (user && tag) {
+        user.primaryGuild = tag;
+        user.primary_guild = tag; // Map to both for 318 compatibility
+    }
+    return user;
+  }));
+
+  if (GuildMemberStore) {
+    patches.push(after("getMember", GuildMemberStore, (args, member) => {
+      const me = UserStore.getCurrentUser();
+      const tag = getActiveTag();
+      if (member && me && args[1] === me.id && tag) {
+        member.primaryGuild = tag;
+        member.primary_guild = tag;
+      }
+      return member;
+    }));
+  }
+
+  return () => patches.forEach(p => p());
+}
 
 /* =========================
    PLUGIN LIFECYCLE
 ========================= */
-
 let unpatchSidebar: () => void;
 let unpatches: (() => void)[] = [];
 let commandUnpatch: () => void;
 
 export default {
   onLoad: () => {
+    storage.tagConfig ??= { text: null, badge: null, guildId: null };
     storage.nitroSpoof ??= false;
 
-    // 1. Sidebar/Settings Tab
-    try { unpatchSidebar = patchSidebar(); } catch (e) { logger.error(e); }
-
-    // 2. Command Registration
+    // Command Registration
     try { 
       commandUnpatch = registerStealCommand(); 
-    } catch (e) { logger.error("Command registration failed", e); }
+    } catch (e) { logger.error("Command failed", e); }
 
-    // 3. Identity & Nitro Injection
+    // Apply Patches
     try {
       if (UserStore) {
         const tagUnpatch = patchIdentity();
@@ -1751,41 +1838,23 @@ export default {
         unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
           if (user && storage.nitroSpoof) {
             user.premiumType = 2; 
-            user.premiumState = { 
-              premiumSubscriptionType: 2, 
-              premiumSource: 1, 
-              premiumSubscriptionGroupRole: 0 
-            };
+            user.premiumState = { premiumSubscriptionType: 2, premiumSource: 1, premiumSubscriptionGroupRole: 0 };
           }
           return user;
         }));
       }
-    } catch (e) { logger.error(e); }
+    } catch (e) { logger.error("Identity patch failed", e); }
 
-    // 4. Start Background Services
-    try {
-      CopyMessageID.onLoad?.(); 
-      RichPresence.startRichPresence();
-      if (storage.logging?.enabled) startLogger();
-    } catch (e) { logger.error(e); }
-
-    logger.log("Bemmo: Loaded.");
+    RichPresence.startRichPresence();
+    logger.log("Bemmo: System Online.");
   },
 
   onUnload: () => {
-    // Clean up commands and patches
     if (typeof commandUnpatch === "function") commandUnpatch();
     unpatches.forEach(u => u?.());
     unpatches = [];
-
-    // Cleanup other modules
-    if (prisonState.interval) clearInterval(prisonState.interval);
-    if (typeof unpatchSidebar === "function") unpatchSidebar();
-    CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
-    stopLogger();
-
-    logger.log("Bemmo: Unloaded.");
+    logger.log("Bemmo: System Offline.");
   },
 
   settings: Settings,
