@@ -1618,11 +1618,12 @@ commands.push(
 
 
 // ---- /steal-tag (318 Contextual Scraper) ----
+// ---- /steal-tag (318 Anti-Hang Version) ----
 const registerStealCommand = () => {
   return registerCommand({
     name: "steal-tag",
     displayName: "steal-tag",
-    description: "Steal any tag (Clan or Verified Server Tag)",
+    description: "Steal any tag (Clan or Verified)",
     options: [
       { name: "user", displayName: "user", description: "The user to steal from", required: false, type: 3 },
       { name: "remove", displayName: "remove", description: "Reset your tag", required: false, type: 5 }
@@ -1633,7 +1634,6 @@ const registerStealCommand = () => {
     execute: async (args, ctx) => {
       const userInput = args.find(a => a.name === "user")?.value;
       const shouldRemove = args.find(a => a.name === "remove")?.value;
-      const currentUser = UserStore.getCurrentUser();
 
       if (shouldRemove) {
         storage.tagConfig = { text: null, badge: null, guildId: null };
@@ -1643,24 +1643,31 @@ const registerStealCommand = () => {
       const userId = userInput?.replace(/[<@!>]/g, "");
       if (!userId) return;
 
-      // Immediate feedback to confirm the command is running
-      receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "⌛ Fetching profile data..." }));
+      receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: "⌛ Fetching... (Requesting API)" }));
 
       try {
-        // Fetching with guild_id context is required for Verified Server Tags
-        const res = await HTTP.get({ url: `/users/${userId}/profile?guild_id=${ctx.guild_id || ""}` });
+        // Use a timeout to prevent the 'Infinite Loading' bug
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 5000);
+
+        const res = await HTTP.get({ 
+          url: `/users/${userId}/profile?guild_id=${ctx.guild_id || ""}`,
+          timeout: 5000,
+          signal: controller.signal
+        });
+        
+        clearTimeout(id);
         const body = res.body;
 
-        // Scrape multiple possible locations for the tag/clan object
         const clan = body?.clan 
                   || body?.guild_member?.primary_guild 
                   || body?.primary_guild 
                   || body?.user_profile?.primary_guild;
 
-        if (!clan || !clan.tag) {
+        if (!clan?.tag) {
           return receiveMessage(ctx.channel.id, createBotMessage({ 
             channelId: ctx.channel.id, 
-            content: "❌ No tag found. Make sure you're in a server where their tag is visible." 
+            content: "❌ No tag data found. The API returned a response, but the tag field was empty." 
           }));
         }
 
@@ -1670,46 +1677,31 @@ const registerStealCommand = () => {
           guildId: clan.identity_guild_id || clan.identity_guildId || clan.guild_id
         };
 
-        receiveMessage(ctx.channel.id, Object.assign(createBotMessage({ 
+        return receiveMessage(ctx.channel.id, createBotMessage({ 
           channelId: ctx.channel.id, 
-          content: `🧬 **Successfully Copied Tag:** [${clan.tag}]` 
-        }), { author: currentUser }));
+          content: `🧬 **Copied:** [${clan.tag}]` 
+        }));
 
       } catch (err) {
-        logger.error("Steal-tag failed", err);
+        const errorMsg = err.name === 'AbortError' ? "🛑 Request Timed Out (API is too slow)" : "🛑 API Error: " + err.message;
+        receiveMessage(ctx.channel.id, createBotMessage({ channelId: ctx.channel.id, content: errorMsg }));
       }
     },
   });
 };
 
-// Persistent storage initialization
-storage.tagConfig ??= { text: null, badge: null, guildId: null };
-
-function getActiveTag() {
-  if (!storage.tagConfig?.text) return null;
-
-  return {
-    identityGuildId: storage.tagConfig.guildId,
-    identityEnabled: true,
-    tag: storage.tagConfig.text,
-    badge: storage.tagConfig.badge
-  };
-}
-
 function patchIdentity() {
   const patches = [];
   
-  // Patch UserStore for Global Profile / Settings
   patches.push(after("getCurrentUser", UserStore, (_, user) => {
     const tag = getActiveTag();
     if (user && tag) {
         user.primaryGuild = tag;
-        user.primary_guild = tag;
+        user.primary_guild = tag; // Important for message list tags
     }
     return user;
   }));
 
-  // Patch GuildMemberStore for Message List / Sidebar
   if (GuildMemberStore) {
     patches.push(after("getMember", GuildMemberStore, (args, member) => {
       const me = UserStore.getCurrentUser();
@@ -1724,6 +1716,7 @@ function patchIdentity() {
 
   return () => patches.forEach(p => p());
 }
+
 
 /* =========================
    PLUGIN LIFECYCLE
