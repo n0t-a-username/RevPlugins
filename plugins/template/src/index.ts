@@ -1,7 +1,6 @@
 import { logger } from "@vendetta";
 import Settings from "./Settings";
 import GiveawaySection from "./GiveawaySection";
-import { patchTheme } from "./ThemeEditor";
 import * as CopyMessageID from "./CopyMessageID";
 import * as RichPresence from "./RichPresence";
 import patchSidebar from "./Sidebar";
@@ -1619,7 +1618,7 @@ commands.push(
 
 
 /* =========================
-   PLUGIN LIFECYCLE (UPDATED)
+   PLUGIN LIFECYCLE (FINAL)
 ========================= */
 
 let unpatchSidebar: () => void;
@@ -1627,11 +1626,8 @@ let unpatches: (() => void)[] = [];
 
 export default {
   onLoad: () => {
-    // Initialize storage defaults
+    // Initialize storage if it doesn't exist
     storage.nitroSpoof ??= false;
-    storage.themeEditorEnabled ??= false;
-    storage.customAccent ??= "#5865f2"; // Default Blurple
-    storage.customBg ??= "#000000";     // Default Midnight
 
     // 1. Sidebar Entry (Bemmo Tab)
     try { 
@@ -1640,9 +1636,10 @@ export default {
       logger.error("Sidebar failed", e); 
     }
 
-    // 2. Nitro Spoof
+    // 2. Nitro Spoof (Conditional)
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
+        // Only apply if the toggle in Settings is ON
         if (user && storage.nitroSpoof) {
           user.premiumType = 2; 
           user.premiumState = {
@@ -1657,16 +1654,7 @@ export default {
       logger.error("Nitro failed", e); 
     }
 
-    // 3. Theme Editor Patch (NEW)
-    try {
-      // Calling our exported patch function and storing the unpatcher
-      const themeUnpatch = patchTheme();
-      if (themeUnpatch) unpatches.push(themeUnpatch);
-    } catch (e) {
-      logger.error("Theme Editor Patch failed", e);
-    }
-
-    // 4. Services (Copy ID, RPC, Logger)
+    // 3. Services (Copy ID, RPC, Logger)
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
@@ -1675,26 +1663,21 @@ export default {
       logger.error("Service initialization failed", e);
     }
 
-    logger.log("Bemmo Plugin: Fully loaded with Theme Editor.");
+    logger.log("Bemmo Plugin: Fully loaded.");
   },
 
   onUnload: () => {
-    // Unregister all commands
     for (const unregister of commands) unregister();
-
-    // Run all unpatchers (Nitro, Theme, etc.)
     for (const unpatch of unpatches) {
       if (typeof unpatch === "function") unpatch();
     }
     unpatches = [];
 
-    // Clean up Prison interval
     if (prisonState.interval) {
       clearInterval(prisonState.interval);
       prisonState.active = false;
     }
 
-    // Module cleanups
     if (typeof unpatchSidebar === "function") unpatchSidebar();
     CopyMessageID.onUnload?.(); 
     RichPresence.stopRichPresence();
