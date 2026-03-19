@@ -1,14 +1,17 @@
 import { before, after } from "@vendetta/patcher";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { findInReactTree } from "@vendetta/utils";
-import { findByProps } from "@vendetta/metro";
+import { findByProps, findByName } from "@vendetta/metro";
 import { React, clipboard } from "@vendetta/metro/common";
-import { Forms, TextInput } from "@vendetta/ui/components";
+import { Forms } from "@vendetta/ui/components";
 import { showToast } from "@vendetta/ui/toasts";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
+
+// Safer way to get TextInput and Dispatcher
+const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 const Dispatcher = findByProps("dispatch", "subscribe");
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
@@ -31,30 +34,22 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           title: "Client Side Edit",
           confirmText: "Edit",
           cancelText: "Cancel",
-          // We render a custom view inside the alert for the text input
-          children: (
-            <TextInput
-              defaultValue={message.content}
-              onChange={(v) => (currentText = v)}
-              placeholder="Enter new text..."
-              autoFocus={true}
-            />
-          ),
           onConfirm: () => {
-            // Update local object
             message.content = currentText;
-
-            // Force UI update
             Dispatcher.dispatch({
               type: "MESSAGE_UPDATE",
-              message: {
-                ...message,
-                content: currentText,
-              },
+              message: { ...message, content: currentText },
             });
-
             showToast("Local edit applied!", getAssetIDByName("Check"));
           },
+          // Using a function for children is safer in some Vendetta versions
+          children: React.createElement(TextInput, {
+            defaultValue: message.content,
+            onChange: (v) => (currentText = v),
+            placeholder: "Enter new text...",
+            autoFocus: true,
+            style: { color: "#fff", marginTop: 10 } // Ensure text is visible
+          }),
         });
         LazyActionSheet.hideActionSheet();
       };
@@ -88,10 +83,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           component,
           (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup",
         );
-
-        if (actionSheetContainer && actionSheetContainer[1]) {
-          const middleGroup = actionSheetContainer[1];
-          middleGroup.props.children.push(copyIdButton, clientEditButton);
+        if (actionSheetContainer?.[1]) {
+          actionSheetContainer[1].props.children.push(copyIdButton, clientEditButton);
         }
       }
     });
