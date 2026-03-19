@@ -2,71 +2,81 @@ import { before, after } from "@vendetta/patcher";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { findInReactTree } from "@vendetta/utils";
 import { findByProps } from "@vendetta/metro";
-import { React, clipboard, Toasts } from "@vendetta/metro/common";
+import { React, clipboard, ReactNative } from "@vendetta/metro/common";
 import { Forms } from "@vendetta/ui/components";
-import { ReactNative } from "@vendetta/metro/common";
+import { showToast } from "@vendetta/ui/toasts";
 
-const { Alert } = ReactNative;
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
+const { Alert } = ReactNative;
 
-const unpatch = before("openLazy", LazyActionSheet, ([component, key, props]) => {
-  const message = props?.message;
+const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
+  const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
   component.then((instance) => {
     const unpatchInner = after("default", instance, (_, component) => {
       React.useEffect(() => () => unpatchInner(), []);
 
-      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
+      const buttons = findInReactTree(
+        component,
+        (x) => x?.[0]?.type?.name === "ButtonRow",
+      );
 
-      // Logic to trigger the client-side edit
-      const handleClientEdit = () => {
+      // --- Helper for the Edit Logic ---
+      const openEditPrompt = () => {
         Alert.prompt(
           "Client Side Edit",
-          "This will only change the text for you locally.",
-          [
-            {
-              text: "Cancel",
-              style: "cancel",
-            },
-            {
-              text: "Edit",
-              onPress: (newContent) => {
-                message.content = newContent;
-                // We don't need to force a re-render here because 
-                // Discord usually updates the message object in the store directly.
-                Toasts.showToast("Local edit applied!", getAssetIDByName("Check"));
-                LazyActionSheet.hideActionSheet();
-              },
-            },
-          ],
-          "plain-text",
+          "Edit this message locally (only you see this).",
+          (newText) => {
+            if (newText) {
+              message.content = newText;
+              showToast("Local edit applied!", getAssetIDByName("Check"));
+            }
+          },
           message.content
         );
+        LazyActionSheet.hideActionSheet();
       };
 
-      const createButtons = () => [
+      // --- Button Components ---
+      const copyIdButton = (
         <FormRow
           key="copy-message-id"
           label="Copy Message ID"
           leading={<FormIcon source={getAssetIDByName("IdIcon")} />}
           onPress={() => {
             clipboard.setString(String(message.id));
-            Toasts.showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
+            showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
             LazyActionSheet.hideActionSheet();
           }}
-        />,
+        />
+      );
+
+      const clientEditButton = (
         <FormRow
           key="client-side-edit"
           label="Client Side Edit"
-          leading={<FormIcon source={getAssetIDByName("copy")} />} // You can swap "copy" for any icon name
-          onPress={handleClientEdit}
+          leading={<FormIcon source={getAssetIDByName("edit")} />}
+          onPress={openEditPrompt}
         />
-      ];
+      );
 
+      // --- Injecting the buttons ---
       if (buttons) {
-        buttons.push(...createButtons());
+        buttons.push(copyIdButton);
+        buttons.push(clientEditButton);
+      } else {
+        // Fallback for different layouts
+        const actionSheetContainer = findInReactTree(
+          component,
+          (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup",
+        );
+
+        if (actionSheetContainer && actionSheetContainer[1]) {
+          const middleGroup = actionSheetContainer[1];
+          middleGroup.props.children.push(copyIdButton, clientEditButton);
+        }
       }
     });
   });
