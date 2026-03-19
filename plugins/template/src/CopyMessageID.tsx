@@ -1,96 +1,72 @@
 import { before, after } from "@vendetta/patcher";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { findInReactTree } from "@vendetta/utils";
-import { findByName, findByProps } from "@vendetta/metro";
-import { React } from "@vendetta/metro/common";
+import { findByProps } from "@vendetta/metro";
+import { React, clipboard, Toasts } from "@vendetta/metro/common";
 import { Forms } from "@vendetta/ui/components";
-import { clipboard } from "@vendetta/metro/common";
-import { showToast } from "@vendetta/ui/toasts";
+import { ReactNative } from "@vendetta/metro/common";
 
+const { Alert } = ReactNative;
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 
-const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
-  const message = msg?.message;
+const unpatch = before("openLazy", LazyActionSheet, ([component, key, props]) => {
+  const message = props?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
   component.then((instance) => {
     const unpatchInner = after("default", instance, (_, component) => {
-      React.useEffect(
-        () => () => {
-          unpatchInner();
-        },
-        [],
-      );
+      React.useEffect(() => () => unpatchInner(), []);
 
-      const actionSheetContainer = findInReactTree(
-        component,
-        (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup",
-      );
+      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
 
-      const buttons = findInReactTree(
-        component,
-        (x) => x?.[0]?.type?.name === "ButtonRow",
-      );
+      // Logic to trigger the client-side edit
+      const handleClientEdit = () => {
+        Alert.prompt(
+          "Client Side Edit",
+          "This will only change the text for you locally.",
+          [
+            {
+              text: "Cancel",
+              style: "cancel",
+            },
+            {
+              text: "Edit",
+              onPress: (newContent) => {
+                message.content = newContent;
+                // We don't need to force a re-render here because 
+                // Discord usually updates the message object in the store directly.
+                Toasts.showToast("Local edit applied!", getAssetIDByName("Check"));
+                LazyActionSheet.hideActionSheet();
+              },
+            },
+          ],
+          "plain-text",
+          message.content
+        );
+      };
 
-      const createCopyRow = () => (
+      const createButtons = () => [
         <FormRow
           key="copy-message-id"
           label="Copy Message ID"
-          leading={
-            <FormIcon
-              style={{ opacity: 1 }}
-              source={getAssetIDByName("IdIcon")}
-            />
-          }
+          leading={<FormIcon source={getAssetIDByName("IdIcon")} />}
           onPress={() => {
             clipboard.setString(String(message.id));
-            showToast(
-              "Copied Message ID",
-              getAssetIDByName("toast_copy_link"),
-            );
+            Toasts.showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
             LazyActionSheet.hideActionSheet();
           }}
+        />,
+        <FormRow
+          key="client-side-edit"
+          label="Client Side Edit"
+          leading={<FormIcon source={getAssetIDByName("copy")} />} // You can swap "copy" for any icon name
+          onPress={handleClientEdit}
         />
-      );
+      ];
 
-      // Preferred path (ButtonRow)
       if (buttons) {
-        buttons.push(createCopyRow());
-      }
-      // Fallback path (ActionSheetRowGroup)
-      else if (actionSheetContainer && actionSheetContainer[1]) {
-        const middleGroup = actionSheetContainer[1];
-
-        const ActionSheetRow = middleGroup.props.children[0].type;
-
-        const copyButton = (
-          <ActionSheetRow
-            label="Copy Message ID"
-            icon={{
-              $$typeof: middleGroup.props.children[0].props.icon.$$typeof,
-              type: middleGroup.props.children[0].props.icon.type,
-              key: null,
-              ref: null,
-              props: {
-                source: getAssetIDByName("IdIcon"),
-              },
-            }}
-            onPress={() => {
-              clipboard.setString(String(message.id));
-              showToast(
-                "Copied Message ID",
-                getAssetIDByName("toast_copy_link"),
-              );
-              LazyActionSheet.hideActionSheet();
-            }}
-            key="copy-message-id"
-          />
-        );
-
-        middleGroup.props.children.push(copyButton);
-      } else {
-        console.log("[CopyMessageID] Error: Could not find ActionSheet");
+        buttons.push(...createButtons());
       }
     });
   });
