@@ -2,15 +2,13 @@ import { before, after } from "@vendetta/patcher";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { findInReactTree } from "@vendetta/utils";
 import { findByProps } from "@vendetta/metro";
-import { React, clipboard, ReactNative } from "@vendetta/metro/common";
-import { Forms } from "@vendetta/ui/components";
+import { React, clipboard } from "@vendetta/metro/common";
+import { Forms, TextInput } from "@vendetta/ui/components";
 import { showToast } from "@vendetta/ui/toasts";
+import { showConfirmationAlert } from "@vendetta/ui/alerts";
 
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
-const { Alert } = ReactNative;
-
-// Find the Dispatcher to force the UI to update
 const Dispatcher = findByProps("dispatch", "subscribe");
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
@@ -26,39 +24,38 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         (x) => x?.[0]?.type?.name === "ButtonRow",
       );
 
-      const openEditPrompt = () => {
-        Alert.prompt(
-          "Client Side Edit",
-          "This edit is local and will disappear if you reload the app.",
-          [
-            {
-              text: "Cancel",
-              style: "cancel",
-            },
-            {
-              text: "Edit",
-              onPress: (newText) => {
-                if (newText !== undefined) {
-                  // 1. Update the local object
-                  message.content = newText;
+      const openEditModal = () => {
+        let currentText = message.content;
 
-                  // 2. Dispatch the update to force the UI to re-render
-                  Dispatcher.dispatch({
-                    type: "MESSAGE_UPDATE",
-                    message: {
-                      ...message,
-                      content: newText,
-                    },
-                  });
+        showConfirmationAlert({
+          title: "Client Side Edit",
+          confirmText: "Edit",
+          cancelText: "Cancel",
+          // We render a custom view inside the alert for the text input
+          children: (
+            <TextInput
+              defaultValue={message.content}
+              onChange={(v) => (currentText = v)}
+              placeholder="Enter new text..."
+              autoFocus={true}
+            />
+          ),
+          onConfirm: () => {
+            // Update local object
+            message.content = currentText;
 
-                  showToast("Local edit applied!", getAssetIDByName("Check"));
-                }
+            // Force UI update
+            Dispatcher.dispatch({
+              type: "MESSAGE_UPDATE",
+              message: {
+                ...message,
+                content: currentText,
               },
-            },
-          ],
-          "plain-text",
-          message.content,
-        );
+            });
+
+            showToast("Local edit applied!", getAssetIDByName("Check"));
+          },
+        });
         LazyActionSheet.hideActionSheet();
       };
 
@@ -80,7 +77,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           key="client-side-edit"
           label="Client Side Edit"
           leading={<FormIcon source={getAssetIDByName("edit")} />}
-          onPress={openEditPrompt}
+          onPress={openEditModal}
         />
       );
 
