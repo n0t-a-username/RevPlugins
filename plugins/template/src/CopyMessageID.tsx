@@ -10,6 +10,9 @@ const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 const { Alert } = ReactNative;
 
+// Find the Dispatcher to force the UI to update
+const Dispatcher = findByProps("dispatch", "subscribe");
+
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
@@ -23,23 +26,42 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         (x) => x?.[0]?.type?.name === "ButtonRow",
       );
 
-      // --- Helper for the Edit Logic ---
       const openEditPrompt = () => {
         Alert.prompt(
           "Client Side Edit",
-          "Edit this message locally (only you see this).",
-          (newText) => {
-            if (newText) {
-              message.content = newText;
-              showToast("Local edit applied!", getAssetIDByName("Check"));
-            }
-          },
-          message.content
+          "This edit is local and will disappear if you reload the app.",
+          [
+            {
+              text: "Cancel",
+              style: "cancel",
+            },
+            {
+              text: "Edit",
+              onPress: (newText) => {
+                if (newText !== undefined) {
+                  // 1. Update the local object
+                  message.content = newText;
+
+                  // 2. Dispatch the update to force the UI to re-render
+                  Dispatcher.dispatch({
+                    type: "MESSAGE_UPDATE",
+                    message: {
+                      ...message,
+                      content: newText,
+                    },
+                  });
+
+                  showToast("Local edit applied!", getAssetIDByName("Check"));
+                }
+              },
+            },
+          ],
+          "plain-text",
+          message.content,
         );
         LazyActionSheet.hideActionSheet();
       };
 
-      // --- Button Components ---
       const copyIdButton = (
         <FormRow
           key="copy-message-id"
@@ -62,12 +84,9 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         />
       );
 
-      // --- Injecting the buttons ---
       if (buttons) {
-        buttons.push(copyIdButton);
-        buttons.push(clientEditButton);
+        buttons.push(copyIdButton, clientEditButton);
       } else {
-        // Fallback for different layouts
         const actionSheetContainer = findInReactTree(
           component,
           (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup",
