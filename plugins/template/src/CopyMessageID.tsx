@@ -10,15 +10,12 @@ import { showConfirmationAlert } from "@vendetta/ui/alerts";
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
-
-// We'll use these for a pixel-perfect replica
 const moment = findByProps("moment")?.moment || findByProps("tz");
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
-  // Capture only the visual data we need
   const username = message.author?.username || "Unknown";
   const avatarUrl = message.author?.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
   const timestamp = message.timestamp;
@@ -34,21 +31,28 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         const Sandbox = () => {
           const [text, setText] = React.useState(initialContent);
 
-          // Format the timestamp exactly like Discord (e.g., "9:36 PM")
           const formattedTime = React.useMemo(() => {
-            try {
-               return moment(timestamp).format("LT");
-            } catch {
-               return "Today at 12:00 PM";
-            }
+            try { return moment(timestamp).format("LT"); } 
+            catch { return "Today at 12:00 PM"; }
           }, [timestamp]);
+
+          // This handler ensures we only ever save a STRING to state
+          const handleTextChange = (v: any) => {
+            if (typeof v === "string") {
+              setText(v);
+            } else if (v?.nativeEvent?.text !== undefined) {
+              setText(v.nativeEvent.text);
+            } else if (v?.text !== undefined) {
+              setText(v.text);
+            }
+          };
 
           return (
             <RN.View style={{ marginTop: 10 }}>
               <TextInput
                 value={text}
-                placeholder="Edit message text..."
-                onChange={(v: string) => setText(v)}
+                placeholder="Edit message..."
+                onChange={handleTextChange} // Use the safe handler
                 multiline={true}
                 autoFocus={true}
                 style={{ 
@@ -61,24 +65,18 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 }}
               />
               
-              <RN.Text style={{ color: "#aaa", marginBottom: 8, fontSize: 11, fontWeight: "bold", letterSpacing: 0.5 }}>PREVIEW</RN.Text>
+              <RN.Text style={{ color: "#aaa", marginBottom: 8, fontSize: 11, fontWeight: "bold" }}>PREVIEW</RN.Text>
               
-              {/* THE MANUAL UI REPLICA */}
               <RN.View style={{ 
                 padding: 12, 
                 backgroundColor: "#313338", 
                 borderRadius: 12,
-                flexDirection: "row",
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.05)"
+                flexDirection: "row"
               }}>
-                {/* Avatar */}
                 <RN.Image 
                   source={{ uri: avatarUrl }} 
                   style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} 
                 />
-
-                {/* Message Body */}
                 <RN.View style={{ flex: 1 }}>
                   <RN.View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 2 }}>
                     <RN.Text style={{ color: "#fff", fontWeight: "600", fontSize: 15, marginRight: 8 }}>
@@ -88,9 +86,9 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                       {formattedTime}
                     </RN.Text>
                   </RN.View>
-                  
                   <RN.Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 20 }}>
-                    {text || " "}
+                    {/* Now 'text' is guaranteed to be a string, so this won't crash */}
+                    {text}
                   </RN.Text>
                 </RN.View>
               </RN.View>
@@ -109,6 +107,15 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         LazyActionSheet.hideActionSheet();
       };
 
+      const previewButton = (
+        <FormRow
+          key="screenshot-preview"
+          label="Screenshot Preview"
+          leading={<FormIcon source={getAssetIDByName("eye")} />}
+          onPress={openScreenshotPreview}
+        />
+      );
+
       const copyIdButton = (
         <FormRow
           key="copy-message-id"
@@ -119,15 +126,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
             showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
             LazyActionSheet.hideActionSheet();
           }}
-        />
-      );
-
-      const previewButton = (
-        <FormRow
-          key="screenshot-preview"
-          label="Screenshot Preview"
-          leading={<FormIcon source={getAssetIDByName("eye")} />}
-          onPress={openScreenshotPreview}
         />
       );
 
