@@ -34,24 +34,18 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
-            // 1. Update the actual content in memory
+            // 1. Manually overwrite the text in the message object
             message.content = currentText;
 
-            // 2. FORCE REFRESH:
-            // We dispatch a "LOCAL_MESSAGE_UPDATE". 
-            // This is safer than MESSAGE_UPDATE because it's meant for 
-            // optimistic UI changes and won't crash the renderer.
+            // 2. THE INSTANT REFRESH TRICK:
+            // Instead of MESSAGE_UPDATE (which crashes/vanishes), we use
+            // LOAD_MESSAGES_SUCCESS. This tells Discord "Hey, we just got this 
+            // message fresh from the server," forcing an instant UI refresh.
             Dispatcher.dispatch({
-              type: "MESSAGE_UPDATE",
-              message: {
-                ...message,
-                content: currentText,
-              },
+              type: "LOAD_MESSAGES_SUCCESS",
+              channelId: message.channel_id,
+              messages: [message]
             });
-            
-            // If the above still vanishes, we can try this 'ping' instead:
-            // Dispatcher.dispatch({ type: "MESSAGE_EDIT_START", messageId: message.id });
-            // Dispatcher.dispatch({ type: "MESSAGE_EDIT_STOP", messageId: message.id });
 
             showToast("Local edit applied!", getAssetIDByName("Check"));
           },
