@@ -18,7 +18,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
-  // Capture identity
+  // Capture identity data immediately
   const author = { ...message.author };
   const timestamp = message.timestamp;
   const channelId = message.channel_id;
@@ -40,6 +40,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 placeholder="Edit message..."
                 onChange={(v: string) => setText(v)}
                 multiline={true}
+                autoFocus={true}
                 style={{ 
                   color: "#fff", 
                   backgroundColor: "rgba(255,255,255,0.05)", 
@@ -58,7 +59,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                   key={text} 
                   rowGenerator={new RowManager()}
                   message={{
-                    // 1. Data Fields
+                    // 1. Core Data
                     id: "0",
                     channel_id: channelId,
                     author: author,
@@ -66,14 +67,16 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                     content: text,
                     state: "SENT",
                     type: 0,
+                    attachments: [],
+                    embeds: [],
+                    mentions: [],
                     
-                    // 2. Mocking Class Methods to stop the "undefined is not a function" crash
-                    // These satisfy Discord's internal 'isRecord' or 'Immutable' checks
+                    // 2. Mocking Immutable/Class methods to prevent the crash
                     toJS: function() { return this; },
-                    get: function(key) { return this[key]; },
-                    has: function(key) { return key in this; },
+                    get: function(k) { return this[k]; },
+                    has: function(k) { return k in this; },
                     
-                    // 3. Clear cache keys
+                    // 3. Force fresh render
                     content_parsed: undefined,
                     content_formatted: undefined,
                   }}
