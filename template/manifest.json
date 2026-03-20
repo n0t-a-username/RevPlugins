@@ -1,1 +1,1 @@
-{"name":"Bemmo","description":"A self-bot im so tired","authors":[{"name":"ChatGPT & Gemini","id":"1180328592247090278"}],"main":"index.js","vendetta":{"icon":"emoji-negative"},"hash":"d7e29b3e10b5141ff330f49f0b014366885fbc04298625e2234c72db9e7dd5ad"}
+{"name":"Bemmo","description":"A self-bot plugin","authors":[{"name":"ChatGPT & Gemini","id":"1180328592247090278"}],"main":"index.js","vendetta":{"icon":"emoji-negative"},"hash":"d7e29b3e10b5141ff330f49f0b014366885fbc04298625e2234c72db9e7dd5ad"}
