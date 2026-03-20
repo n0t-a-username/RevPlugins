@@ -11,23 +11,9 @@ const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
-const MessageStore = findByProps("getMessage");
+const Dispatcher = findByProps("dispatch", "subscribe");
 
-// This map will store our edits during the current session
-const localEdits = new Map<string, string>();
-
-// PATCH 1: The "Visual Mask"
-// This intercepts any message being retrieved for display and swaps the text
-const unpatchStore = MessageStore ? after("getMessage", MessageStore, ([channelId, messageId], message) => {
-  if (message && localEdits.has(messageId)) {
-    // We modify the text property that the UI uses, but keep the original object intact
-    message.content = localEdits.get(messageId);
-  }
-  return message;
-}) : null;
-
-// PATCH 2: The Action Sheet (Long Press Menu)
-const unpatchActionSheet = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
+const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
@@ -35,27 +21,39 @@ const unpatchActionSheet = before("openLazy", LazyActionSheet, ([component, key,
     const unpatchInner = after("default", instance, (_, component) => {
       React.useEffect(() => () => unpatchInner(), []);
 
-      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
+      const buttons = findInReactTree(
+        component,
+        (x) => x?.[0]?.type?.name === "ButtonRow",
+      );
 
       const openEditModal = () => {
         let currentText = message.content;
 
         showConfirmationAlert({
           title: "Client Side Edit",
-          confirmText: "Apply",
+          confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
-            // Save to our map so the Visual Mask (Patch 1) picks it up
-            localEdits.set(message.id, currentText);
-            
-            // Force the current object to update so the UI refreshes immediately
+            // 1. Update the local object memory directly
             message.content = currentText;
+
+            // 2. Client-side only Dispatch
+            // We only send the ID, Channel ID, and Content.
+            // This tells the UI "re-render this" without hitting the API.
+            Dispatcher.dispatch({
+              type: "MESSAGE_UPDATE",
+              message: { 
+                id: message.id, 
+                channel_id: message.channel_id, 
+                content: currentText 
+              },
+            });
 
             showToast("Local edit applied!", getAssetIDByName("Check"));
           },
           children: React.createElement(TextInput, {
             defaultValue: message.content,
-            onChange: (v: string) => (currentText = v),
+            onChange: (v) => (currentText = v),
             placeholder: "Enter new text...",
             autoFocus: true,
             style: { color: "#fff", marginTop: 10 }
@@ -88,12 +86,17 @@ const unpatchActionSheet = before("openLazy", LazyActionSheet, ([component, key,
 
       if (buttons) {
         buttons.push(copyIdButton, clientEditButton);
+      } else {
+        const actionSheetContainer = findInReactTree(
+          component,
+          (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup",
+        );
+        if (actionSheetContainer?.[1]) {
+          actionSheetContainer[1].props.children.push(copyIdButton, clientEditButton);
+        }
       }
     });
   });
 });
 
-export const onUnload = () => {
-  unpatchActionSheet();
-  if (unpatchStore) unpatchStore();
-};
+export const onUnload = () => unpatch();
