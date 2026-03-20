@@ -10,96 +10,114 @@ import { showConfirmationAlert } from "@vendetta/ui/alerts";
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
-const moment = findByProps("moment")?.moment || findByProps("tz");
+
+const GuildMemberStore = findByProps("getMember", "getNick");
+const SelectedGuildStore = findByProps("getGuildId");
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
+  const guildId = SelectedGuildStore.getGuildId();
+  const member = guildId ? GuildMemberStore.getMember(guildId, message.author.id) : null;
+
+  const displayName = member?.nick || message.author.globalName || message.author.username;
+  const avatarUrl = member?.avatar 
+    ? `https://cdn.discordapp.com/guilds/${guildId}/users/${message.author.id}/avatars/${member.avatar}.png`
+    : message.author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
+
+  // --- Identity Extras ---
   const author = message.author;
-  const displayName = message.nick || author.globalName || author.username;
-  const avatarUrl = author.getAvatarURL?.() || `https://cdn.discordapp.com/avatars/${author.id}/${author.avatar}.png`;
-  
+  const decorationData = author.avatarDecorationData;
   const primaryGuild = author.primaryGuild;
   const guildTag = primaryGuild?.tag;
   const guildBadgeUrl = primaryGuild?.badge 
     ? `https://cdn.discordapp.com/clan-badges/${primaryGuild.identityGuildId}/${primaryGuild.badge}.png` 
     : null;
 
-  const roleColor = message.colorString || "#ffffff";
+  const roleColor = member?.colorString || "#ffffff"; 
+  const initialContent = message.content;
 
   component.then((instance) => {
     const unpatchInner = after("default", instance, (_, component) => {
       React.useEffect(() => () => unpatchInner(), []);
 
+      // Your working button detection
+      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
+
       const openScreenshotPreview = () => {
         const Sandbox = () => {
-          const [text, setText] = React.useState(message.content || "");
-          
-          // Get CURRENT device time instead of message timestamp
-          const formattedTime = React.useMemo(() => {
-            try { 
-                return moment().calendar(); 
-            } catch { return "Today at 12:00 PM"; }
-          }, []);
+          const [text, setText] = React.useState(initialContent || "");
+
+          const handleTextChange = (v: any) => {
+            if (typeof v === "string") setText(v);
+            else if (v?.nativeEvent?.text !== undefined) setText(v.nativeEvent.text);
+          };
+
+          const NameAndTag = (
+            <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
+              <RN.Text 
+                numberOfLines={1} 
+                ellipsizeMode="tail"
+                style={{ color: roleColor, fontWeight: "700", fontSize: 15, includeFontPadding: false, flexShrink: 1 }}
+              >
+                {displayName}
+              </RN.Text>
+              
+              {guildTag && (
+                <RN.View style={{ 
+                  backgroundColor: "rgba(255,255,255,0.1)", 
+                  paddingHorizontal: 3, // Tightened
+                  borderRadius: 4, 
+                  marginLeft: 4, 
+                  flexShrink: 0,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  height: 14 // Tightened
+                }}>
+                  {guildBadgeUrl && (
+                    <RN.Image source={{ uri: guildBadgeUrl }} style={{ width: 10, height: 10, marginRight: 2 }} />
+                  )}
+                  <RN.Text style={{ color: "#caccce", fontSize: 9, fontWeight: "700", includeFontPadding: false }}>
+                    {guildTag}
+                  </RN.Text>
+                </RN.View>
+              )}
+            </RN.View>
+          );
 
           return (
             <RN.View style={{ marginTop: 10 }}>
-              <TextInput 
-                value={text} 
-                placeholder="Edit message..." 
-                onChange={(v: any) => setText(v?.nativeEvent?.text ?? v ?? "")} 
-                multiline={true} 
-                autoFocus={true} 
-                style={{ color: "#fff", backgroundColor: "rgba(255,255,255,0.07)", padding: 12, borderRadius: 8, marginBottom: 20 }} 
+              <TextInput
+                value={text}
+                placeholder="Edit message..."
+                onChange={handleTextChange}
+                multiline={true}
+                autoFocus={true}
+                style={{ color: "#fff", backgroundColor: "rgba(255,255,255,0.07)", padding: 12, borderRadius: 8, marginBottom: 20 }}
               />
               
-              <RN.View style={{ paddingVertical: 12, paddingHorizontal: 14, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
-                <RN.View style={{ width: 42, height: 42, marginRight: 14 }}>
-                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 42, height: 42, borderRadius: 21 }} />
-                   {author.avatarDecorationData && (
-                     <RN.Image 
-                       source={{ uri: `https://cdn.discordapp.com/avatar-decoration-presets/${author.avatarDecorationData.asset}.png` }} 
-                       style={{ position: "absolute", width: 50, height: 50, top: -4, left: -4 }} 
-                     />
-                   )}
+              <RN.View style={{ paddingVertical: 10, paddingHorizontal: 12, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
+                <RN.View style={{ width: 40, height: 40, marginRight: 14 }}>
+                  <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                  {decorationData && (
+                    <RN.Image 
+                      source={{ uri: `https://cdn.discordapp.com/avatar-decoration-presets/${decorationData.asset}.png` }} 
+                      style={{ position: "absolute", width: 48, height: 48, top: -4, left: -4 }} 
+                    />
+                  )}
                 </RN.View>
-
+                
                 <RN.View style={{ flex: 1 }}>
-                  <RN.View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 2 }}>
-                    <RN.Text 
-                      numberOfLines={1} 
-                      ellipsizeMode="tail" 
-                      style={{ color: roleColor, fontWeight: "700", fontSize: 16, letterSpacing: -0.3, includeFontPadding: false, flexShrink: 1 }}
-                    >
-                      {displayName}
-                    </RN.Text>
-                    
-                    {guildTag && (
-                      <RN.View style={{ 
-                        backgroundColor: "rgba(255,255,255,0.12)", 
-                        paddingHorizontal: 4, 
-                        borderRadius: 4, 
-                        marginLeft: 5, 
-                        flexShrink: 0,
-                        flexDirection: "row",
-                        alignItems: "center",
-                        height: 16
-                      }}>
-                        {guildBadgeUrl && (
-                          <RN.Image source={{ uri: guildBadgeUrl }} style={{ width: 10, height: 10, marginRight: 3 }} />
-                        )}
-                        <RN.Text style={{ color: "#caccce", fontSize: 10, fontWeight: "700", includeFontPadding: false }}>
-                          {guildTag}
-                        </RN.Text>
-                      </RN.View>
-                    )}
+                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 1 }}>
+                    {NameAndTag}
 
-                    <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, flexShrink: 0, includeFontPadding: false }}>
-                      {formattedTime}
+                    <RN.Text style={{ color: "#949ba4", fontSize: 11, marginLeft: 6, flexShrink: 0, includeFontPadding: false }}>
+                      1:37 PM
                     </RN.Text>
                   </RN.View>
-                  <RN.Text style={{ color: "#dbdee1", fontSize: 16, lineHeight: 22, letterSpacing: -0.2, includeFontPadding: false }}>
+
+                  <RN.Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 18, includeFontPadding: false }}>
                     {text || " "}
                   </RN.Text>
                 </RN.View>
@@ -115,6 +133,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           // @ts-expect-error
           children: <Sandbox />,
         });
+        
         LazyActionSheet.hideActionSheet();
       };
 
@@ -139,8 +158,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           }}
         />
       );
-
-      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
 
       if (buttons) {
         buttons.push(copyIdButton, previewButton);
