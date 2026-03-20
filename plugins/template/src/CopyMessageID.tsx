@@ -14,8 +14,9 @@ const TextInput = findByProps("render", "displayName")?.default || findByName("T
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
 
-// Used for rendering Discord emojis/markdown instead of raw text
-const MessageRenderUtils = findByProps("parseAndRenderContent", "renderMessage");
+// Discord's internal markdown/emoji renderer
+const Markdown = findByProps("render", "unparse") || findByProps("parse", "output");
+const MessageContent = findByProps("MessageContent")?.MessageContent || findByName("MessageContent");
 
 const getDisplayFont = (fontId: number) => {
   switch (fontId) {
@@ -23,7 +24,7 @@ const getDisplayFont = (fontId: number) => {
     case 3:  return "CherryBombOne-Normal";
     case 4:  return "Chicle-Normal";
     case 6:  return "MuseoModerno-Medium";
-    case 7:  return "NeoCastel-Normal"; // Added NeoCastel
+    case 7:  return "NeoCastel-Normal"; 
     case 8:  return "PixelifySans-Normal";
     case 10: return "Sinistre-Normal";
     default: return "ggsans-Semibold";
@@ -64,11 +65,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         const Sandbox = () => {
           const [text, setText] = React.useState(message.content || "");
 
-          // This renders the text using Discord's parser (enabling Discord emojis)
-          const renderedContent = MessageRenderUtils?.parseAndRenderContent ? 
-            MessageRenderUtils.parseAndRenderContent(text, { channelId: message.channel_id }) : 
-            text;
-
           return (
             <RN.View style={{ marginTop: 10 }}>
               <TextInput
@@ -79,7 +75,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 autoFocus={true}
                 style={{ color: "#fff", backgroundColor: "rgba(255,255,255,0.07)", padding: 12, borderRadius: 8, marginBottom: 20, fontFamily: "ggsans-Medium" }}
               />
-              
+
               <RN.View style={{ paddingVertical: 12, paddingHorizontal: 14, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
                 <RN.View style={{ width: 40, height: 40, marginRight: 10 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
@@ -90,7 +86,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                     />
                   )}
                 </RN.View>
-                
+
                 <RN.View style={{ flex: 1 }}>
                   <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2, justifyContent: "flex-start" }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
@@ -115,16 +111,21 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                     </RN.Text>
                   </RN.View>
 
-                  {/* Wrapped in a View to handle Discord's custom emoji components */}
-                  <RN.View>
-                    {typeof renderedContent === "string" ? (
-                      <RN.Text style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium", includeFontPadding: false }}>
-                        {renderedContent || " "}
-                      </RN.Text>
-                    ) : (
-                      renderedContent
-                    )}
-                  </RN.View>
+                  {/* Targeting ONLY message content:
+                      Using Discord's MessageContent component ensures emojis are rendered 
+                      via Discord's CDN rather than system font glyphs.
+                  */}
+                  {MessageContent ? (
+                    <MessageContent 
+                      message={{ ...message, content: text }} 
+                      content={text}
+                      style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium" }}
+                    />
+                  ) : (
+                    <RN.Text style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium" }}>
+                      {text || " "}
+                    </RN.Text>
+                  )}
                 </RN.View>
               </RN.View>
             </RN.View>
