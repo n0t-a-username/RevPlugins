@@ -10,6 +10,9 @@ import { showConfirmationAlert } from "@vendetta/ui/alerts";
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
+
+// Discord's internal Text component (includes their custom fonts)
+const Text = findByProps("Colors", "Sizes")?.default || findByName("Text");
 const moment = findByProps("moment")?.moment || findByProps("tz");
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
@@ -36,15 +39,9 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
             catch { return "Today at 12:00 PM"; }
           }, [timestamp]);
 
-          // This handler ensures we only ever save a STRING to state
           const handleTextChange = (v: any) => {
-            if (typeof v === "string") {
-              setText(v);
-            } else if (v?.nativeEvent?.text !== undefined) {
-              setText(v.nativeEvent.text);
-            } else if (v?.text !== undefined) {
-              setText(v.text);
-            }
+            if (typeof v === "string") setText(v);
+            else if (v?.nativeEvent?.text !== undefined) setText(v.nativeEvent.text);
           };
 
           return (
@@ -52,7 +49,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
               <TextInput
                 value={text}
                 placeholder="Edit message..."
-                onChange={handleTextChange} // Use the safe handler
+                onChange={handleTextChange}
                 multiline={true}
                 autoFocus={true}
                 style={{ 
@@ -60,36 +57,54 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                   backgroundColor: "rgba(255,255,255,0.07)", 
                   padding: 12, 
                   borderRadius: 8,
-                  marginBottom: 20,
-                  fontSize: 16
+                  marginBottom: 20
                 }}
               />
               
-              <RN.Text style={{ color: "#aaa", marginBottom: 8, fontSize: 11, fontWeight: "bold" }}>PREVIEW</RN.Text>
-              
               <RN.View style={{ 
-                padding: 12, 
+                paddingVertical: 14, 
+                paddingHorizontal: 16,
                 backgroundColor: "#313338", 
-                borderRadius: 12,
+                borderRadius: 8,
                 flexDirection: "row"
               }}>
+                {/* Avatar */}
                 <RN.Image 
                   source={{ uri: avatarUrl }} 
-                  style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} 
+                  style={{ width: 40, height: 40, borderRadius: 20, marginRight: 16 }} 
                 />
+
                 <RN.View style={{ flex: 1 }}>
-                  <RN.View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 2 }}>
-                    <RN.Text style={{ color: "#fff", fontWeight: "600", fontSize: 15, marginRight: 8 }}>
+                  {/* Name & Time Row */}
+                  <RN.View style={{ 
+                    flexDirection: "row", 
+                    alignItems: "center", // This centers the time with the name
+                    marginBottom: 1 // Tight spacing
+                  }}>
+                    <Text style={{ 
+                      color: "#fff", 
+                      fontWeight: "500", 
+                      fontSize: 16, 
+                      marginRight: 8 
+                    }}>
                       {username}
-                    </RN.Text>
-                    <RN.Text style={{ color: "#949ba4", fontSize: 11 }}>
+                    </Text>
+                    <Text style={{ 
+                      color: "#949ba4", 
+                      fontSize: 12 
+                    }}>
                       {formattedTime}
-                    </RN.Text>
+                    </Text>
                   </RN.View>
-                  <RN.Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 20 }}>
-                    {/* Now 'text' is guaranteed to be a string, so this won't crash */}
+
+                  {/* Message Content */}
+                  <Text style={{ 
+                    color: "#dbdee1", 
+                    fontSize: 16, 
+                    lineHeight: 22 // Standard Discord leading
+                  }}>
                     {text}
-                  </RN.Text>
+                  </Text>
                 </RN.View>
               </RN.View>
             </RN.View>
@@ -116,6 +131,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         />
       );
 
+      // (Keep existing Copy ID button logic here)
       const copyIdButton = (
         <FormRow
           key="copy-message-id"
