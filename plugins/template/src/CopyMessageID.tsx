@@ -34,7 +34,6 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
   const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g;
   const mentionRegex = /(@[^\s]+)/g;
 
-  // Split by both emojis and mentions
   const parts = text.split(/(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]|@[^\s]+)/g);
 
   return (
@@ -42,7 +41,6 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
       {parts.map((part, i) => {
         if (!part) return null;
 
-        // Emoji Match
         if (emojiRegex.test(part)) {
           return (
             <RN.Image 
@@ -53,19 +51,20 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
           );
         }
 
-        // Mention Match
         if (mentionRegex.test(part)) {
-          // Strict Case Sensitivity for the selfName check
           const isHighlight = part === "@everyone" || part === "@here" || part === `@${selfName}`;
           return (
             <RN.Text 
               key={i} 
               style={{ 
                 backgroundColor: isHighlight ? "rgba(250, 166, 26, 0.1)" : "rgba(88, 101, 242, 0.15)",
-                color: isHighlight ? "#f0b132" : "#dee0fc",
+                // Keep text color same as base style (#dee0fc) for all pings
+                color: "#dee0fc",
                 fontFamily: "ggsans-Medium",
-                borderRadius: 3,
-                paddingHorizontal: 2
+                borderRadius: 4,
+                paddingHorizontal: 2,
+                // Extend highlight downward
+                paddingBottom: 2
               }}
             >
               {part}
@@ -111,8 +110,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
       const openScreenshotPreview = () => {
         const Sandbox = () => {
           const [text, setText] = React.useState(message.content || "");
-          
-          // Determine if the whole message should have the yellow highlight background (Case Sensitive)
           const isGlobalPing = text.includes("@everyone") || text.includes("@here") || text.includes(`@${displayName}`);
 
           return (
@@ -132,9 +129,21 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 backgroundColor: isGlobalPing ? "rgba(250, 166, 26, 0.05)" : "#313338", 
                 borderRadius: 8, 
                 flexDirection: "row",
-                borderLeftWidth: isGlobalPing ? 2 : 0,
-                borderLeftColor: "#faa61a"
+                overflow: "hidden" // Keeps absolute line inside the box
               }}>
+                {/* Thicker Yellow Line (Absolute so it doesn't push content) */}
+                {isGlobalPing && (
+                  <RN.View style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: 4, // Slightly thicker
+                    backgroundColor: "#faa61a",
+                    zIndex: 2
+                  }} />
+                )}
+
                 <RN.View style={{ width: 40, height: 40, marginRight: 10 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
                   {decorationData && (
