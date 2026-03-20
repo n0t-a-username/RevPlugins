@@ -11,12 +11,18 @@ const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 
-const ChatItemWrapper = findByProps("DCDAutoModerationSystemMessageView", "default")?.default;
-const RowManager = findByName("RowManager");
+// We'll use these for a pixel-perfect replica
+const moment = findByProps("moment")?.moment || findByProps("tz");
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
+
+  // Capture only the visual data we need
+  const username = message.author?.username || "Unknown";
+  const avatarUrl = message.author?.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
+  const timestamp = message.timestamp;
+  const initialContent = message.content;
 
   component.then((instance) => {
     const unpatchInner = after("default", instance, (_, component) => {
@@ -26,56 +32,67 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
       const openScreenshotPreview = () => {
         const Sandbox = () => {
-          const [text, setText] = React.useState(message.content);
+          const [text, setText] = React.useState(initialContent);
 
-          // We create a copy of the actual message object to keep all internal methods intact
-          const fakeMessage = React.useMemo(() => {
-            // Use the internal 'Object.assign' or spread to keep the prototype chain if possible
-            const clone = Object.assign(Object.create(Object.getPrototypeOf(message)), message);
-            
-            // Give it a unique ID to avoid the cache/database lookup issues
-            clone.id = `preview-${Math.random().toString(36).substring(7)}`;
-            return clone;
-          }, []);
-
-          // Sync the text to the clone whenever it changes
-          React.useMemo(() => {
-            fakeMessage.content = text;
-            // Nuke the parsed cache so it has to re-draw the 'text'
-            fakeMessage.content_parsed = undefined;
-            fakeMessage.content_formatted = undefined;
-            fakeMessage._contentMarkup = undefined;
-            fakeMessage.contentParsed = undefined;
-            fakeMessage.contentFormatted = undefined;
-          }, [text]);
+          // Format the timestamp exactly like Discord (e.g., "9:36 PM")
+          const formattedTime = React.useMemo(() => {
+            try {
+               return moment(timestamp).format("LT");
+            } catch {
+               return "Today at 12:00 PM";
+            }
+          }, [timestamp]);
 
           return (
             <RN.View style={{ marginTop: 10 }}>
               <TextInput
                 value={text}
-                placeholder="Edit for screenshot..."
+                placeholder="Edit message text..."
                 onChange={(v: string) => setText(v)}
                 multiline={true}
                 autoFocus={true}
                 style={{ 
                   color: "#fff", 
-                  backgroundColor: "rgba(255,255,255,0.05)", 
+                  backgroundColor: "rgba(255,255,255,0.07)", 
                   padding: 12, 
                   borderRadius: 8,
-                  marginBottom: 20
+                  marginBottom: 20,
+                  fontSize: 16
                 }}
               />
               
+              <RN.Text style={{ color: "#aaa", marginBottom: 8, fontSize: 11, fontWeight: "bold", letterSpacing: 0.5 }}>PREVIEW</RN.Text>
+              
+              {/* THE MANUAL UI REPLICA */}
               <RN.View style={{ 
-                padding: 10, 
+                padding: 12, 
                 backgroundColor: "#313338", 
-                borderRadius: 8,
+                borderRadius: 12,
+                flexDirection: "row",
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.05)"
               }}>
-                <ChatItemWrapper
-                  key={text} 
-                  rowGenerator={new RowManager()}
-                  message={fakeMessage}
+                {/* Avatar */}
+                <RN.Image 
+                  source={{ uri: avatarUrl }} 
+                  style={{ width: 40, height: 40, borderRadius: 20, marginRight: 12 }} 
                 />
+
+                {/* Message Body */}
+                <RN.View style={{ flex: 1 }}>
+                  <RN.View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 2 }}>
+                    <RN.Text style={{ color: "#fff", fontWeight: "600", fontSize: 15, marginRight: 8 }}>
+                      {username}
+                    </RN.Text>
+                    <RN.Text style={{ color: "#949ba4", fontSize: 11 }}>
+                      {formattedTime}
+                    </RN.Text>
+                  </RN.View>
+                  
+                  <RN.Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 20 }}>
+                    {text || " "}
+                  </RN.Text>
+                </RN.View>
               </RN.View>
             </RN.View>
           );
