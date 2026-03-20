@@ -83,26 +83,27 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 </RN.View>
                 
                 <RN.View style={{ flex: 1 }}>
-                  {/* Header row with Name, Tag, and Time */}
-                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
+                  {/* Header: Name and Tag shrink to protect the Time space */}
+                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2, justifyContent: "flex-start" }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
                       <RN.Text 
                         numberOfLines={1} 
-                        style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, includeFontPadding: false }}
+                        ellipsizeMode="tail"
+                        style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, includeFontPadding: false, flexShrink: 1 }}
                       >
                         {displayName}
                       </RN.Text>
 
                       {guildTag && (
-                        <RN.View style={{ backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 5, borderRadius: 4, marginLeft: 6, flexDirection: "row", alignItems: "center", height: 18 }}>
+                        <RN.View style={{ backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 5, borderRadius: 4, marginLeft: 6, flexDirection: "row", alignItems: "center", height: 18, flexShrink: 0 }}>
                           {guildBadgeUrl && <RN.Image source={{ uri: guildBadgeUrl }} style={{ width: 12, height: 12, marginRight: 3 }} />}
                           <RN.Text style={{ color: "#caccce", fontSize: 11, fontFamily: "ggsans-Semibold", includeFontPadding: false }}>{guildTag}</RN.Text>
                         </RN.View>
                       )}
                     </RN.View>
 
-                    {/* Time stays tucked in the corner of the header */}
-                    <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, fontFamily: "ggsans-Medium", includeFontPadding: false }}>
+                    {/* Time is fixed with flex-shrink 0 so it never hides */}
+                    <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, fontFamily: "ggsans-Medium", includeFontPadding: false, flexShrink: 0 }}>
                       1:37 PM
                     </RN.Text>
                   </RN.View>
