@@ -27,21 +27,35 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
       const openScreenshotPreview = () => {
         const Sandbox = () => {
+          // 1. Hold the edited text in state
           const [content, setContent] = React.useState(message.content);
 
-          // Extract only what we need for the visual "identity"
-          const identity = {
-            author: message.author,
-            timestamp: message.timestamp,
-            // We use a completely random ID to bypass any caching logic
-            id: `fake-${Math.random().toString(36).substr(2, 9)}`,
-            channel_id: message.channel_id,
-          };
+          // 2. Create a stable MessageRecord that stays in memory
+          const fakeMessage = React.useMemo(() => {
+            return new MessageRecord({
+              id: message.id, // Keep original ID for stability
+              channel_id: message.channel_id,
+              author: message.author,
+              timestamp: message.timestamp,
+              content: content,
+            });
+          }, []);
+
+          // 3. Manually update the content of that record when state changes
+          React.useEffect(() => {
+             fakeMessage.content = content;
+             // Purge all possible cache keys
+             delete fakeMessage.content_parsed;
+             delete fakeMessage.content_formatted;
+             delete fakeMessage._contentMarkup;
+             delete fakeMessage.contentParsed;
+             delete fakeMessage.contentFormatted;
+          }, [content]);
 
           return (
             <RN.View style={{ marginTop: 10 }}>
               <TextInput
-                defaultValue={content}
+                value={content} // This prevents the text from clearing
                 placeholder="Edit content..."
                 onChange={(v: string) => setContent(v)}
                 multiline={true}
@@ -51,8 +65,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                   backgroundColor: "rgba(255,255,255,0.05)", 
                   padding: 12, 
                   borderRadius: 8,
-                  marginBottom: 20,
-                  maxHeight: 150
+                  marginBottom: 20
                 }}
               />
               
@@ -60,21 +73,11 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 padding: 10, 
                 backgroundColor: "#313338", 
                 borderRadius: 8,
-                minHeight: 60
               }}>
                 <ChatItemWrapper
-                  key={content.length + (content[0] || "")} // Force re-render on change
+                  key={`preview-${content.length}`} // Nudge refresh
                   rowGenerator={new RowManager()}
-                  message={new MessageRecord({
-                    ...identity,
-                    content: content,
-                    // Ensure the parser treats this as brand-new text
-                    content_parsed: undefined,
-                    content_formatted: undefined,
-                    _contentMarkup: undefined,
-                    contentParsed: undefined,
-                    contentFormatted: undefined
-                  })}
+                  message={fakeMessage}
                 />
               </RN.View>
             </RN.View>
