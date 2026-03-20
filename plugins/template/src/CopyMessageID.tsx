@@ -14,12 +14,16 @@ const TextInput = findByProps("render", "displayName")?.default || findByName("T
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
 
+// Used for rendering Discord emojis/markdown instead of raw text
+const MessageRenderUtils = findByProps("parseAndRenderContent", "renderMessage");
+
 const getDisplayFont = (fontId: number) => {
   switch (fontId) {
     case 12: return "ZillaSlab-SemiBold";
     case 3:  return "CherryBombOne-Normal";
     case 4:  return "Chicle-Normal";
     case 6:  return "MuseoModerno-Medium";
+    case 7:  return "NeoCastel-Normal"; // Added NeoCastel
     case 8:  return "PixelifySans-Normal";
     case 10: return "Sinistre-Normal";
     default: return "ggsans-Semibold";
@@ -60,6 +64,11 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         const Sandbox = () => {
           const [text, setText] = React.useState(message.content || "");
 
+          // This renders the text using Discord's parser (enabling Discord emojis)
+          const renderedContent = MessageRenderUtils?.parseAndRenderContent ? 
+            MessageRenderUtils.parseAndRenderContent(text, { channelId: message.channel_id }) : 
+            text;
+
           return (
             <RN.View style={{ marginTop: 10 }}>
               <TextInput
@@ -83,7 +92,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 </RN.View>
                 
                 <RN.View style={{ flex: 1 }}>
-                  {/* Header: Name and Tag shrink to protect the Time space */}
                   <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2, justifyContent: "flex-start" }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
                       <RN.Text 
@@ -102,15 +110,21 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                       )}
                     </RN.View>
 
-                    {/* Time is fixed with flex-shrink 0 so it never hides */}
                     <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, fontFamily: "ggsans-Medium", includeFontPadding: false, flexShrink: 0 }}>
                       1:37 PM
                     </RN.Text>
                   </RN.View>
 
-                  <RN.Text style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium", includeFontPadding: false }}>
-                    {text || " "}
-                  </RN.Text>
+                  {/* Wrapped in a View to handle Discord's custom emoji components */}
+                  <RN.View>
+                    {typeof renderedContent === "string" ? (
+                      <RN.Text style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium", includeFontPadding: false }}>
+                        {renderedContent || " "}
+                      </RN.Text>
+                    ) : (
+                      renderedContent
+                    )}
+                  </RN.View>
                 </RN.View>
               </RN.View>
             </RN.View>
