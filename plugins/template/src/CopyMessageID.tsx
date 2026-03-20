@@ -11,11 +11,11 @@ const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
-const UserStore = findByProps("getCurrentUser", "getUser"); // Used to get YOUR name
+const UserStore = findByProps("getCurrentUser", "getUser");
 
 const getEmojiURL = (char: string) => {
   const codePoints = Array.from(char).map(c => c.codePointAt(0)?.toString(16)).join("-");
-  return `https://cdn.jsdelivr.gh/twitter/twemoji@latest/assets/72x72/${codePoints}.png`;
+  return `https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/${codePoints}.png`;
 };
 
 const getDisplayFont = (fontId: number) => {
@@ -35,10 +35,11 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
   const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g;
   const mentionRegex = /(@[^\s]+)/g;
 
+  // Splitting properly to keep all tokens
   const parts = text.split(/(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]|@[^\s]+)/g);
 
   return (
-    <RN.View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "baseline" }}>
+    <RN.Text style={style}>
       {parts.map((part, i) => {
         if (!part) return null;
 
@@ -70,13 +71,9 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
           );
         }
 
-        return (
-          <RN.Text key={i} style={style}>
-            {part}
-          </RN.Text>
-        );
+        return part;
       })}
-    </RN.View>
+    </RN.Text>
   );
 };
 
@@ -88,7 +85,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const member = guildId ? GuildMemberStore.getMember(guildId, message.author.id) : null;
   const author = message.author;
 
-  // This is the message author's details
   const authorDisplayName = member?.nick || author.globalName || author.username;
   const avatarUrl = author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
   const primaryGuild = author.primaryGuild;
@@ -101,7 +97,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const nameFont = (fontId !== undefined && fontId !== null) ? getDisplayFont(fontId) : "ggsans-Semibold";
   const roleColor = member?.colorString || "#ffffff"; 
 
-  // Get YOUR account details for the global ping check
   const currentUser = UserStore.getCurrentUser();
   const myName = currentUser?.globalName || currentUser?.username;
 
@@ -116,8 +111,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
       const openScreenshotPreview = () => {
         const Sandbox = () => {
           const [text, setText] = React.useState(message.content || "");
-          
-          // Check if the text contains @everyone, @here, or YOUR name specifically
           const isGlobalPing = text.includes("@everyone") || text.includes("@here") || (myName && text.includes(`@${myName}`));
 
           return (
@@ -143,9 +136,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 {isGlobalPing && (
                   <RN.View style={{
                     position: "absolute",
-                    left: 0,
-                    top: 0,
-                    bottom: 0,
+                    left: 0, top: 0, bottom: 0,
                     width: 2,
                     backgroundColor: "#faa61a",
                     zIndex: 10
