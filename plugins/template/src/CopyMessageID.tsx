@@ -11,10 +11,11 @@ const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
+const UserStore = findByProps("getCurrentUser", "getUser"); // Used to get YOUR name
 
 const getEmojiURL = (char: string) => {
   const codePoints = Array.from(char).map(c => c.codePointAt(0)?.toString(16)).join("-");
-  return `https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/${codePoints}.png`;
+  return `https://cdn.jsdelivr.gh/twitter/twemoji@latest/assets/72x72/${codePoints}.png`;
 };
 
 const getDisplayFont = (fontId: number) => {
@@ -60,7 +61,6 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
                 height: 19,
                 justifyContent: "center",
                 marginHorizontal: 1,
-                // Moved back up 1.5px (from 2.0 to 0.5)
                 transform: [{ translateY: 0.5 }]
             }}>
                 <RN.Text style={{ color: "#dee0fc", fontFamily: "ggsans-Medium", fontSize: 15, includeFontPadding: false }}>
@@ -88,7 +88,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const member = guildId ? GuildMemberStore.getMember(guildId, message.author.id) : null;
   const author = message.author;
 
-  const displayName = member?.nick || author.globalName || author.username;
+  // This is the message author's details
+  const authorDisplayName = member?.nick || author.globalName || author.username;
   const avatarUrl = author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
   const primaryGuild = author.primaryGuild;
   const guildTag = primaryGuild?.tag;
@@ -99,6 +100,10 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const fontId = author?.displayNameStyles?.fontId;
   const nameFont = (fontId !== undefined && fontId !== null) ? getDisplayFont(fontId) : "ggsans-Semibold";
   const roleColor = member?.colorString || "#ffffff"; 
+
+  // Get YOUR account details for the global ping check
+  const currentUser = UserStore.getCurrentUser();
+  const myName = currentUser?.globalName || currentUser?.username;
 
   component.then((instance) => {
     const unpatchInner = after("default", instance, (_, component) => {
@@ -111,14 +116,15 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
       const openScreenshotPreview = () => {
         const Sandbox = () => {
           const [text, setText] = React.useState(message.content || "");
-          const isGlobalPing = text.includes("@everyone") || text.includes("@here") || text.includes(`@${displayName}`);
+          
+          // Check if the text contains @everyone, @here, or YOUR name specifically
+          const isGlobalPing = text.includes("@everyone") || text.includes("@here") || (myName && text.includes(`@${myName}`));
 
           return (
             <RN.View style={{ marginTop: 10 }}>
               <TextInput
                 value={text}
                 placeholder="Edit message..."
-                // Changed placeholder from default (black) to light gray
                 placeholderTextColor="#a1a1a1"
                 onChange={(v: any) => setText(v?.nativeEvent?.text ?? v ?? "")}
                 multiline={true}
@@ -154,7 +160,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                   <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: -3 }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
                       <RN.Text numberOfLines={1} style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, flexShrink: 1 }}>
-                        {displayName}
+                        {authorDisplayName}
                       </RN.Text>
                       {guildTag && (
                         <RN.View style={{ backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 5, borderRadius: 4, marginLeft: 6, flexDirection: "row", alignItems: "center", height: 18, flexShrink: 0 }}>
@@ -168,7 +174,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
                   <DiscordText 
                     text={text || " "} 
-                    selfName={displayName}
+                    selfName={myName}
                     style={{ color: "#dbdee1", fontSize: 16, lineHeight: 22, fontFamily: "ggsans-Medium", includeFontPadding: false }} 
                   />
                 </RN.View>
