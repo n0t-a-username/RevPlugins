@@ -116,6 +116,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 authorAvatar: avatarUrl
               });
               showToast("Saved!", getAssetIDByName("Check"));
+            } else {
+              showToast("Already saved", getAssetIDByName("Small"));
             }
           }
         });
