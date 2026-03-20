@@ -16,20 +16,18 @@ const localEdits = {};
 // Safely grab modules
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 const Dispatcher = findByProps("dispatch", "subscribe");
-const MessageStore = findByProps("getMessage", "getMessages");
+const MessageStore = findByProps("getMessage");
 
-// 1. Patch the MessageStore to keep edits visible after channel swaps
-let unpatchStore;
+// Patch MessageStore safely
 if (MessageStore) {
-  unpatchStore = after("getMessage", MessageStore, ([channelId, messageId], message) => {
+  after("getMessage", MessageStore, ([channelId, messageId], message) => {
     if (message && localEdits[messageId]) {
       message.content = localEdits[messageId];
     }
-    return message;
   });
 }
 
-const unpatchActionSheet = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
+const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
@@ -37,9 +35,11 @@ const unpatchActionSheet = before("openLazy", LazyActionSheet, ([component, key,
     const unpatchInner = after("default", instance, (_, component) => {
       React.useEffect(() => () => unpatchInner(), []);
 
-      // Find where buttons live
-      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow") || 
-                      findInReactTree(component, (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup");
+      // Find the group of rows in the action sheet
+      const root = findInReactTree(component, (x) => x?.type?.name === "ActionSheet");
+      const content = findInReactTree(root, (x) => Array.isArray(x?.props?.children));
+
+      if (!content) return;
 
       const openEditModal = () => {
         let currentText = message.content;
@@ -48,64 +48,49 @@ const unpatchActionSheet = before("openLazy", LazyActionSheet, ([component, key,
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
-            // Store the edit so the MessageStore patch can find it later
             localEdits[message.id] = currentText;
             message.content = currentText;
 
-            // Update UI immediately
             Dispatcher?.dispatch({
               type: "MESSAGE_UPDATE",
               message: { ...message, content: currentText },
             });
 
-            showToast("Local edit saved!", getAssetIDByName("Check"));
+            showToast("Edited locally!", getAssetIDByName("Check"));
           },
           children: React.createElement(TextInput, {
             defaultValue: message.content,
             onChange: (v) => (currentText = v),
-            placeholder: "Enter new text...",
-            autoFocus: true,
-            style: { color: "#fff", marginTop: 10 }
+            style: { color: "#ffffff", marginTop: 8 }
           }),
         });
         LazyActionSheet.hideActionSheet();
       };
 
-      // Button Components
-      const copyIdButton = (
+      // Create the buttons
+      const newButtons = [
         <FormRow
-          key="copy-message-id"
+          key="copy-id-alt"
           label="Copy Message ID"
           leading={<FormIcon source={getAssetIDByName("IdIcon")} />}
           onPress={() => {
             clipboard.setString(String(message.id));
-            showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
+            showToast("Copied ID", getAssetIDByName("toast_copy_link"));
             LazyActionSheet.hideActionSheet();
           }}
-        />
-      );
-
-      const clientEditButton = (
+        />,
         <FormRow
-          key="client-side-edit"
+          key="client-edit-alt"
           label="Client Side Edit"
           leading={<FormIcon source={getAssetIDByName("edit")} />}
           onPress={openEditModal}
         />
-      );
+      ];
 
-      // Injection logic
-      if (Array.isArray(buttons)) {
-        buttons.push(copyIdButton, clientEditButton);
-      } else if (buttons?.props?.children) {
-        // Fallback for different ActionSheet structures
-        buttons.props.children.push(copyIdButton, clientEditButton);
-      }
+      // Insert at the top of the list for maximum visibility and stability
+      content.props.children.unshift(...newButtons);
     });
   });
 });
 
-export const onUnload = () => {
-  unpatchActionSheet();
-  if (unpatchStore) unpatchStore();
-};
+export const onUnload = () => unpatch();
