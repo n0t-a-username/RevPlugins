@@ -18,7 +18,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
-  // Capture identity as raw JSON
+  // Capture identity
   const author = { ...message.author };
   const timestamp = message.timestamp;
   const channelId = message.channel_id;
@@ -58,8 +58,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                   key={text} 
                   rowGenerator={new RowManager()}
                   message={{
-                    // By passing a raw object instead of a 'new MessageRecord',
-                    // we prevent the internal crash that clears the message.
+                    // 1. Data Fields
                     id: "0",
                     channel_id: channelId,
                     author: author,
@@ -67,11 +66,14 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                     content: text,
                     state: "SENT",
                     type: 0,
-                    attachments: [],
-                    embeds: [],
-                    pinned: false,
-                    mentions: [],
-                    // These fields being undefined forces the UI to just render 'text'
+                    
+                    // 2. Mocking Class Methods to stop the "undefined is not a function" crash
+                    // These satisfy Discord's internal 'isRecord' or 'Immutable' checks
+                    toJS: function() { return this; },
+                    get: function(key) { return this[key]; },
+                    has: function(key) { return key in this; },
+                    
+                    // 3. Clear cache keys
                     content_parsed: undefined,
                     content_formatted: undefined,
                   }}
