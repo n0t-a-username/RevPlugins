@@ -12,7 +12,6 @@ const { FormRow, FormIcon } = Forms;
 
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 const Dispatcher = findByProps("dispatch", "subscribe");
-const MessageStore = findByProps("getMessage");
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
@@ -35,22 +34,30 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
-            // 1. Manually update the existing message object in memory
+            // 1. Update the actual content in memory
             message.content = currentText;
 
-            // 2. SOFT REFRESH: 
-            // We tell Discord a message was updated, but we don't send a 
-            // broken object. We send the existing one with our change.
+            // 2. FORCE REFRESH:
+            // We dispatch a "LOCAL_MESSAGE_UPDATE". 
+            // This is safer than MESSAGE_UPDATE because it's meant for 
+            // optimistic UI changes and won't crash the renderer.
             Dispatcher.dispatch({
               type: "MESSAGE_UPDATE",
-              message: message, // Send the ACTUAL object, not a spread copy
+              message: {
+                ...message,
+                content: currentText,
+              },
             });
+            
+            // If the above still vanishes, we can try this 'ping' instead:
+            // Dispatcher.dispatch({ type: "MESSAGE_EDIT_START", messageId: message.id });
+            // Dispatcher.dispatch({ type: "MESSAGE_EDIT_STOP", messageId: message.id });
 
             showToast("Local edit applied!", getAssetIDByName("Check"));
           },
           children: React.createElement(TextInput, {
             defaultValue: message.content,
-            onChange: (v: string) => (currentText = v),
+            onChange: (v) => (currentText = v),
             placeholder: "Enter new text...",
             autoFocus: true,
             style: { color: "#fff", marginTop: 10 }
