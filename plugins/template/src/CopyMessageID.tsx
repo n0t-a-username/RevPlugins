@@ -11,23 +11,27 @@ const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
+const Dispatcher = findByProps("dispatch", "subscribe");
 const MessageStore = findByProps("getMessage");
 
 // Session storage for edits
 const localEdits = new Map<string, string>();
 
-// 1. Persistent Patch: Intercepts message data before it hits the UI
-// This ensures edits stick when switching channels
-const unpatchStore = MessageStore ? after("getMessage", MessageStore, ([channelId, messageId], message) => {
-  if (message && localEdits.has(messageId)) {
-    message.content = localEdits.get(messageId);
-  }
-  return message;
-}) : null;
-
-const unpatchActionSheet = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
+const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
+
+  // 1. Persistent Hook: We patch getMessage ONLY when the action sheet is actually opened.
+  // This avoids the "startup crash" but ensures the edit stays if you switch channels.
+  if (MessageStore && !MessageStore.getMessage.__patched) {
+    after("getMessage", MessageStore, ([channelId, messageId], msgObj) => {
+      if (msgObj && localEdits.has(messageId)) {
+        msgObj.content = localEdits.get(messageId);
+      }
+      return msgObj;
+    });
+    MessageStore.getMessage.__patched = true;
+  }
 
   component.then((instance) => {
     const unpatchInner = after("default", instance, (_, component) => {
@@ -43,8 +47,20 @@ const unpatchActionSheet = before("openLazy", LazyActionSheet, ([component, key,
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
+            // Update our local memory
             localEdits.set(message.id, currentText);
             message.content = currentText;
+
+            // Trigger a UI refresh without a full, dangerous Dispatch
+            Dispatcher?.dispatch({
+              type: "MESSAGE_UPDATE",
+              message: {
+                id: message.id,
+                channel_id: message.channel_id,
+                content: currentText,
+              },
+            });
+
             showToast("Local edit applied!", getAssetIDByName("Check"));
           },
           children: React.createElement(TextInput, {
@@ -82,13 +98,14 @@ const unpatchActionSheet = before("openLazy", LazyActionSheet, ([component, key,
 
       if (buttons) {
         buttons.push(copyIdButton, clientEditButton);
+      } else {
+        const actionSheetContainer = findInReactTree(component, (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup");
+        if (actionSheetContainer?.[1]) {
+          actionSheetContainer[1].props.children.push(copyIdButton, clientEditButton);
+        }
       }
     });
   });
 });
 
-// The final cleanup function
-export const onUnload = () => {
-  unpatchActionSheet();
-  if (unpatchStore) unpatchStore();
-};
+export const onUnload = () => unpatch();
