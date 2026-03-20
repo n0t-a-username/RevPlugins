@@ -12,17 +12,15 @@ const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 
 const ChatItemWrapper = findByProps("DCDAutoModerationSystemMessageView", "default")?.default;
-const MessageRecord = findByName("MessageRecord");
 const RowManager = findByName("RowManager");
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
-  // STEP 1: Capture the data into "dumb" variables immediately
-  const capturedAuthor = message.author;
-  const capturedTimestamp = message.timestamp;
-  const originalContent = message.content;
+  // Capture identity as raw JSON
+  const author = { ...message.author };
+  const timestamp = message.timestamp;
   const channelId = message.channel_id;
 
   component.then((instance) => {
@@ -33,11 +31,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
       const openScreenshotPreview = () => {
         const Sandbox = () => {
-          const [text, setText] = React.useState(originalContent);
-
-          // STEP 2: Generate a truly unique ID for every single render
-          // This forces the RowManager to treat every keystroke as a brand new message
-          const uniqueId = React.useMemo(() => Math.random().toString(36), [text]);
+          const [text, setText] = React.useState(message.content);
 
           return (
             <RN.View style={{ marginTop: 10 }}>
@@ -61,21 +55,26 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 borderRadius: 8,
               }}>
                 <ChatItemWrapper
-                  key={uniqueId} // Complete re-mount on every character
+                  key={text} 
                   rowGenerator={new RowManager()}
-                  message={new MessageRecord({
-                    id: uniqueId, // No link to the real message ID
+                  message={{
+                    // By passing a raw object instead of a 'new MessageRecord',
+                    // we prevent the internal crash that clears the message.
+                    id: "0",
                     channel_id: channelId,
-                    author: capturedAuthor,
-                    timestamp: capturedTimestamp,
+                    author: author,
+                    timestamp: timestamp,
                     content: text,
-                    // Wipe all possible internal caches
+                    state: "SENT",
+                    type: 0,
+                    attachments: [],
+                    embeds: [],
+                    pinned: false,
+                    mentions: [],
+                    // These fields being undefined forces the UI to just render 'text'
                     content_parsed: undefined,
                     content_formatted: undefined,
-                    _contentMarkup: undefined,
-                    contentParsed: undefined,
-                    contentFormatted: undefined
-                  })}
+                  }}
                 />
               </RN.View>
             </RN.View>
