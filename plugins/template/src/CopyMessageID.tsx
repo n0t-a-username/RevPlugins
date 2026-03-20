@@ -3,21 +3,16 @@ import { getAssetIDByName } from "@vendetta/ui/assets";
 import { findInReactTree } from "@vendetta/utils";
 import { findByProps, findByName } from "@vendetta/metro";
 import { React, clipboard, ReactNative as RN, storage } from "@vendetta/metro/common";
-import { Forms } from "@vendetta/ui/components";
 import { showToast } from "@vendetta/ui/toasts";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
-const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
-
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
 
-// Ensure storage is ready at the top level so the plugin doesn't crash on boot
-if (!Array.isArray(storage.favorites)) {
-  storage.favorites = [];
-}
+// Top-level storage safety
+if (!storage.favorites) storage.favorites = [];
 
 const getDisplayFont = (fontId: number) => {
   switch (fontId) {
@@ -42,7 +37,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const displayName = member?.nick || author.globalName || author.username;
   const avatarUrl = author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
   const decorationData = author.avatarDecorationData;
-
   const primaryGuild = author.primaryGuild;
   const guildTag = primaryGuild?.tag;
   const guildBadgeUrl = primaryGuild?.badge 
@@ -50,9 +44,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
     : null;
 
   const fontId = author?.displayNameStyles?.fontId;
-  const nameFont = (fontId !== undefined && fontId !== null) ? getDisplayFont(fontId) : "ggsans-Semibold";
+  const nameFont = getDisplayFont(fontId);
   const roleColor = member?.colorString || "#ffffff"; 
-  const initialContent = message.content;
 
   component.then((instance) => {
     const unpatchInner = after("default", instance, (_, component) => {
@@ -64,8 +57,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
       const openScreenshotPreview = () => {
         const Sandbox = () => {
-          const [text, setText] = React.useState(initialContent || "");
-
+          const [text, setText] = React.useState(message.content || "");
           return (
             <RN.View style={{ marginTop: 10 }}>
               <TextInput
@@ -76,7 +68,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 autoFocus={true}
                 style={{ color: "#fff", backgroundColor: "rgba(255,255,255,0.07)", padding: 12, borderRadius: 8, marginBottom: 20, fontFamily: "ggsans-Medium" }}
               />
-              
               <RN.View style={{ paddingVertical: 12, paddingHorizontal: 14, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
                 <RN.View style={{ width: 40, height: 40, marginRight: 10 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
@@ -87,71 +78,44 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                     />
                   )}
                 </RN.View>
-                
                 <RN.View style={{ flex: 1 }}>
-                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2, justifyContent: "flex-start" }}>
+                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
-                      <RN.Text 
-                        numberOfLines={1} 
-                        ellipsizeMode="tail"
-                        style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, includeFontPadding: false, flexShrink: 1 }}
-                      >
-                        {displayName}
-                      </RN.Text>
-
+                      <RN.Text numberOfLines={1} ellipsizeMode="tail" style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, flexShrink: 1 }}>{displayName}</RN.Text>
                       {guildTag && (
-                        <RN.View style={{ backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 5, borderRadius: 4, marginLeft: 6, flexDirection: "row", alignItems: "center", height: 18, flexShrink: 0 }}>
-                          {guildBadgeUrl && <RN.Image source={{ uri: guildBadgeUrl }} style={{ width: 12, height: 12, marginRight: 3 }} />}
-                          <RN.Text style={{ color: "#caccce", fontSize: 11, fontFamily: "ggsans-Semibold", includeFontPadding: false }}>{guildTag}</RN.Text>
+                        <RN.View style={{ backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 5, borderRadius: 4, marginLeft: 6, height: 18, justifyContent: "center" }}>
+                          <RN.Text style={{ color: "#caccce", fontSize: 11, fontFamily: "ggsans-Semibold" }}>{guildTag}</RN.Text>
                         </RN.View>
                       )}
                     </RN.View>
-
-                    <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, fontFamily: "ggsans-Medium", includeFontPadding: false, flexShrink: 0 }}>
-                      1:37 PM
-                    </RN.Text>
+                    <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, flexShrink: 0 }}>1:37 PM</RN.Text>
                   </RN.View>
-
-                  <RN.Text style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium", includeFontPadding: false }}>
-                    {text || " "}
-                  </RN.Text>
+                  <RN.Text style={{ color: "#dbdee1", fontSize: 16, fontFamily: "ggsans-Medium" }}>{text || " "}</RN.Text>
                 </RN.View>
               </RN.View>
             </RN.View>
           );
         };
-
-        showConfirmationAlert({
-          title: "Edit Message Locally",
-          confirmText: "Done",
-          onConfirm: () => {},
-          // @ts-expect-error
-          children: <Sandbox />,
-        });
+        showConfirmationAlert({ title: "Edit Locally", confirmText: "Done", onConfirm: () => {}, children: <Sandbox /> });
         LazyActionSheet.hideActionSheet();
       };
 
       const openFavoritePrompt = () => {
-        const favoriteData = {
-          id: message.id,
-          channelId: message.channel_id,
-          guildId: guildId,
-          content: message.content,
-          authorName: displayName,
-          authorAvatar: avatarUrl,
-        };
-
         showConfirmationAlert({
           title: "Favorite Message",
-          content: `Save this message from ${displayName} to your favorites?`,
-          confirmText: "Favorite",
-          cancelText: "Cancel",
+          content: `Save this message from ${displayName}?`,
+          confirmText: "Save",
           onConfirm: () => {
-            if (!storage.favorites.find(f => f.id === message.id)) {
-              storage.favorites.push(favoriteData);
-              showToast("Added to Favorites", getAssetIDByName("Check"));
-            } else {
-              showToast("Already in Favorites", getAssetIDByName("Small"));
+            if (!storage.favorites.some(f => f.id === message.id)) {
+              storage.favorites.push({
+                id: message.id,
+                channelId: message.channel_id,
+                guildId: guildId,
+                content: message.content,
+                authorName: displayName,
+                authorAvatar: avatarUrl
+              });
+              showToast("Saved!", getAssetIDByName("Check"));
             }
           }
         });
@@ -162,36 +126,16 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         const group = actionSheetContainer[1];
         const ActionSheetRow = group.props.children[0].type;
         const baseIcon = group.props.children[0].props.icon;
-
         const createIcon = (name: string) => ({
           $$typeof: baseIcon.$$typeof,
           type: baseIcon.type,
-          props: { source: getAssetIDByName(name) },
+          props: { source: getAssetIDByName(name) || getAssetIDByName("StarIcon") || 0 },
         });
 
         group.props.children.push(
-          <ActionSheetRow
-            key="copy-id"
-            label="Copy Message ID"
-            icon={createIcon("IdIcon")}
-            onPress={() => {
-              clipboard.setString(String(message.id));
-              showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
-              LazyActionSheet.hideActionSheet();
-            }}
-          />,
-          <ActionSheetRow
-            key="favorite-msg"
-            label="Favorite Message"
-            icon={createIcon("HeartIcon")}
-            onPress={openFavoritePrompt}
-          />,
-          <ActionSheetRow
-            key="preview"
-            label="Edit Message Locally"
-            icon={createIcon("PencilIcon")}
-            onPress={openScreenshotPreview}
-          />
+          <ActionSheetRow key="copy-id" label="Copy ID" icon={createIcon("IdIcon")} onPress={() => { clipboard.setString(message.id); LazyActionSheet.hideActionSheet(); }} />,
+          <ActionSheetRow key="fav-msg" label="Favorite Message" icon={createIcon("StarIcon")} onPress={openFavoritePrompt} />,
+          <ActionSheetRow key="preview" label="Edit Locally" icon={createIcon("PencilIcon")} onPress={openScreenshotPreview} />
         );
       }
     });
