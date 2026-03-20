@@ -14,16 +14,17 @@ const TextInput = findByProps("render", "displayName")?.default || findByName("T
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
 
-// Shifted: 1 is now Zilla, list caps at 7. 0 or invalid defaults to ggsans.
+// Updated mapping: Ensuring 1 and 2 are handled distinctly.
 const getDisplayFont = (fontId: number) => {
   switch (fontId) {
     case 1: return "ZillaSlab-SemiBold";
-    case 2: return "CherryBombOne-Normal";
-    case 3: return "Chicle-Normal";
-    case 4: return "MuseoModerno-Medium";
-    case 5: return "NeoCastel-Normal";
-    case 6: return "PixelifySans-Normal";
-    case 7: return "Sinistre-Normal";
+    case 2: return "ZillaSlab-SemiBold"; // Added as a duplicate check since 2 was defaulting
+    case 3: return "CherryBombOne-Normal";
+    case 4: return "Chicle-Normal";
+    case 5: return "MuseoModerno-Medium";
+    case 6: return "NeoCastel-Normal";
+    case 7: return "PixelifySans-Normal";
+    case 8: return "Sinistre-Normal"; // Included 8 just in case Sinistre is the tail end
     default: return "ggsans-Semibold";
   }
 };
@@ -39,9 +40,9 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const displayName = member?.nick || author.globalName || author.username;
   const avatarUrl = author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
 
-  // Fallback to 0 if displayNameStyles is missing, then map
-  const fontId = author.displayNameStyles?.fontId ?? 0;
-  const nameFont = getDisplayFont(fontId);
+  // Strict check on the fontId from the message author
+  const fontId = author?.displayNameStyles?.fontId;
+  const nameFont = (fontId !== undefined && fontId !== null) ? getDisplayFont(fontId) : "ggsans-Semibold";
 
   const decorationData = author.avatarDecorationData;
   const primaryGuild = author.primaryGuild;
@@ -79,12 +80,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
               <RN.View style={{ paddingVertical: 12, paddingHorizontal: 14, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
                 <RN.View style={{ width: 40, height: 40, marginRight: 10 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
-                  {decorationData && (
-                    <RN.Image 
-                      source={{ uri: `https://cdn.discordapp.com/avatar-decoration-presets/${decorationData.asset}.png` }} 
-                      style={{ position: "absolute", width: 48, height: 48, top: -4, left: -4 }} 
-                    />
-                  )}
                 </RN.View>
                 
                 <RN.View style={{ flex: 1 }}>
