@@ -27,52 +27,55 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
       const openScreenshotPreview = () => {
         const Sandbox = () => {
-          // Initialize with current message content
           const [content, setContent] = React.useState(message.content);
+          const [displayComponent, setDisplayComponent] = React.useState(true);
 
-          // We create a "key" based on the content length/hash to force React to 
-          // unmount and remount the ChatItemWrapper when text changes.
-          const renderKey = React.useMemo(() => Date.now(), [content]);
+          // Every time content changes, we briefly unmount and remount 
+          // to kill any ghost cache in ChatItemWrapper
+          React.useEffect(() => {
+            setDisplayComponent(false);
+            const timeout = setTimeout(() => setDisplayComponent(true), 10);
+            return () => clearTimeout(timeout);
+          }, [content]);
 
           return (
             <RN.View style={{ marginTop: 10 }}>
               <TextInput
                 defaultValue={content}
-                size="md"
-                placeholder="Type new content..."
+                placeholder="Type something new..."
                 onChange={(v: string) => setContent(v)}
                 autoFocus={true}
                 style={{ 
                   color: "#fff", 
-                  backgroundColor: "rgba(0,0,0,0.2)", 
+                  backgroundColor: "rgba(255,255,255,0.05)", 
                   padding: 12, 
                   borderRadius: 8,
-                  marginBottom: 15,
-                  borderWidth: 1,
-                  borderColor: "rgba(255,255,255,0.1)"
+                  marginBottom: 20
                 }}
               />
-              <RN.Text style={{ color: "#bbb", marginBottom: 8, fontSize: 12, fontWeight: "bold" }}>PREVIEW:</RN.Text>
+              
               <RN.View style={{ 
                 padding: 10, 
                 backgroundColor: "#313338", 
                 borderRadius: 8,
-                overflow: "hidden"
+                minHeight: 80,
+                justifyContent: 'center'
               }}>
-                <ChatItemWrapper
-                  key={renderKey} // THIS FORCES THE UI TO RE-RENDER
-                  rowGenerator={new RowManager()}
-                  message={new MessageRecord({
-                    ...message,
-                    content: content,
-                    // Completely wipe these to ensure the new content is parsed fresh
-                    content_parsed: undefined,
-                    content_formatted: undefined,
-                    _contentMarkup: undefined,
-                    contentParsed: undefined,
-                    contentFormatted: undefined
-                  })}
-                />
+                {displayComponent && (
+                  <ChatItemWrapper
+                    rowGenerator={new RowManager()}
+                    message={new MessageRecord({
+                      ...message.toJS?.() || message, // Try to convert to plain object first
+                      id: `temp-${Date.now()}`, // New ID to prevent internal memoization
+                      content: content,
+                      content_parsed: undefined,
+                      content_formatted: undefined,
+                      _contentMarkup: undefined,
+                      contentParsed: undefined,
+                      contentFormatted: undefined
+                    })}
+                  />
+                )}
               </RN.View>
             </RN.View>
           );
