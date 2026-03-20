@@ -14,12 +14,17 @@ const TextInput = findByProps("render", "displayName")?.default || findByName("T
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
 
+// Fully re-aligned mapping based on your last corrections
 const getDisplayFont = (fontId: number) => {
   switch (fontId) {
     case 1: return "ggsans-Semibold"; 
-    case 2: return "Cursive";     
-    case 3: return "Comic Sans MS"; 
-    case 4: return "monospace";   
+    case 2: return "ZillaSlab-SemiBold";
+    case 3: return "CherryBombOne-Normal";
+    case 4: return "Chicle-Normal";
+    case 5: return "MuseoModerno-Medium";
+    case 6: return "NeoCastel-Normal";
+    case 7: return "PixelifySans-Normal";
+    case 8: return "Sinistre-Normal";
     default: return "ggsans-Semibold";
   }
 };
@@ -72,7 +77,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
               />
               
               <RN.View style={{ paddingVertical: 12, paddingHorizontal: 14, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
-                <RN.View style={{ width: 40, height: 40, marginRight: 12 }}>
+                <RN.View style={{ width: 40, height: 40, marginRight: 10 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
                   {decorationData && (
                     <RN.Image 
@@ -85,7 +90,13 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 <RN.View style={{ flex: 1 }}>
                   <RN.View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 0 }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
-                      <RN.Text style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, includeFontPadding: false, flexShrink: 1 }}>{displayName}</RN.Text>
+                      <RN.Text 
+                        numberOfLines={1} 
+                        ellipsizeMode="tail"
+                        style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, includeFontPadding: false, flexShrink: 1 }}
+                      >
+                        {displayName}
+                      </RN.Text>
                       {guildTag && (
                         <RN.View style={{ backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 5, borderRadius: 4, marginLeft: 6, flexDirection: "row", alignItems: "center", height: 18 }}>
                           {guildBadgeUrl && <RN.Image source={{ uri: guildBadgeUrl }} style={{ width: 12, height: 12, marginRight: 3 }} />}
@@ -148,15 +159,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         );
 
         group.props.children.push(copyButton, previewButton);
-      } else {
-        // Fallback for ButtonRow injection if container is missing
-        const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
-        if (buttons) {
-          buttons.push(
-            <FormRow key="copy-message-id" label="Copy Message ID" leading={<FormIcon source={getAssetIDByName("IdIcon")} />} onPress={() => { clipboard.setString(String(message.id)); LazyActionSheet.hideActionSheet(); }} />,
-            <FormRow key="screenshot-preview" label="Screenshot Preview" leading={<FormIcon source={getAssetIDByName("PencilIcon")} />} onPress={openScreenshotPreview} />
-          );
-        }
       }
     });
   });
