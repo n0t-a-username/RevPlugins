@@ -12,6 +12,18 @@ const { FormRow, FormIcon } = Forms;
 
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 const Dispatcher = findByProps("dispatch", "subscribe");
+const MessageStore = findByProps("getMessage");
+
+// Map to keep track of our client-side edits during the session
+const localEdits = new Map<string, string>();
+
+// 1. PATCH THE STORE: This ensures the app always sees your edited text locally.
+const unpatchStore = MessageStore ? after("getMessage", MessageStore, ([channelId, messageId], message) => {
+  if (message && localEdits.has(messageId)) {
+    message.content = localEdits.get(messageId);
+  }
+  return message;
+}) : null;
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
@@ -27,20 +39,21 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
       );
 
       const openEditModal = () => {
-        let currentText = message.content;
+        // Pull from our local edits map if it exists, otherwise use original content
+        let currentText = localEdits.get(message.id) || message.content;
 
         showConfirmationAlert({
           title: "Client Side Edit",
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
-            // 1. Manually overwrite the text in the message object
+            // Save the new text to our local map
+            localEdits.set(message.id, currentText);
+            
+            // Manually update the current object for instant visual feedback
             message.content = currentText;
 
-            // 2. THE INSTANT REFRESH TRICK:
-            // Instead of MESSAGE_UPDATE (which crashes/vanishes), we use
-            // LOAD_MESSAGES_SUCCESS. This tells Discord "Hey, we just got this 
-            // message fresh from the server," forcing an instant UI refresh.
+            // Force the UI to refresh by telling it the message "re-loaded"
             Dispatcher.dispatch({
               type: "LOAD_MESSAGES_SUCCESS",
               channelId: message.channel_id,
@@ -50,8 +63,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
             showToast("Local edit applied!", getAssetIDByName("Check"));
           },
           children: React.createElement(TextInput, {
-            defaultValue: message.content,
-            onChange: (v) => (currentText = v),
+            defaultValue: currentText,
+            onChange: (v: string) => (currentText = v),
             placeholder: "Enter new text...",
             autoFocus: true,
             style: { color: "#fff", marginTop: 10 }
@@ -97,4 +110,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   });
 });
 
-export const onUnload = () => unpatch();
+export const onUnload = () => {
+  unpatch();
+  if (unpatchStore) unpatchStore();
+};
