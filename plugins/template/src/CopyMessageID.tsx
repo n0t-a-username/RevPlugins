@@ -15,17 +15,13 @@ const Dispatcher = findByProps("dispatch", "subscribe");
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
-  // This ensures we are only touching the message object you showed me
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
   component.then((instance) => {
     const unpatchInner = after("default", instance, (_, component) => {
       React.useEffect(() => () => unpatchInner(), []);
 
-      const buttons = findInReactTree(
-        component,
-        (x) => x?.[0]?.type?.name === "ButtonRow",
-      );
+      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
 
       const openEditModal = () => {
         let currentText = message.content;
@@ -35,12 +31,17 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
-            // 1. DIRECT SPOOF: Modify the content key in the actual object
+            // 1. UPDATE CONTENT
             message.content = currentText;
 
-            // 2. RE-RENDER TRIGGER: 
-            // We dispatch an update using the same message object.
-            // This forces the UI to look at message.content again.
+            // 2. THE CRITICAL FIX: Clear pre-parsed data
+            // Discord crashes because it tries to use old AST/parsed data with new content.
+            // Deleting these forces the 'getOrParse' function to re-run safely.
+            delete message.content_parsed;
+            delete message.content_formatted;
+            delete message._contentMarkup; 
+
+            // 3. RE-RENDER
             Dispatcher.dispatch({
               type: "MESSAGE_UPDATE",
               message: message,
@@ -59,6 +60,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         LazyActionSheet.hideActionSheet();
       };
 
+      // ... Rest of your button logic (Copy ID / Client Edit) ...
       const copyIdButton = (
         <FormRow
           key="copy-message-id"
@@ -81,13 +83,11 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         />
       );
 
-      // Using your working button injection logic
       if (buttons) {
         buttons.push(copyIdButton, clientEditButton);
       } else {
-        const actionSheetContainer = findInReactTree(
-          component,
-          (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup",
+        const actionSheetContainer = findInReactTree(component, (x) => 
+          Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup"
         );
         if (actionSheetContainer?.[1]) {
           actionSheetContainer[1].props.children.push(copyIdButton, clientEditButton);
