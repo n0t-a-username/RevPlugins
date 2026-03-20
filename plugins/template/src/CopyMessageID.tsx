@@ -35,7 +35,6 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
   const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g;
   const mentionRegex = /(@[^\s]+)/g;
 
-  // Splitting properly to keep all tokens
   const parts = text.split(/(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]|@[^\s]+)/g);
 
   return (
@@ -62,7 +61,8 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
                 height: 19,
                 justifyContent: "center",
                 marginHorizontal: 1,
-                transform: [{ translateY: 0.5 }]
+                // Adjusted translateY to 4 to move it down significantly to center it
+                transform: [{ translateY: 4 }]
             }}>
                 <RN.Text style={{ color: "#dee0fc", fontFamily: "ggsans-Medium", fontSize: 15, includeFontPadding: false }}>
                     {part}
