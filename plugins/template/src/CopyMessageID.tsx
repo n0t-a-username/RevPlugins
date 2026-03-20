@@ -54,23 +54,19 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
         if (mentionRegex.test(part)) {
           const isHighlight = part === "@everyone" || part === "@here" || part === `@${selfName}`;
           return (
-            <RN.Text 
-              key={i} 
-              style={{ 
-                // Solid-feeling background for proper layering
-                backgroundColor: isHighlight ? "rgba(250, 166, 26, 0.15)" : "rgba(88, 101, 242, 0.3)",
-                // Keep text color same as base style (#dee0fc) for all pings
-                color: "#dee0fc",
-                fontFamily: "ggsans-Medium",
-                borderRadius: 4,
-                paddingHorizontal: 4,
-                paddingTop: 1,
-                paddingBottom: 3, 
-                includeFontPadding: false,
-              }}
-            >
-              {part}
-            </RN.Text>
+            <RN.View key={i} style={{ 
+                backgroundColor: isHighlight ? "#4d402b" : "#3e4471", 
+                borderRadius: 3, 
+                paddingHorizontal: 4, 
+                paddingVertical: 0,
+                marginBottom: -4, // Pulls the highlight down slightly
+                display: "flex",
+                justifyContent: "center"
+            }}>
+                <RN.Text style={{ color: "#dee0fc", fontFamily: "ggsans-Medium", fontSize: 15 }}>
+                    {part}
+                </RN.Text>
+            </RN.View>
           );
         }
 
@@ -126,27 +122,26 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
               />
 
               <RN.View style={{ 
-                paddingVertical: 12, 
+                paddingVertical: 10, // Refined vertical padding
                 paddingHorizontal: 14, 
                 backgroundColor: isGlobalPing ? "rgba(250, 166, 26, 0.05)" : "#313338", 
                 borderRadius: 8, 
                 flexDirection: "row",
                 overflow: "hidden"
               }}>
-                {/* 2px Vertical line only (no corner wrap) */}
                 {isGlobalPing && (
                   <RN.View style={{
                     position: "absolute",
                     left: 0,
                     top: 0,
                     bottom: 0,
-                    width: 2, // Slightly thinner
+                    width: 2,
                     backgroundColor: "#faa61a",
                     zIndex: 10
                   }} />
                 )}
 
-                <RN.View style={{ width: 40, height: 40, marginRight: 10 }}>
+                <RN.View style={{ width: 40, height: 40, marginRight: 12 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
                   {decorationData && (
                     <RN.Image 
@@ -157,7 +152,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 </RN.View>
 
                 <RN.View style={{ flex: 1 }}>
-                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
+                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 0 }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
                       <RN.Text numberOfLines={1} style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, flexShrink: 1 }}>
                         {displayName}
@@ -172,11 +167,13 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                     <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, flexShrink: 0 }}>1:37 PM</RN.Text>
                   </RN.View>
 
-                  <DiscordText 
-                    text={text || " "} 
-                    selfName={displayName}
-                    style={{ color: "#dbdee1", fontSize: 16, lineHeight: 22, fontFamily: "ggsans-Medium" }} 
-                  />
+                  <RN.View style={{ marginTop: -2 }}> 
+                    <DiscordText 
+                      text={text || " "} 
+                      selfName={displayName}
+                      style={{ color: "#dbdee1", fontSize: 16, lineHeight: 22, fontFamily: "ggsans-Medium" }} 
+                    />
+                  </RN.View>
                 </RN.View>
               </RN.View>
             </RN.View>
