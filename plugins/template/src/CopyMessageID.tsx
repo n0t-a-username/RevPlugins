@@ -9,10 +9,20 @@ import { showConfirmationAlert } from "@vendetta/ui/alerts";
 
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
-
-// Safer way to get TextInput and Dispatcher
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 const Dispatcher = findByProps("dispatch", "subscribe");
+const MessageStore = findByProps("getMessage", "getMessages");
+
+// This object will store our local edits during the app session
+const localEdits = {};
+
+// Patch MessageStore so it returns our edited content even after switching channels
+const patchStore = after("getMessage", MessageStore, ([channelId, messageId], message) => {
+  if (message && localEdits[messageId]) {
+    message.content = localEdits[messageId];
+  }
+  return message;
+});
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
@@ -22,33 +32,33 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
     const unpatchInner = after("default", instance, (_, component) => {
       React.useEffect(() => () => unpatchInner(), []);
 
-      const buttons = findInReactTree(
-        component,
-        (x) => x?.[0]?.type?.name === "ButtonRow",
-      );
+      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
 
       const openEditModal = () => {
         let currentText = message.content;
-
         showConfirmationAlert({
           title: "Client Side Edit",
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
+            // Save to our persistent session object
+            localEdits[message.id] = currentText;
             message.content = currentText;
+
+            // Update UI immediately
             Dispatcher.dispatch({
               type: "MESSAGE_UPDATE",
               message: { ...message, content: currentText },
             });
-            showToast("Local edit applied!", getAssetIDByName("Check"));
+
+            showToast("Session edit applied!", getAssetIDByName("Check"));
           },
-          // Using a function for children is safer in some Vendetta versions
           children: React.createElement(TextInput, {
             defaultValue: message.content,
             onChange: (v) => (currentText = v),
             placeholder: "Enter new text...",
             autoFocus: true,
-            style: { color: "#fff", marginTop: 10 } // Ensure text is visible
+            style: { color: "#fff", marginTop: 10 }
           }),
         });
         LazyActionSheet.hideActionSheet();
@@ -78,17 +88,12 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
       if (buttons) {
         buttons.push(copyIdButton, clientEditButton);
-      } else {
-        const actionSheetContainer = findInReactTree(
-          component,
-          (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup",
-        );
-        if (actionSheetContainer?.[1]) {
-          actionSheetContainer[1].props.children.push(copyIdButton, clientEditButton);
-        }
       }
     });
   });
 });
 
-export const onUnload = () => unpatch();
+export const onUnload = () => {
+  unpatch();
+  patchStore(); // Stop hijacking the MessageStore when plugin is off
+};
