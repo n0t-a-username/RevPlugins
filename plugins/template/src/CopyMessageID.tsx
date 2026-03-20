@@ -7,6 +7,10 @@ import { Forms } from "@vendetta/ui/components";
 import { showToast } from "@vendetta/ui/toasts";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 
+// For saving the image
+const { captureRef } = findByProps("captureRef") || {};
+const CameraRoll = findByProps("saveToCameraRoll") || findByProps("save");
+
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
@@ -14,7 +18,6 @@ const TextInput = findByProps("render", "displayName")?.default || findByName("T
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
 
-// Fully re-aligned mapping based on your last corrections
 const getDisplayFont = (fontId: number) => {
   switch (fontId) {
     case 1: return "ggsans-Semibold"; 
@@ -62,6 +65,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
       );
 
       const openScreenshotPreview = () => {
+        const viewRef = React.useRef(null);
+
         const Sandbox = () => {
           const [text, setText] = React.useState(initialContent || "");
 
@@ -76,7 +81,12 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 style={{ color: "#fff", backgroundColor: "rgba(255,255,255,0.07)", padding: 12, borderRadius: 8, marginBottom: 20, fontFamily: "ggsans-Medium" }}
               />
               
-              <RN.View style={{ paddingVertical: 12, paddingHorizontal: 14, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
+              {/* This is the part we capture */}
+              <RN.View 
+                ref={viewRef} 
+                collapsable={false}
+                style={{ paddingVertical: 12, paddingHorizontal: 14, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}
+              >
                 <RN.View style={{ width: 40, height: 40, marginRight: 10 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
                   {decorationData && (
@@ -90,13 +100,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 <RN.View style={{ flex: 1 }}>
                   <RN.View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 0 }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
-                      <RN.Text 
-                        numberOfLines={1} 
-                        ellipsizeMode="tail"
-                        style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, includeFontPadding: false, flexShrink: 1 }}
-                      >
-                        {displayName}
-                      </RN.Text>
+                      <RN.Text style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, includeFontPadding: false, flexShrink: 1 }}>{displayName}</RN.Text>
                       {guildTag && (
                         <RN.View style={{ backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 5, borderRadius: 4, marginLeft: 6, flexDirection: "row", alignItems: "center", height: 18 }}>
                           {guildBadgeUrl && <RN.Image source={{ uri: guildBadgeUrl }} style={{ width: 12, height: 12, marginRight: 3 }} />}
@@ -113,30 +117,52 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           );
         };
 
+        const handleSave = async () => {
+          if (!viewRef.current || !captureRef) {
+            showToast("Error: Capture utility not found", getAssetIDByName("Small"));
+            return;
+          }
+
+          try {
+            const uri = await captureRef(viewRef.current, {
+              format: "png",
+              quality: 1.0,
+            });
+            
+            if (CameraRoll?.save) {
+               await CameraRoll.save(uri, { type: 'photo' });
+            } else {
+               // Fallback if CameraRoll isn't directly available
+               showToast("Screenshot captured to " + uri, getAssetIDByName("Check"));
+            }
+            showToast("Saved to Gallery", getAssetIDByName("Check"));
+          } catch (e) {
+            showToast("Failed to save image", getAssetIDByName("Small"));
+          }
+        };
+
         showConfirmationAlert({
           title: "Screenshot Preview",
-          confirmText: "Done",
-          onConfirm: () => {},
+          confirmText: "Save Image",
+          cancelText: "Close",
+          onConfirm: handleSave,
           // @ts-expect-error
           children: <Sandbox />,
         });
         LazyActionSheet.hideActionSheet();
       };
 
+      // ... [Injection logic for IdIcon and PencilIcon remains the same]
       if (actionSheetContainer && actionSheetContainer[1]) {
         const group = actionSheetContainer[1];
         const ActionSheetRow = group.props.children[0].type;
         const baseIcon = group.props.children[0].props.icon;
-
         const createIcon = (name: string) => ({
-          $$typeof: baseIcon.$$typeof,
-          type: baseIcon.type,
-          key: null,
-          ref: null,
+          $$typeof: baseIcon.$$typeof, type: baseIcon.type, key: null, ref: null,
           props: { source: getAssetIDByName(name) },
         });
 
-        const copyButton = (
+        group.props.children.push(
           <ActionSheetRow
             key="copy-message-id"
             label="Copy Message ID"
@@ -146,10 +172,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
               showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
               LazyActionSheet.hideActionSheet();
             }}
-          />
-        );
-
-        const previewButton = (
+          />,
           <ActionSheetRow
             key="screenshot-preview"
             label="Screenshot Preview"
@@ -157,8 +180,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
             onPress={openScreenshotPreview}
           />
         );
-
-        group.props.children.push(copyButton, previewButton);
       }
     });
   });
