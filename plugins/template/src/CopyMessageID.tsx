@@ -8,13 +8,10 @@ import { showToast } from "@vendetta/ui/toasts";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
-const { FormRow } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
-
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
 
-// Helper to get Discord's emoji URL from a unicode character
 const getEmojiURL = (char: string) => {
   const codePoints = Array.from(char).map(c => c.codePointAt(0)?.toString(16)).join("-");
   return `https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/${codePoints}.png`;
@@ -33,15 +30,19 @@ const getDisplayFont = (fontId: number) => {
   }
 };
 
-const DiscordText = ({ text, style }: { text: string, style: any }) => {
-  // Simple regex to catch standard emojis. 
-  // Custom emojis would use <:name:id> logic, but this fixes your "thumbs up" issue.
+const DiscordText = ({ text, style, selfName }: { text: string, style: any, selfName: string }) => {
   const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g;
-  const parts = text.split(emojiRegex);
+  const mentionRegex = /(@[^\s]+)/g;
+
+  // Split by both emojis and mentions
+  const parts = text.split(/(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]|@[^\s]+)/g);
 
   return (
     <RN.Text style={style}>
       {parts.map((part, i) => {
+        if (!part) return null;
+
+        // Emoji Match
         if (emojiRegex.test(part)) {
           return (
             <RN.Image 
@@ -51,6 +52,27 @@ const DiscordText = ({ text, style }: { text: string, style: any }) => {
             />
           );
         }
+
+        // Mention Match
+        if (mentionRegex.test(part)) {
+          // Strict Case Sensitivity for the selfName check
+          const isHighlight = part === "@everyone" || part === "@here" || part === `@${selfName}`;
+          return (
+            <RN.Text 
+              key={i} 
+              style={{ 
+                backgroundColor: isHighlight ? "rgba(250, 166, 26, 0.1)" : "rgba(88, 101, 242, 0.15)",
+                color: isHighlight ? "#f0b132" : "#dee0fc",
+                fontFamily: "ggsans-Medium",
+                borderRadius: 3,
+                paddingHorizontal: 2
+              }}
+            >
+              {part}
+            </RN.Text>
+          );
+        }
+
         return part;
       })}
     </RN.Text>
@@ -68,7 +90,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const displayName = member?.nick || author.globalName || author.username;
   const avatarUrl = author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
   const decorationData = author.avatarDecorationData;
-
   const primaryGuild = author.primaryGuild;
   const guildTag = primaryGuild?.tag;
   const guildBadgeUrl = primaryGuild?.badge 
@@ -90,6 +111,9 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
       const openScreenshotPreview = () => {
         const Sandbox = () => {
           const [text, setText] = React.useState(message.content || "");
+          
+          // Determine if the whole message should have the yellow highlight background (Case Sensitive)
+          const isGlobalPing = text.includes("@everyone") || text.includes("@here") || text.includes(`@${displayName}`);
 
           return (
             <RN.View style={{ marginTop: 10 }}>
@@ -102,7 +126,15 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 style={{ color: "#fff", backgroundColor: "rgba(255,255,255,0.07)", padding: 12, borderRadius: 8, marginBottom: 20, fontFamily: "ggsans-Medium" }}
               />
 
-              <RN.View style={{ paddingVertical: 12, paddingHorizontal: 14, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
+              <RN.View style={{ 
+                paddingVertical: 12, 
+                paddingHorizontal: 14, 
+                backgroundColor: isGlobalPing ? "rgba(250, 166, 26, 0.05)" : "#313338", 
+                borderRadius: 8, 
+                flexDirection: "row",
+                borderLeftWidth: isGlobalPing ? 2 : 0,
+                borderLeftColor: "#faa61a"
+              }}>
                 <RN.View style={{ width: 40, height: 40, marginRight: 10 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
                   {decorationData && (
@@ -114,31 +146,25 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 </RN.View>
 
                 <RN.View style={{ flex: 1 }}>
-                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2, justifyContent: "flex-start" }}>
+                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2 }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
-                      <RN.Text 
-                        numberOfLines={1} 
-                        style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, includeFontPadding: false, flexShrink: 1 }}
-                      >
+                      <RN.Text numberOfLines={1} style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, flexShrink: 1 }}>
                         {displayName}
                       </RN.Text>
-
                       {guildTag && (
                         <RN.View style={{ backgroundColor: "rgba(255,255,255,0.12)", paddingHorizontal: 5, borderRadius: 4, marginLeft: 6, flexDirection: "row", alignItems: "center", height: 18, flexShrink: 0 }}>
                           {guildBadgeUrl && <RN.Image source={{ uri: guildBadgeUrl }} style={{ width: 12, height: 12, marginRight: 3 }} />}
-                          <RN.Text style={{ color: "#caccce", fontSize: 11, fontFamily: "ggsans-Semibold", includeFontPadding: false }}>{guildTag}</RN.Text>
+                          <RN.Text style={{ color: "#caccce", fontSize: 11, fontFamily: "ggsans-Semibold" }}>{guildTag}</RN.Text>
                         </RN.View>
                       )}
                     </RN.View>
-                    <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, fontFamily: "ggsans-Medium", includeFontPadding: false, flexShrink: 0 }}>
-                      1:37 PM
-                    </RN.Text>
+                    <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, flexShrink: 0 }}>1:37 PM</RN.Text>
                   </RN.View>
 
-                  {/* Only affecting content here */}
                   <DiscordText 
                     text={text || " "} 
-                    style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium", includeFontPadding: false }} 
+                    selfName={displayName}
+                    style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium" }} 
                   />
                 </RN.View>
               </RN.View>
