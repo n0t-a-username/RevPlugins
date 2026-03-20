@@ -7,10 +7,6 @@ import { Forms } from "@vendetta/ui/components";
 import { showToast } from "@vendetta/ui/toasts";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 
-// Safer module lookups
-const ViewShot = findByProps("captureRef");
-const MediaEditor = findByProps("saveToCameraRoll") || findByProps("save");
-
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
@@ -48,8 +44,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
       React.useEffect(() => () => unpatchInner(), []);
 
       const openScreenshotPreview = () => {
-        const viewRef = React.useRef(null);
-
+        // We define the component outside the showConfirmationAlert to keep it clean
         const Sandbox = () => {
           const [text, setText] = React.useState(message.content || "");
           return (
@@ -58,52 +53,37 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 value={text}
                 placeholder="Edit message..."
                 onChange={(v: any) => setText(v?.nativeEvent?.text ?? v ?? "")}
-                multiline={true} autoFocus={true}
+                multiline={true}
+                autoFocus={true}
                 style={{ color: "#fff", backgroundColor: "rgba(255,255,255,0.07)", padding: 12, borderRadius: 8, marginBottom: 20, fontFamily: "ggsans-Medium" }}
               />
-              <RN.View ref={viewRef} collapsable={false} style={{ paddingVertical: 12, paddingHorizontal: 14, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
+              {/* No Refs here to prevent native memory leaks/crashes */}
+              <RN.View style={{ paddingVertical: 12, paddingHorizontal: 14, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
                 <RN.View style={{ width: 40, height: 40, marginRight: 10 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
                 </RN.View>
                 <RN.View style={{ flex: 1 }}>
-                  <RN.View style={{ flexDirection: "row", alignItems: "baseline" }}>
+                  <RN.View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 0 }}>
                     <RN.Text style={{ color: roleColor, fontFamily: nameFont, fontSize: 16 }}>{displayName}</RN.Text>
-                    <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8 }}>1:37 PM</RN.Text>
+                    <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, fontFamily: "ggsans-Medium" }}>1:37 PM</RN.Text>
                   </RN.View>
-                  <RN.Text style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium" }}>{text || " "}</RN.Text>
+                  <RN.Text style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium", paddingBottom: 4 }}>{text || " "}</RN.Text>
                 </RN.View>
               </RN.View>
             </RN.View>
           );
         };
 
-        const handleSave = async () => {
-          if (!ViewShot?.captureRef) return showToast("Capture not supported", getAssetIDByName("Small"));
-          
-          // Small delay to prevent layout racing/crashing
-          setTimeout(async () => {
-            try {
-              const uri = await ViewShot.captureRef(viewRef.current, { format: "png", quality: 1.0 });
-              if (MediaEditor?.save) {
-                await MediaEditor.save(uri, "photo");
-                showToast("Saved to Gallery", getAssetIDByName("Check"));
-              } else {
-                showToast("Captured: " + uri.split('/').pop(), getAssetIDByName("Check"));
-              }
-            } catch (e) {
-              showToast("Capture failed", getAssetIDByName("Small"));
-            }
-          }, 150);
-        };
-
+        // If captureRef crashes, we simply allow the user to view/edit and screenshot manually
         showConfirmationAlert({
           title: "Screenshot Preview",
-          confirmText: "Save",
-          cancelText: "Close",
-          onConfirm: handleSave,
+          content: "Adjust your text and take a manual screenshot. Native saving is disabled to prevent crashes.",
+          confirmText: "Done",
           // @ts-expect-error
           children: <Sandbox />,
+          onConfirm: () => {}
         });
+        
         LazyActionSheet.hideActionSheet();
       };
 
