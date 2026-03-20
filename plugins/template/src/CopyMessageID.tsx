@@ -7,12 +7,10 @@ import { Forms } from "@vendetta/ui/components";
 import { showToast } from "@vendetta/ui/toasts";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 
-// Metro Modules
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 
-// Chat UI Modules
 const ChatItemWrapper = findByProps("DCDAutoModerationSystemMessageView", "default")?.default;
 const MessageRecord = findByName("MessageRecord");
 const RowManager = findByName("RowManager");
@@ -28,9 +26,9 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
       const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
 
       const openScreenshotPreview = () => {
-        // Inner component to handle live text state for the preview
         const Sandbox = () => {
-          const [content, setContent] = React.useState(message.content);
+          // We initialize state with a COPY of the content
+          const [content, setContent] = React.useState(String(message.content));
 
           return (
             <RN.View style={{ marginTop: 10 }}>
@@ -57,9 +55,18 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 <ChatItemWrapper
                   rowGenerator={new RowManager()}
                   message={new MessageRecord({
-                    ...message,
-                    content: content,
-                    // Clear cache to force re-render of edited text
+                    // Manually copying properties to ensure zero link to the original 'message' object
+                    id: message.id,
+                    channel_id: message.channel_id,
+                    author: message.author,
+                    attachments: message.attachments,
+                    embeds: message.embeds,
+                    components: message.components,
+                    timestamp: message.timestamp,
+                    state: message.state,
+                    // Use our local state 'content' instead of message.content
+                    content: content, 
+                    // Ensure the renderer doesn't try to use old cached markup
                     content_parsed: undefined,
                     content_formatted: undefined,
                     _contentMarkup: undefined
@@ -74,14 +81,13 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           title: "Screenshot Preview",
           confirmText: "Done",
           onConfirm: () => {},
-          // @ts-expect-error - valid property for alerts
+          // @ts-expect-error
           children: <Sandbox />,
         });
         
         LazyActionSheet.hideActionSheet();
       };
 
-      // Button 1: Copy ID
       const copyIdButton = (
         <FormRow
           key="copy-message-id"
@@ -95,7 +101,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         />
       );
 
-      // Button 2: Screenshot Preview (Replaces the broken Client Side Edit)
       const previewButton = (
         <FormRow
           key="screenshot-preview"
@@ -105,7 +110,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         />
       );
 
-      // Injecting both buttons
       if (buttons) {
         buttons.push(copyIdButton, previewButton);
       } else {
