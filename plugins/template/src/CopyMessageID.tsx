@@ -13,10 +13,11 @@ const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 const MessageStore = findByProps("getMessage");
 
-// Map to keep track of our "fake" edits so they persist across channel swaps
-const localEdits = new Map();
+// Session storage for edits
+const localEdits = new Map<string, string>();
 
 // 1. Persistent Patch: Intercepts message data before it hits the UI
+// This ensures edits stick when switching channels
 const unpatchStore = MessageStore ? after("getMessage", MessageStore, ([channelId, messageId], message) => {
   if (message && localEdits.has(messageId)) {
     message.content = localEdits.get(messageId);
@@ -42,17 +43,13 @@ const unpatchActionSheet = before("openLazy", LazyActionSheet, ([component, key,
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
-            // Save to our persistent map
             localEdits.set(message.id, currentText);
-            
-            // Update the object in-place so the current view refreshes
             message.content = currentText;
-
             showToast("Local edit applied!", getAssetIDByName("Check"));
           },
           children: React.createElement(TextInput, {
             defaultValue: message.content,
-            onChange: (v) => (currentText = v),
+            onChange: (v: string) => (currentText = v),
             placeholder: "Enter new text...",
             autoFocus: true,
             style: { color: "#fff", marginTop: 10 }
