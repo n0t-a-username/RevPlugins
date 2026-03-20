@@ -57,14 +57,16 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
             <RN.Text 
               key={i} 
               style={{ 
-                backgroundColor: isHighlight ? "rgba(250, 166, 26, 0.1)" : "rgba(88, 101, 242, 0.15)",
-                // Keep text color same as base style (#dee0fc) for all pings
+                // Solid-feeling background to prevent mixing with the container background
+                backgroundColor: isHighlight ? "rgba(250, 166, 26, 0.15)" : "rgba(88, 101, 242, 0.3)",
                 color: "#dee0fc",
                 fontFamily: "ggsans-Medium",
                 borderRadius: 4,
-                paddingHorizontal: 2,
-                // Extend highlight downward
-                paddingBottom: 2
+                paddingHorizontal: 4,
+                // These properties help push the highlight lower
+                paddingTop: 1,
+                paddingBottom: 3, 
+                includeFontPadding: false,
               }}
             >
               {part}
@@ -129,18 +131,18 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 backgroundColor: isGlobalPing ? "rgba(250, 166, 26, 0.05)" : "#313338", 
                 borderRadius: 8, 
                 flexDirection: "row",
-                overflow: "hidden" // Keeps absolute line inside the box
+                overflow: "hidden"
               }}>
-                {/* Thicker Yellow Line (Absolute so it doesn't push content) */}
+                {/* 4px Vertical line only (no corner wrap) */}
                 {isGlobalPing && (
                   <RN.View style={{
                     position: "absolute",
                     left: 0,
                     top: 0,
                     bottom: 0,
-                    width: 4, // Slightly thicker
+                    width: 4,
                     backgroundColor: "#faa61a",
-                    zIndex: 2
+                    zIndex: 10
                   }} />
                 )}
 
@@ -173,7 +175,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                   <DiscordText 
                     text={text || " "} 
                     selfName={displayName}
-                    style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium" }} 
+                    style={{ color: "#dbdee1", fontSize: 16, lineHeight: 22, fontFamily: "ggsans-Medium" }} 
                   />
                 </RN.View>
               </RN.View>
