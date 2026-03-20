@@ -2,7 +2,7 @@ import { before, after } from "@vendetta/patcher";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { findInReactTree } from "@vendetta/utils";
 import { findByProps, findByName } from "@vendetta/metro";
-import { React, clipboard, ReactNative as RN } from "@vendetta/metro/common";
+import { React, clipboard, ReactNative as RN, storage } from "@vendetta/metro/common";
 import { Forms } from "@vendetta/ui/components";
 import { showToast } from "@vendetta/ui/toasts";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
@@ -13,6 +13,11 @@ const TextInput = findByProps("render", "displayName")?.default || findByName("T
 
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
+
+// Initialize favorites storage if it doesn't exist
+if (!Array.isArray(storage.favorites)) {
+  storage.favorites = [];
+}
 
 const getDisplayFont = (fontId: number) => {
   switch (fontId) {
@@ -47,6 +52,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const fontId = author?.displayNameStyles?.fontId;
   const nameFont = (fontId !== undefined && fontId !== null) ? getDisplayFont(fontId) : "ggsans-Semibold";
   const roleColor = member?.colorString || "#ffffff"; 
+  const initialContent = message.content;
 
   component.then((instance) => {
     const unpatchInner = after("default", instance, (_, component) => {
@@ -58,7 +64,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
       const openScreenshotPreview = () => {
         const Sandbox = () => {
-          const [text, setText] = React.useState(message.content || "");
+          const [text, setText] = React.useState(initialContent || "");
 
           return (
             <RN.View style={{ marginTop: 10 }}>
@@ -83,7 +89,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 </RN.View>
                 
                 <RN.View style={{ flex: 1 }}>
-                  {/* Header: Name and Tag shrink to protect the Time space */}
                   <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 2, justifyContent: "flex-start" }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
                       <RN.Text 
@@ -102,7 +107,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                       )}
                     </RN.View>
 
-                    {/* Time is fixed with flex-shrink 0 so it never hides */}
                     <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, fontFamily: "ggsans-Medium", includeFontPadding: false, flexShrink: 0 }}>
                       1:37 PM
                     </RN.Text>
@@ -123,6 +127,33 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           onConfirm: () => {},
           // @ts-expect-error
           children: <Sandbox />,
+        });
+        LazyActionSheet.hideActionSheet();
+      };
+
+      const openFavoritePrompt = () => {
+        const favoriteData = {
+          id: message.id,
+          channelId: message.channel_id,
+          guildId: guildId,
+          content: message.content,
+          authorName: displayName,
+          authorAvatar: avatarUrl,
+        };
+
+        showConfirmationAlert({
+          title: "Favorite Message",
+          content: `Save this message from ${displayName} to your favorites?`,
+          confirmText: "Favorite",
+          cancelText: "Cancel",
+          onConfirm: () => {
+            if (!storage.favorites.find(f => f.id === message.id)) {
+              storage.favorites.push(favoriteData);
+              showToast("Added to Favorites", getAssetIDByName("Check"));
+            } else {
+              showToast("Already in Favorites", getAssetIDByName("Small"));
+            }
+          }
         });
         LazyActionSheet.hideActionSheet();
       };
@@ -148,6 +179,12 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
               showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
               LazyActionSheet.hideActionSheet();
             }}
+          />,
+          <ActionSheetRow
+            key="favorite-msg"
+            label="Favorite Message"
+            icon={createIcon("HeartIcon")}
+            onPress={openFavoritePrompt}
           />,
           <ActionSheetRow
             key="preview"
