@@ -31,25 +31,27 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
-            // 1. Update the raw content
+            // 1. Create the spoofed object with cleared internal markup to prevent crashes
+            const spoofedMessage = {
+              ...message,
+              content: currentText,
+              content_parsed: undefined,
+              content_formatted: undefined,
+              _contentMarkup: undefined,
+              contentParsed: undefined,
+              contentFormatted: undefined
+            };
+
+            // 2. Keep the original reference in sync for the next time the modal opens
             message.content = currentText;
 
-            // 2. NUKE THE CACHE
-            // These are the hidden properties Discord uses to store pre-parsed text.
-            // Deleting them forces the renderer to re-parse your new string safely.
-            delete message.content_parsed;
-            delete message.content_formatted;
-            delete message._contentMarkup;
-            delete message.contentFormatted;
-            delete message.contentParsed;
-
-            // 3. Trigger UI Redraw
+            // 3. Dispatch the update to force the UI to redraw with the new text
             Dispatcher.dispatch({
               type: "MESSAGE_UPDATE",
-              message: message,
+              message: spoofedMessage,
             });
 
-            showToast("Spoofed!", getAssetIDByName("Check"));
+            showToast("Content spoofed!", getAssetIDByName("Check"));
           },
           children: React.createElement(TextInput, {
             defaultValue: message.content,
@@ -62,6 +64,21 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         LazyActionSheet.hideActionSheet();
       };
 
+      // Button 1: Copy ID
+      const copyIdButton = (
+        <FormRow
+          key="copy-message-id"
+          label="Copy Message ID"
+          leading={<FormIcon source={getAssetIDByName("IdIcon")} />}
+          onPress={() => {
+            clipboard.setString(String(message.id));
+            showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
+            LazyActionSheet.hideActionSheet();
+          }}
+        />
+      );
+
+      // Button 2: Client Side Edit
       const clientEditButton = (
         <FormRow
           key="client-side-edit"
@@ -71,14 +88,15 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         />
       );
 
+      // Injecting both buttons
       if (buttons) {
-        buttons.push(clientEditButton);
+        buttons.push(copyIdButton, clientEditButton);
       } else {
         const actionSheetContainer = findInReactTree(component, (x) => 
           Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup"
         );
         if (actionSheetContainer?.[1]) {
-          actionSheetContainer[1].props.children.push(clientEditButton);
+          actionSheetContainer[1].props.children.push(copyIdButton, clientEditButton);
         }
       }
     });
