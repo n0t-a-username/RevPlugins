@@ -8,15 +8,17 @@ import { showToast } from "@vendetta/ui/toasts";
 import { showConfirmationAlert } from "@vendetta/ui/alerts";
 
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
-const { FormRow, FormIcon } = Forms;
+const { FormRow } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
 
-// Discord's internal markdown/emoji renderer
-const Markdown = findByProps("render", "unparse") || findByProps("parse", "output");
-const MessageContent = findByProps("MessageContent")?.MessageContent || findByName("MessageContent");
+// Helper to get Discord's emoji URL from a unicode character
+const getEmojiURL = (char: string) => {
+  const codePoints = Array.from(char).map(c => c.codePointAt(0)?.toString(16)).join("-");
+  return `https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/${codePoints}.png`;
+};
 
 const getDisplayFont = (fontId: number) => {
   switch (fontId) {
@@ -29,6 +31,30 @@ const getDisplayFont = (fontId: number) => {
     case 10: return "Sinistre-Normal";
     default: return "ggsans-Semibold";
   }
+};
+
+const DiscordText = ({ text, style }: { text: string, style: any }) => {
+  // Simple regex to catch standard emojis. 
+  // Custom emojis would use <:name:id> logic, but this fixes your "thumbs up" issue.
+  const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g;
+  const parts = text.split(emojiRegex);
+
+  return (
+    <RN.Text style={style}>
+      {parts.map((part, i) => {
+        if (emojiRegex.test(part)) {
+          return (
+            <RN.Image 
+              key={i}
+              source={{ uri: getEmojiURL(part) }} 
+              style={{ width: 20, height: 20, transform: [{ translateY: 4 }] }} 
+            />
+          );
+        }
+        return part;
+      })}
+    </RN.Text>
+  );
 };
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
@@ -92,7 +118,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
                       <RN.Text 
                         numberOfLines={1} 
-                        ellipsizeMode="tail"
                         style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, includeFontPadding: false, flexShrink: 1 }}
                       >
                         {displayName}
@@ -105,27 +130,16 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                         </RN.View>
                       )}
                     </RN.View>
-
                     <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, fontFamily: "ggsans-Medium", includeFontPadding: false, flexShrink: 0 }}>
                       1:37 PM
                     </RN.Text>
                   </RN.View>
 
-                  {/* Targeting ONLY message content:
-                      Using Discord's MessageContent component ensures emojis are rendered 
-                      via Discord's CDN rather than system font glyphs.
-                  */}
-                  {MessageContent ? (
-                    <MessageContent 
-                      message={{ ...message, content: text }} 
-                      content={text}
-                      style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium" }}
-                    />
-                  ) : (
-                    <RN.Text style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium" }}>
-                      {text || " "}
-                    </RN.Text>
-                  )}
+                  {/* Only affecting content here */}
+                  <DiscordText 
+                    text={text || " "} 
+                    style={{ color: "#dbdee1", fontSize: 16, lineHeight: 20, fontFamily: "ggsans-Medium", includeFontPadding: false }} 
+                  />
                 </RN.View>
               </RN.View>
             </RN.View>
