@@ -11,15 +11,17 @@ const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
-const Dispatcher = findByProps("dispatch", "subscribe");
 const MessageStore = findByProps("getMessage");
 
-// Map to keep track of our "fake" edits so they persist across channel swaps
+// Session storage for edits
 const localEdits = new Map();
 
-// This ensures the message stays edited when you scroll away and back
+// 1. The ONLY way we change the message. 
+// This intercepts the message whenever Discord tries to display it.
 const unpatchStore = MessageStore ? after("getMessage", MessageStore, ([channelId, messageId], message) => {
   if (message && localEdits.has(messageId)) {
+    // We modify the content property of the existing object directly.
+    // This is safer than Dispatcher because it preserves all other metadata.
     message.content = localEdits.get(messageId);
   }
   return message;
@@ -43,21 +45,13 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
-            // Save to our persistent map
+            // Update the map
             localEdits.set(message.id, currentText);
+            
+            // Manually update the current object so the UI refreshes immediately
             message.content = currentText;
 
-            // Update UI safely - only send the essential fields
-            Dispatcher.dispatch({
-              type: "MESSAGE_UPDATE",
-              message: {
-                id: message.id,
-                channel_id: message.channel_id,
-                content: currentText,
-              },
-            });
-
-            showToast("Local edit applied!", getAssetIDByName("Check"));
+            showToast("Edit applied locally", getAssetIDByName("Check"));
           },
           children: React.createElement(TextInput, {
             defaultValue: message.content,
@@ -94,13 +88,15 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
       if (buttons) {
         buttons.push(copyIdButton, clientEditButton);
-      } else {
-        const actionSheetContainer = findInReactTree(component, (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup");
-        if (actionSheetContainer?.[1]) {
-          actionSheetContainer[1].props.children.push(copyIdButton, clientEditButton);
-        }
       }
     });
+  });
+});
+
+export const onUnload = () => {
+  unpatch();
+  if (unpatchStore) unpatchStore();
+};
   });
 });
 
