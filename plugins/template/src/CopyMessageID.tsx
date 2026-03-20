@@ -22,11 +22,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const member = guildId ? GuildMemberStore.getMember(guildId, message.author.id) : null;
 
   const displayName = member?.nick || message.author.globalName || message.author.username;
-  const avatarUrl = member?.avatar 
-    ? `https://cdn.discordapp.com/guilds/${guildId}/users/${message.author.id}/avatars/${member.avatar}.png`
-    : message.author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
+  const avatarUrl = message.author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
 
-  // --- Identity Extras ---
   const author = message.author;
   const decorationData = author.avatarDecorationData;
   const primaryGuild = author.primaryGuild;
@@ -42,62 +39,25 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
     const unpatchInner = after("default", instance, (_, component) => {
       React.useEffect(() => () => unpatchInner(), []);
 
-      // Your working button detection
-      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
+      // Ensure proper button background styling
+      const ActionSheetRow = findByProps("ActionSheetRow")?.ActionSheetRow || FormRow;
 
       const openScreenshotPreview = () => {
         const Sandbox = () => {
           const [text, setText] = React.useState(initialContent || "");
-
-          const handleTextChange = (v: any) => {
-            if (typeof v === "string") setText(v);
-            else if (v?.nativeEvent?.text !== undefined) setText(v.nativeEvent.text);
-          };
-
-          const NameAndTag = (
-            <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
-              <RN.Text 
-                numberOfLines={1} 
-                ellipsizeMode="tail"
-                style={{ color: roleColor, fontWeight: "700", fontSize: 15, includeFontPadding: false, flexShrink: 1 }}
-              >
-                {displayName}
-              </RN.Text>
-              
-              {guildTag && (
-                <RN.View style={{ 
-                  backgroundColor: "rgba(255,255,255,0.1)", 
-                  paddingHorizontal: 3, // Tightened
-                  borderRadius: 4, 
-                  marginLeft: 4, 
-                  flexShrink: 0,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  height: 14 // Tightened
-                }}>
-                  {guildBadgeUrl && (
-                    <RN.Image source={{ uri: guildBadgeUrl }} style={{ width: 10, height: 10, marginRight: 2 }} />
-                  )}
-                  <RN.Text style={{ color: "#caccce", fontSize: 9, fontWeight: "700", includeFontPadding: false }}>
-                    {guildTag}
-                  </RN.Text>
-                </RN.View>
-              )}
-            </RN.View>
-          );
 
           return (
             <RN.View style={{ marginTop: 10 }}>
               <TextInput
                 value={text}
                 placeholder="Edit message..."
-                onChange={handleTextChange}
+                onChange={(v: any) => setText(v?.nativeEvent?.text ?? v ?? "")}
                 multiline={true}
                 autoFocus={true}
                 style={{ color: "#fff", backgroundColor: "rgba(255,255,255,0.07)", padding: 12, borderRadius: 8, marginBottom: 20 }}
               />
               
-              <RN.View style={{ paddingVertical: 10, paddingHorizontal: 12, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
+              <RN.View style={{ paddingVertical: 12, paddingHorizontal: 14, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
                 <RN.View style={{ width: 40, height: 40, marginRight: 14 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
                   {decorationData && (
@@ -109,15 +69,48 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 </RN.View>
                 
                 <RN.View style={{ flex: 1 }}>
-                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 1 }}>
-                    {NameAndTag}
+                  <RN.View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 2 }}>
+                    <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
+                      <RN.Text 
+                        numberOfLines={1} 
+                        ellipsizeMode="tail"
+                        style={{ color: roleColor, fontWeight: "700", fontSize: 16, includeFontPadding: false, flexShrink: 1 }}
+                      >
+                        {displayName}
+                      </RN.Text>
+                      
+                      {guildTag && (
+                        <RN.View style={{ 
+                          backgroundColor: "rgba(255,255,255,0.12)", 
+                          paddingHorizontal: 5, 
+                          borderRadius: 4, 
+                          marginLeft: 6, 
+                          flexDirection: "row",
+                          alignItems: "center",
+                          height: 18 // Incremented height for "wee bit taller" look
+                        }}>
+                          {guildBadgeUrl && (
+                            <RN.Image source={{ uri: guildBadgeUrl }} style={{ width: 12, height: 12, marginRight: 3 }} />
+                          )}
+                          <RN.Text style={{ color: "#caccce", fontSize: 11, fontWeight: "700", includeFontPadding: false }}>
+                            {guildTag}
+                          </RN.Text>
+                        </RN.View>
+                      )}
+                    </RN.View>
 
-                    <RN.Text style={{ color: "#949ba4", fontSize: 11, marginLeft: 6, flexShrink: 0, includeFontPadding: false }}>
+                    <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, flexShrink: 0, includeFontPadding: false }}>
                       1:37 PM
                     </RN.Text>
                   </RN.View>
 
-                  <RN.Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 18, includeFontPadding: false }}>
+                  <RN.Text style={{ 
+                    color: "#dbdee1", 
+                    fontSize: 16, 
+                    lineHeight: 22, 
+                    paddingBottom: 4, // Extra clearance for descenders (y, g, p)
+                    includeFontPadding: false 
+                  }}>
                     {text || " "}
                   </RN.Text>
                 </RN.View>
@@ -138,7 +131,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
       };
 
       const previewButton = (
-        <FormRow
+        <ActionSheetRow
           key="screenshot-preview"
           label="Screenshot Preview"
           leading={<FormIcon source={getAssetIDByName("eye")} />}
@@ -147,7 +140,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
       );
 
       const copyIdButton = (
-        <FormRow
+        <ActionSheetRow
           key="copy-message-id"
           label="Copy Message ID"
           leading={<FormIcon source={getAssetIDByName("copy")} />}
@@ -159,15 +152,15 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         />
       );
 
-      if (buttons) {
-        buttons.push(copyIdButton, previewButton);
+      const actionSheetContainer = findInReactTree(component, (x) => 
+        Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup"
+      );
+
+      if (actionSheetContainer?.[1]) {
+        actionSheetContainer[1].props.children.push(copyIdButton, previewButton);
       } else {
-        const actionSheetContainer = findInReactTree(component, (x) => 
-          Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup"
-        );
-        if (actionSheetContainer?.[1]) {
-          actionSheetContainer[1].props.children.push(copyIdButton, previewButton);
-        }
+        const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
+        if (buttons) buttons.push(copyIdButton, previewButton);
       }
     });
   });
