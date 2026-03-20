@@ -15,6 +15,7 @@ const Dispatcher = findByProps("dispatch", "subscribe");
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
+  // This ensures we are only touching the message object you showed me
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
   component.then((instance) => {
@@ -34,25 +35,22 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
-            // 1. Update the actual properties that Discord's renderer looks at
+            // 1. DIRECT SPOOF: Modify the content key in the actual object
             message.content = currentText;
-            
-            // Some newer builds use 'content_formatted' or 'content_parsed' 
-            // for the actual display. We spoof those too just in case.
-            if (message.content_formatted) message.content_formatted = currentText;
 
-            // 2. The "UI Poke": This tells the Dispatcher to refresh this specific message
-            // We pass the edited object directly to avoid the "vanishing" bug.
+            // 2. RE-RENDER TRIGGER: 
+            // We dispatch an update using the same message object.
+            // This forces the UI to look at message.content again.
             Dispatcher.dispatch({
               type: "MESSAGE_UPDATE",
               message: message,
             });
 
-            showToast("Text spoofed!", getAssetIDByName("Check"));
+            showToast("Content spoofed!", getAssetIDByName("Check"));
           },
           children: React.createElement(TextInput, {
             defaultValue: message.content,
-            onChange: (v) => (currentText = v),
+            onChange: (v: string) => (currentText = v),
             placeholder: "Enter new text...",
             autoFocus: true,
             style: { color: "#fff", marginTop: 10 }
@@ -83,6 +81,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         />
       );
 
+      // Using your working button injection logic
       if (buttons) {
         buttons.push(copyIdButton, clientEditButton);
       } else {
