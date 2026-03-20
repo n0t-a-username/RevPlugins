@@ -37,7 +37,7 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
   const parts = text.split(/(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]|@[^\s]+)/g);
 
   return (
-    <RN.Text style={style}>
+    <RN.View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center" }}>
       {parts.map((part, i) => {
         if (!part) return null;
 
@@ -46,33 +46,35 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
             <RN.Image 
               key={i}
               source={{ uri: getEmojiURL(part) }} 
-              style={{ width: 20, height: 20, transform: [{ translateY: 4 }] }} 
+              style={{ width: 20, height: 20, marginHorizontal: 1 }} 
             />
           );
         }
 
         if (mentionRegex.test(part)) {
-          const isHighlight = part === "@everyone" || part === "@here" || part === `@${selfName}`;
           return (
             <RN.View key={i} style={{ 
-                backgroundColor: isHighlight ? "#4d402b" : "#3e4471", 
+                backgroundColor: "#3e4471", // Locked to blue highlight
                 borderRadius: 3, 
                 paddingHorizontal: 4, 
-                paddingVertical: 0,
-                marginBottom: -4, // Pulls the highlight down slightly
-                display: "flex",
-                justifyContent: "center"
+                height: 20,
+                justifyContent: "center",
+                marginHorizontal: 1
             }}>
-                <RN.Text style={{ color: "#dee0fc", fontFamily: "ggsans-Medium", fontSize: 15 }}>
+                <RN.Text style={{ color: "#dee0fc", fontFamily: "ggsans-Medium", fontSize: 15, includeFontPadding: false }}>
                     {part}
                 </RN.Text>
             </RN.View>
           );
         }
 
-        return part;
+        return (
+          <RN.Text key={i} style={style}>
+            {part}
+          </RN.Text>
+        );
       })}
-    </RN.Text>
+    </RN.View>
   );
 };
 
@@ -122,7 +124,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
               />
 
               <RN.View style={{ 
-                paddingVertical: 10, // Refined vertical padding
+                paddingVertical: 10, 
                 paddingHorizontal: 14, 
                 backgroundColor: isGlobalPing ? "rgba(250, 166, 26, 0.05)" : "#313338", 
                 borderRadius: 8, 
@@ -152,7 +154,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 </RN.View>
 
                 <RN.View style={{ flex: 1 }}>
-                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 0 }}>
+                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: -1 }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
                       <RN.Text numberOfLines={1} style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, flexShrink: 1 }}>
                         {displayName}
@@ -167,13 +169,11 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                     <RN.Text style={{ color: "#949ba4", fontSize: 12, marginLeft: 8, flexShrink: 0 }}>1:37 PM</RN.Text>
                   </RN.View>
 
-                  <RN.View style={{ marginTop: -2 }}> 
-                    <DiscordText 
-                      text={text || " "} 
-                      selfName={displayName}
-                      style={{ color: "#dbdee1", fontSize: 16, lineHeight: 22, fontFamily: "ggsans-Medium" }} 
-                    />
-                  </RN.View>
+                  <DiscordText 
+                    text={text || " "} 
+                    selfName={displayName}
+                    style={{ color: "#dbdee1", fontSize: 16, lineHeight: 22, fontFamily: "ggsans-Medium", includeFontPadding: false }} 
+                  />
                 </RN.View>
               </RN.View>
             </RN.View>
