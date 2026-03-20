@@ -14,7 +14,7 @@ const TextInput = findByProps("render", "displayName")?.default || findByName("T
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
 
-// Initialize favorites storage if it doesn't exist
+// Ensure storage is ready at the top level so the plugin doesn't crash on boot
 if (!Array.isArray(storage.favorites)) {
   storage.favorites = [];
 }
