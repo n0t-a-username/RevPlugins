@@ -12,6 +12,9 @@ const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 const moment = findByProps("moment")?.moment || findByProps("tz");
 
+// Needed for Gradient Support
+const LinearGradient = findByName("LinearGradient");
+
 // Stores for Server-specific data
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
@@ -20,19 +23,19 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
-  // --- SERVER DATA CAPTURE ---
   const guildId = SelectedGuildStore.getGuildId();
   const member = guildId ? GuildMemberStore.getMember(guildId, message.author.id) : null;
 
-  // Fallback to global if no server-specific data exists
   const displayName = member?.nick || message.author.globalName || message.author.username;
   const avatarUrl = member?.avatar 
     ? `https://cdn.discordapp.com/guilds/${guildId}/users/${message.author.id}/avatars/${member.avatar}.png`
     : message.author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
 
-  // Role Color Logic
+  // Gradient / Color Detection
+  const hasGradient = !!member?.colorGradient;
   const roleColor = member?.colorString || "#ffffff"; 
-  
+  const gradientColors = member?.colorGradient?.colors?.map(c => c.color) || [roleColor, roleColor];
+
   const timestamp = message.timestamp;
   const initialContent = message.content;
 
@@ -45,7 +48,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
       const openScreenshotPreview = () => {
         const Sandbox = () => {
           const [text, setText] = React.useState(initialContent);
-
           const formattedTime = React.useMemo(() => {
             try { return moment(timestamp).format("LT"); } 
             catch { return "12:00 PM"; }
@@ -56,6 +58,22 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
             else if (v?.nativeEvent?.text !== undefined) setText(v.nativeEvent.text);
           };
 
+          const NameElement = (
+            <RN.Text 
+              numberOfLines={1} 
+              ellipsizeMode="tail"
+              style={{ 
+                color: hasGradient ? "#fff" : roleColor, 
+                fontWeight: "700", 
+                fontSize: 15, 
+                includeFontPadding: false,
+                flexShrink: 1 // Crucial for letting the name shrink while time stays put
+              }}
+            >
+              {displayName}
+            </RN.Text>
+          );
+
           return (
             <RN.View style={{ marginTop: 10 }}>
               <TextInput
@@ -64,41 +82,42 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 onChange={handleTextChange}
                 multiline={true}
                 autoFocus={true}
-                style={{ 
-                  color: "#fff", 
-                  backgroundColor: "rgba(255,255,255,0.07)", 
-                  padding: 12, 
-                  borderRadius: 8,
-                  marginBottom: 20
-                }}
+                style={{ color: "#fff", backgroundColor: "rgba(255,255,255,0.07)", padding: 12, borderRadius: 8, marginBottom: 20 }}
               />
               
-              <RN.View style={{ 
-                paddingVertical: 10, 
-                paddingHorizontal: 12,
-                backgroundColor: "#313338", 
-                borderRadius: 8,
-                flexDirection: "row"
-              }}>
-                <RN.Image 
-                  source={{ uri: avatarUrl }} 
-                  style={{ width: 40, height: 40, borderRadius: 20, marginRight: 14 }} 
-                />
+              <RN.View style={{ paddingVertical: 10, paddingHorizontal: 12, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
+                <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 14 }} />
+                
                 <RN.View style={{ flex: 1 }}>
                   <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 1 }}>
+                    
+                    {/* GRADIENT LOGIC */}
+                    {hasGradient && LinearGradient ? (
+                       <LinearGradient 
+                         colors={gradientColors} 
+                         start={{x: 0, y: 0}} 
+                         end={{x: 1, y: 0}}
+                         style={{ flexShrink: 1, marginRight: 6 }}
+                       >
+                         {/* We use a white text as a mask for the gradient if needed, 
+                             but Discord often just renders the text over the gradient box */}
+                         {NameElement}
+                       </LinearGradient>
+                    ) : (
+                      NameElement
+                    )}
+
                     <RN.Text style={{ 
-                      color: roleColor, // Dynamic Role Color applied here
-                      fontWeight: "700", 
-                      fontSize: 15, 
-                      marginRight: 6,
+                      color: "#949ba4", 
+                      fontSize: 11, 
+                      marginLeft: 6, // Spacing from name/ellipsis
+                      flexShrink: 0, // Never hide the time
                       includeFontPadding: false 
                     }}>
-                      {displayName}
-                    </RN.Text>
-                    <RN.Text style={{ color: "#949ba4", fontSize: 11, includeFontPadding: false }}>
                       {formattedTime}
                     </RN.Text>
                   </RN.View>
+
                   <RN.Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 18, includeFontPadding: false }}>
                     {text}
                   </RN.Text>
@@ -128,27 +147,14 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         />
       );
 
-      const copyIdButton = (
-        <FormRow
-          key="copy-message-id"
-          label="Copy Message ID"
-          leading={<FormIcon source={getAssetIDByName("IdIcon")} />}
-          onPress={() => {
-            clipboard.setString(String(message.id));
-            showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
-            LazyActionSheet.hideActionSheet();
-          }}
-        />
-      );
-
       if (buttons) {
-        buttons.push(copyIdButton, previewButton);
+        buttons.push(previewButton);
       } else {
         const actionSheetContainer = findInReactTree(component, (x) => 
           Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup"
         );
         if (actionSheetContainer?.[1]) {
-          actionSheetContainer[1].props.children.push(copyIdButton, previewButton);
+          actionSheetContainer[1].props.children.push(previewButton);
         }
       }
     });
