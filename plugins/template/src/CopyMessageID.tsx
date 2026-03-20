@@ -37,7 +37,7 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
   const parts = text.split(/(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff]|@[^\s]+)/g);
 
   return (
-    <RN.View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center" }}>
+    <RN.View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "baseline" }}>
       {parts.map((part, i) => {
         if (!part) return null;
 
@@ -46,7 +46,7 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
             <RN.Image 
               key={i}
               source={{ uri: getEmojiURL(part) }} 
-              style={{ width: 20, height: 20, marginHorizontal: 1 }} 
+              style={{ width: 20, height: 20, marginHorizontal: 1, transform: [{ translateY: 4 }] }} 
             />
           );
         }
@@ -54,12 +54,14 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
         if (mentionRegex.test(part)) {
           return (
             <RN.View key={i} style={{ 
-                backgroundColor: "#3e4471", // Locked to blue highlight
+                backgroundColor: "#3e4471", 
                 borderRadius: 3, 
                 paddingHorizontal: 4, 
-                height: 20,
+                height: 19,
                 justifyContent: "center",
-                marginHorizontal: 1
+                marginHorizontal: 1,
+                // Moving the ping down 2 pixels to center it with text
+                transform: [{ translateY: 2 }]
             }}>
                 <RN.Text style={{ color: "#dee0fc", fontFamily: "ggsans-Medium", fontSize: 15, includeFontPadding: false }}>
                     {part}
@@ -145,16 +147,11 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
                 <RN.View style={{ width: 40, height: 40, marginRight: 12 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
-                  {decorationData && (
-                    <RN.Image 
-                      source={{ uri: `https://cdn.discordapp.com/avatar-decoration-presets/${decorationData.asset}.png` }} 
-                      style={{ position: "absolute", width: 48, height: 48, top: -4, left: -4, zIndex: 1 }} 
-                    />
-                  )}
                 </RN.View>
 
                 <RN.View style={{ flex: 1 }}>
-                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: -1 }}>
+                  {/* Pulling name row and content 2px closer */}
+                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: -3 }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
                       <RN.Text numberOfLines={1} style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, flexShrink: 1 }}>
                         {displayName}
@@ -202,16 +199,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         });
 
         group.props.children.push(
-          <ActionSheetRow
-            key="copy-id"
-            label="Copy Message ID"
-            icon={createIcon("IdIcon")}
-            onPress={() => {
-              clipboard.setString(String(message.id));
-              showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
-              LazyActionSheet.hideActionSheet();
-            }}
-          />,
           <ActionSheetRow
             key="preview"
             label="Edit Message Locally"
