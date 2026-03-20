@@ -10,9 +10,6 @@ import { showConfirmationAlert } from "@vendetta/ui/alerts";
 const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
-
-// Discord's internal Text component (includes their custom fonts)
-const Text = findByProps("Colors", "Sizes")?.default || findByName("Text");
 const moment = findByProps("moment")?.moment || findByProps("tz");
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
@@ -28,15 +25,13 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
     const unpatchInner = after("default", instance, (_, component) => {
       React.useEffect(() => () => unpatchInner(), []);
 
-      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
-
       const openScreenshotPreview = () => {
         const Sandbox = () => {
           const [text, setText] = React.useState(initialContent);
 
           const formattedTime = React.useMemo(() => {
             try { return moment(timestamp).format("LT"); } 
-            catch { return "Today at 12:00 PM"; }
+            catch { return "12:00 PM"; }
           }, [timestamp]);
 
           const handleTextChange = (v: any) => {
@@ -61,50 +56,56 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 }}
               />
               
+              {/* CONTAINER */}
               <RN.View style={{ 
-                paddingVertical: 14, 
-                paddingHorizontal: 16,
+                paddingVertical: 10, 
+                paddingHorizontal: 12,
                 backgroundColor: "#313338", 
                 borderRadius: 8,
-                flexDirection: "row"
+                flexDirection: "row",
+                alignItems: "flex-start" // Align avatar to top
               }}>
-                {/* Avatar */}
+                {/* AVATAR */}
                 <RN.Image 
                   source={{ uri: avatarUrl }} 
-                  style={{ width: 40, height: 40, borderRadius: 20, marginRight: 16 }} 
+                  style={{ width: 40, height: 40, borderRadius: 20, marginRight: 14 }} 
                 />
 
                 <RN.View style={{ flex: 1 }}>
-                  {/* Name & Time Row */}
+                  {/* HEADER ROW (Name + Time) */}
                   <RN.View style={{ 
                     flexDirection: "row", 
-                    alignItems: "center", // This centers the time with the name
-                    marginBottom: 1 // Tight spacing
+                    alignItems: "center", // Perfectly centers time string with name string
+                    marginBottom: 2 
                   }}>
-                    <Text style={{ 
+                    <RN.Text style={{ 
                       color: "#fff", 
-                      fontWeight: "500", 
-                      fontSize: 16, 
-                      marginRight: 8 
+                      fontWeight: "700", // Discord names are quite bold
+                      fontSize: 15, 
+                      marginRight: 6,
+                      includeFontPadding: false
                     }}>
                       {username}
-                    </Text>
-                    <Text style={{ 
+                    </RN.Text>
+                    <RN.Text style={{ 
                       color: "#949ba4", 
-                      fontSize: 12 
+                      fontSize: 11,
+                      fontWeight: "400",
+                      includeFontPadding: false
                     }}>
                       {formattedTime}
-                    </Text>
+                    </RN.Text>
                   </RN.View>
 
-                  {/* Message Content */}
-                  <Text style={{ 
+                  {/* MESSAGE TEXT */}
+                  <RN.Text style={{ 
                     color: "#dbdee1", 
-                    fontSize: 16, 
-                    lineHeight: 22 // Standard Discord leading
+                    fontSize: 15, 
+                    lineHeight: 18, // Reduced spacing between header and text
+                    includeFontPadding: false
                   }}>
                     {text}
-                  </Text>
+                  </RN.Text>
                 </RN.View>
               </RN.View>
             </RN.View>
@@ -131,29 +132,9 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         />
       );
 
-      // (Keep existing Copy ID button logic here)
-      const copyIdButton = (
-        <FormRow
-          key="copy-message-id"
-          label="Copy Message ID"
-          leading={<FormIcon source={getAssetIDByName("IdIcon")} />}
-          onPress={() => {
-            clipboard.setString(String(message.id));
-            showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
-            LazyActionSheet.hideActionSheet();
-          }}
-        />
-      );
-
+      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
       if (buttons) {
-        buttons.push(copyIdButton, previewButton);
-      } else {
-        const actionSheetContainer = findInReactTree(component, (x) => 
-          Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup"
-        );
-        if (actionSheetContainer?.[1]) {
-          actionSheetContainer[1].props.children.push(copyIdButton, previewButton);
-        }
+        buttons.push(previewButton);
       }
     });
   });
