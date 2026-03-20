@@ -31,23 +31,25 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
-            // 1. UPDATE CONTENT
+            // 1. Update the raw content
             message.content = currentText;
 
-            // 2. THE CRITICAL FIX: Clear pre-parsed data
-            // Discord crashes because it tries to use old AST/parsed data with new content.
-            // Deleting these forces the 'getOrParse' function to re-run safely.
+            // 2. NUKE THE CACHE
+            // These are the hidden properties Discord uses to store pre-parsed text.
+            // Deleting them forces the renderer to re-parse your new string safely.
             delete message.content_parsed;
             delete message.content_formatted;
-            delete message._contentMarkup; 
+            delete message._contentMarkup;
+            delete message.contentFormatted;
+            delete message.contentParsed;
 
-            // 3. RE-RENDER
+            // 3. Trigger UI Redraw
             Dispatcher.dispatch({
               type: "MESSAGE_UPDATE",
               message: message,
             });
 
-            showToast("Content spoofed!", getAssetIDByName("Check"));
+            showToast("Spoofed!", getAssetIDByName("Check"));
           },
           children: React.createElement(TextInput, {
             defaultValue: message.content,
@@ -60,20 +62,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         LazyActionSheet.hideActionSheet();
       };
 
-      // ... Rest of your button logic (Copy ID / Client Edit) ...
-      const copyIdButton = (
-        <FormRow
-          key="copy-message-id"
-          label="Copy Message ID"
-          leading={<FormIcon source={getAssetIDByName("IdIcon")} />}
-          onPress={() => {
-            clipboard.setString(String(message.id));
-            showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
-            LazyActionSheet.hideActionSheet();
-          }}
-        />
-      );
-
       const clientEditButton = (
         <FormRow
           key="client-side-edit"
@@ -84,13 +72,13 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
       );
 
       if (buttons) {
-        buttons.push(copyIdButton, clientEditButton);
+        buttons.push(clientEditButton);
       } else {
         const actionSheetContainer = findInReactTree(component, (x) => 
           Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup"
         );
         if (actionSheetContainer?.[1]) {
-          actionSheetContainer[1].props.children.push(copyIdButton, clientEditButton);
+          actionSheetContainer[1].props.children.push(clientEditButton);
         }
       }
     });
