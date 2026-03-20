@@ -18,11 +18,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
-  // Capture identity data immediately
-  const author = { ...message.author };
-  const timestamp = message.timestamp;
-  const channelId = message.channel_id;
-
   component.then((instance) => {
     const unpatchInner = after("default", instance, (_, component) => {
       React.useEffect(() => () => unpatchInner(), []);
@@ -33,11 +28,32 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         const Sandbox = () => {
           const [text, setText] = React.useState(message.content);
 
+          // We create a copy of the actual message object to keep all internal methods intact
+          const fakeMessage = React.useMemo(() => {
+            // Use the internal 'Object.assign' or spread to keep the prototype chain if possible
+            const clone = Object.assign(Object.create(Object.getPrototypeOf(message)), message);
+            
+            // Give it a unique ID to avoid the cache/database lookup issues
+            clone.id = `preview-${Math.random().toString(36).substring(7)}`;
+            return clone;
+          }, []);
+
+          // Sync the text to the clone whenever it changes
+          React.useMemo(() => {
+            fakeMessage.content = text;
+            // Nuke the parsed cache so it has to re-draw the 'text'
+            fakeMessage.content_parsed = undefined;
+            fakeMessage.content_formatted = undefined;
+            fakeMessage._contentMarkup = undefined;
+            fakeMessage.contentParsed = undefined;
+            fakeMessage.contentFormatted = undefined;
+          }, [text]);
+
           return (
             <RN.View style={{ marginTop: 10 }}>
               <TextInput
                 value={text}
-                placeholder="Edit message..."
+                placeholder="Edit for screenshot..."
                 onChange={(v: string) => setText(v)}
                 multiline={true}
                 autoFocus={true}
@@ -58,28 +74,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 <ChatItemWrapper
                   key={text} 
                   rowGenerator={new RowManager()}
-                  message={{
-                    // 1. Core Data
-                    id: "0",
-                    channel_id: channelId,
-                    author: author,
-                    timestamp: timestamp,
-                    content: text,
-                    state: "SENT",
-                    type: 0,
-                    attachments: [],
-                    embeds: [],
-                    mentions: [],
-                    
-                    // 2. Mocking Immutable/Class methods to prevent the crash
-                    toJS: function() { return this; },
-                    get: function(k) { return this[k]; },
-                    has: function(k) { return k in this; },
-                    
-                    // 3. Force fresh render
-                    content_parsed: undefined,
-                    content_formatted: undefined,
-                  }}
+                  message={fakeMessage}
                 />
               </RN.View>
             </RN.View>
