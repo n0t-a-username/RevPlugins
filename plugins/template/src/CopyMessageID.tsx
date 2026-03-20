@@ -77,7 +77,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
               />
               
               <RN.View style={{ paddingVertical: 12, paddingHorizontal: 14, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
-                <RN.View style={{ width: 40, height: 40, marginRight: 14 }}>
+                {/* Reduced marginRight from 14 to 12 to nudge text closer */}
+                <RN.View style={{ width: 40, height: 40, marginRight: 12 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
                   {decorationData && (
                     <RN.Image 
@@ -88,7 +89,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 </RN.View>
                 
                 <RN.View style={{ flex: 1 }}>
-                  {/* Reduced marginBottom to bring name and content closer */}
                   <RN.View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 0 }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
                       <RN.Text 
@@ -133,7 +133,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                   <RN.Text style={{ 
                     color: "#dbdee1", 
                     fontSize: 16, 
-                    lineHeight: 20, // Tightened slightly to move closer to name
+                    lineHeight: 20, 
                     fontFamily: "ggsans-Medium",
                     paddingBottom: 4, 
                     includeFontPadding: false 
@@ -161,7 +161,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         <ActionSheetRow
           key="screenshot-preview"
           label="Screenshot Preview"
-          leading={<FormIcon source={getAssetIDByName("eye")} />}
+          leading={<FormIcon source={getAssetIDByName("PencilIcon")} />}
           onPress={openScreenshotPreview}
         />
       );
@@ -170,7 +170,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         <ActionSheetRow
           key="copy-message-id"
           label="Copy Message ID"
-          leading={<FormIcon source={getAssetIDByName("copy")} />}
+          leading={<FormIcon source={getAssetIDByName("IdIcon")} />}
           onPress={() => {
             clipboard.setString(String(message.id));
             showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
