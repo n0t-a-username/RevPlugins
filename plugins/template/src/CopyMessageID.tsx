@@ -14,17 +14,16 @@ const TextInput = findByProps("render", "displayName")?.default || findByName("T
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
 
-// Fully re-aligned mapping based on your last corrections
+// Shifted: 1 is now Zilla, list caps at 7. 0 or invalid defaults to ggsans.
 const getDisplayFont = (fontId: number) => {
   switch (fontId) {
-    case 1: return "ggsans-Semibold"; 
-    case 2: return "ZillaSlab-SemiBold";
-    case 3: return "CherryBombOne-Normal";
-    case 4: return "Chicle-Normal";
-    case 5: return "MuseoModerno-Medium";
-    case 6: return "NeoCastel-Normal";
-    case 7: return "PixelifySans-Normal";
-    case 8: return "Sinistre-Normal";
+    case 1: return "ZillaSlab-SemiBold";
+    case 2: return "CherryBombOne-Normal";
+    case 3: return "Chicle-Normal";
+    case 4: return "MuseoModerno-Medium";
+    case 5: return "NeoCastel-Normal";
+    case 6: return "PixelifySans-Normal";
+    case 7: return "Sinistre-Normal";
     default: return "ggsans-Semibold";
   }
 };
@@ -40,8 +39,9 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const displayName = member?.nick || author.globalName || author.username;
   const avatarUrl = author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
 
-  const fontId = author.displayNameStyles?.fontId;
-  const nameFont = fontId ? getDisplayFont(fontId) : "ggsans-Semibold";
+  // Fallback to 0 if displayNameStyles is missing, then map
+  const fontId = author.displayNameStyles?.fontId ?? 0;
+  const nameFont = getDisplayFont(fontId);
 
   const decorationData = author.avatarDecorationData;
   const primaryGuild = author.primaryGuild;
@@ -136,7 +136,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           props: { source: getAssetIDByName(name) },
         });
 
-        const copyButton = (
+        group.props.children.push(
           <ActionSheetRow
             key="copy-message-id"
             label="Copy Message ID"
@@ -146,10 +146,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
               showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
               LazyActionSheet.hideActionSheet();
             }}
-          />
-        );
-
-        const previewButton = (
+          />,
           <ActionSheetRow
             key="screenshot-preview"
             label="Edit Message Locally"
@@ -157,8 +154,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
             onPress={openScreenshotPreview}
           />
         );
-
-        group.props.children.push(copyButton, previewButton);
       }
     });
   });
