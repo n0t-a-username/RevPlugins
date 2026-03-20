@@ -12,10 +12,7 @@ const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 const moment = findByProps("moment")?.moment || findByProps("tz");
 
-// Needed for Gradient Support
 const LinearGradient = findByName("LinearGradient");
-
-// Stores for Server-specific data
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
 
@@ -26,12 +23,22 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const guildId = SelectedGuildStore.getGuildId();
   const member = guildId ? GuildMemberStore.getMember(guildId, message.author.id) : null;
 
+  // --- IDENTITY & DECOR DATA ---
   const displayName = member?.nick || message.author.globalName || message.author.username;
   const avatarUrl = member?.avatar 
     ? `https://cdn.discordapp.com/guilds/${guildId}/users/${message.author.id}/avatars/${member.avatar}.png`
     : message.author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
 
-  // Gradient / Color Detection
+  // Fetch decoration (Nitro Avatar Decorations)
+  const decorationData = message.author.avatarDecorationData;
+  const decorationUrl = decorationData 
+    ? `https://cdn.discordapp.com/avatar-decoration-presets/${decorationData.asset}.png` 
+    : null;
+
+  // Fetch Guild Tag
+  const guildTag = member?.primaryGuild?.clanTag;
+
+  // Role Color / Gradient
   const hasGradient = !!member?.colorGradient;
   const roleColor = member?.colorString || "#ffffff"; 
   const gradientColors = member?.colorGradient?.colors?.map(c => c.color) || [roleColor, roleColor];
@@ -42,8 +49,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   component.then((instance) => {
     const unpatchInner = after("default", instance, (_, component) => {
       React.useEffect(() => () => unpatchInner(), []);
-
-      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
 
       const openScreenshotPreview = () => {
         const Sandbox = () => {
@@ -58,20 +63,36 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
             else if (v?.nativeEvent?.text !== undefined) setText(v.nativeEvent.text);
           };
 
-          const NameElement = (
-            <RN.Text 
-              numberOfLines={1} 
-              ellipsizeMode="tail"
-              style={{ 
-                color: hasGradient ? "#fff" : roleColor, 
-                fontWeight: "700", 
-                fontSize: 15, 
-                includeFontPadding: false,
-                flexShrink: 1 // Crucial for letting the name shrink while time stays put
-              }}
-            >
-              {displayName}
-            </RN.Text>
+          const NameAndTag = (
+            <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
+              <RN.Text 
+                numberOfLines={1} 
+                ellipsizeMode="tail"
+                style={{ 
+                  color: hasGradient ? "#fff" : roleColor, 
+                  fontWeight: "700", 
+                  fontSize: 15, 
+                  includeFontPadding: false,
+                  flexShrink: 1 
+                }}
+              >
+                {displayName}
+              </RN.Text>
+              
+              {guildTag && (
+                <RN.View style={{ 
+                  backgroundColor: "rgba(255,255,255,0.1)", 
+                  paddingHorizontal: 4, 
+                  borderRadius: 4, 
+                  marginLeft: 4,
+                  flexShrink: 0 
+                }}>
+                  <RN.Text style={{ color: "#b5bac1", fontSize: 10, fontWeight: "700" }}>
+                    {guildTag}
+                  </RN.Text>
+                </RN.View>
+              )}
+            </RN.View>
           );
 
           return (
@@ -86,34 +107,26 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
               />
               
               <RN.View style={{ paddingVertical: 10, paddingHorizontal: 12, backgroundColor: "#313338", borderRadius: 8, flexDirection: "row" }}>
-                <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20, marginRight: 14 }} />
+                {/* AVATAR + DECORATION CONTAINER */}
+                <RN.View style={{ width: 40, height: 40, marginRight: 14 }}>
+                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                   {decorationUrl && (
+                     <RN.Image 
+                       source={{ uri: decorationUrl }} 
+                       style={{ position: "absolute", width: 48, height: 48, top: -4, left: -4 }} 
+                     />
+                   )}
+                </RN.View>
                 
                 <RN.View style={{ flex: 1 }}>
                   <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 1 }}>
-                    
-                    {/* GRADIENT LOGIC */}
                     {hasGradient && LinearGradient ? (
-                       <LinearGradient 
-                         colors={gradientColors} 
-                         start={{x: 0, y: 0}} 
-                         end={{x: 1, y: 0}}
-                         style={{ flexShrink: 1, marginRight: 6 }}
-                       >
-                         {/* We use a white text as a mask for the gradient if needed, 
-                             but Discord often just renders the text over the gradient box */}
-                         {NameElement}
+                       <LinearGradient colors={gradientColors} start={{x: 0, y: 0}} end={{x: 1, y: 0}} style={{ flexShrink: 1 }}>
+                         {NameAndTag}
                        </LinearGradient>
-                    ) : (
-                      NameElement
-                    )}
+                    ) : NameAndTag}
 
-                    <RN.Text style={{ 
-                      color: "#949ba4", 
-                      fontSize: 11, 
-                      marginLeft: 6, // Spacing from name/ellipsis
-                      flexShrink: 0, // Never hide the time
-                      includeFontPadding: false 
-                    }}>
+                    <RN.Text style={{ color: "#949ba4", fontSize: 11, marginLeft: 6, flexShrink: 0, includeFontPadding: false }}>
                       {formattedTime}
                     </RN.Text>
                   </RN.View>
@@ -147,16 +160,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         />
       );
 
-      if (buttons) {
-        buttons.push(previewButton);
-      } else {
-        const actionSheetContainer = findInReactTree(component, (x) => 
-          Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup"
-        );
-        if (actionSheetContainer?.[1]) {
-          actionSheetContainer[1].props.children.push(previewButton);
-        }
-      }
+      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
+      if (buttons) buttons.push(previewButton);
     });
   });
 });
