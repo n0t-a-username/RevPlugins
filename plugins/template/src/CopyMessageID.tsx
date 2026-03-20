@@ -13,21 +13,18 @@ const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 const MessageStore = findByProps("getMessage");
 
-// Session storage for edits
+// Map to keep track of our "fake" edits so they persist across channel swaps
 const localEdits = new Map();
 
-// 1. The ONLY way we change the message. 
-// This intercepts the message whenever Discord tries to display it.
+// 1. Persistent Patch: Intercepts message data before it hits the UI
 const unpatchStore = MessageStore ? after("getMessage", MessageStore, ([channelId, messageId], message) => {
   if (message && localEdits.has(messageId)) {
-    // We modify the content property of the existing object directly.
-    // This is safer than Dispatcher because it preserves all other metadata.
     message.content = localEdits.get(messageId);
   }
   return message;
 }) : null;
 
-const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
+const unpatchActionSheet = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
@@ -45,13 +42,13 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
-            // Update the map
+            // Save to our persistent map
             localEdits.set(message.id, currentText);
             
-            // Manually update the current object so the UI refreshes immediately
+            // Update the object in-place so the current view refreshes
             message.content = currentText;
 
-            showToast("Edit applied locally", getAssetIDByName("Check"));
+            showToast("Local edit applied!", getAssetIDByName("Check"));
           },
           children: React.createElement(TextInput, {
             defaultValue: message.content,
@@ -93,14 +90,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   });
 });
 
+// The final cleanup function
 export const onUnload = () => {
-  unpatch();
-  if (unpatchStore) unpatchStore();
-};
-  });
-});
-
-export const onUnload = () => {
-  unpatch();
+  unpatchActionSheet();
   if (unpatchStore) unpatchStore();
 };
