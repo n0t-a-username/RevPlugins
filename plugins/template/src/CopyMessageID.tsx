@@ -12,12 +12,27 @@ const { FormRow, FormIcon } = Forms;
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
 const moment = findByProps("moment")?.moment || findByProps("tz");
 
+// Stores for Server-specific data
+const GuildMemberStore = findByProps("getMember", "getNick");
+const SelectedGuildStore = findByProps("getGuildId");
+
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
-  const username = message.author?.username || "Unknown";
-  const avatarUrl = message.author?.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
+  // --- SERVER DATA CAPTURE ---
+  const guildId = SelectedGuildStore.getGuildId();
+  const member = guildId ? GuildMemberStore.getMember(guildId, message.author.id) : null;
+
+  // Fallback to global if no server-specific data exists
+  const displayName = member?.nick || message.author.globalName || message.author.username;
+  const avatarUrl = member?.avatar 
+    ? `https://cdn.discordapp.com/guilds/${guildId}/users/${message.author.id}/avatars/${member.avatar}.png`
+    : message.author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
+
+  // Role Color Logic
+  const roleColor = member?.colorString || "#ffffff"; 
+  
   const timestamp = message.timestamp;
   const initialContent = message.content;
 
@@ -39,7 +54,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           const handleTextChange = (v: any) => {
             if (typeof v === "string") setText(v);
             else if (v?.nativeEvent?.text !== undefined) setText(v.nativeEvent.text);
-            else if (v?.text !== undefined) setText(v.text);
           };
 
           return (
@@ -55,8 +69,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                   backgroundColor: "rgba(255,255,255,0.07)", 
                   padding: 12, 
                   borderRadius: 8,
-                  marginBottom: 20,
-                  fontSize: 16
+                  marginBottom: 20
                 }}
               />
               
@@ -72,34 +85,21 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                   style={{ width: 40, height: 40, borderRadius: 20, marginRight: 14 }} 
                 />
                 <RN.View style={{ flex: 1 }}>
-                  <RN.View style={{ 
-                    flexDirection: "row", 
-                    alignItems: "center", // Centered with name
-                    marginBottom: 1 // Tight spacing
-                  }}>
+                  <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: 1 }}>
                     <RN.Text style={{ 
-                      color: "#fff", 
+                      color: roleColor, // Dynamic Role Color applied here
                       fontWeight: "700", 
                       fontSize: 15, 
                       marginRight: 6,
                       includeFontPadding: false 
                     }}>
-                      {username}
+                      {displayName}
                     </RN.Text>
-                    <RN.Text style={{ 
-                      color: "#949ba4", 
-                      fontSize: 11,
-                      includeFontPadding: false 
-                    }}>
+                    <RN.Text style={{ color: "#949ba4", fontSize: 11, includeFontPadding: false }}>
                       {formattedTime}
                     </RN.Text>
                   </RN.View>
-                  <RN.Text style={{ 
-                    color: "#dbdee1", 
-                    fontSize: 15, 
-                    lineHeight: 18, // Compact leading
-                    includeFontPadding: false 
-                  }}>
+                  <RN.Text style={{ color: "#dbdee1", fontSize: 15, lineHeight: 18, includeFontPadding: false }}>
                     {text}
                   </RN.Text>
                 </RN.View>
