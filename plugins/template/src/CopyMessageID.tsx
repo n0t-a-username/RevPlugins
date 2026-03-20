@@ -19,6 +19,12 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
+  // STEP 1: Capture the data into "dumb" variables immediately
+  const capturedAuthor = message.author;
+  const capturedTimestamp = message.timestamp;
+  const originalContent = message.content;
+  const channelId = message.channel_id;
+
   component.then((instance) => {
     const unpatchInner = after("default", instance, (_, component) => {
       React.useEffect(() => () => unpatchInner(), []);
@@ -27,39 +33,19 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
       const openScreenshotPreview = () => {
         const Sandbox = () => {
-          // 1. Hold the edited text in state
-          const [content, setContent] = React.useState(message.content);
+          const [text, setText] = React.useState(originalContent);
 
-          // 2. Create a stable MessageRecord that stays in memory
-          const fakeMessage = React.useMemo(() => {
-            return new MessageRecord({
-              id: message.id, // Keep original ID for stability
-              channel_id: message.channel_id,
-              author: message.author,
-              timestamp: message.timestamp,
-              content: content,
-            });
-          }, []);
-
-          // 3. Manually update the content of that record when state changes
-          React.useEffect(() => {
-             fakeMessage.content = content;
-             // Purge all possible cache keys
-             delete fakeMessage.content_parsed;
-             delete fakeMessage.content_formatted;
-             delete fakeMessage._contentMarkup;
-             delete fakeMessage.contentParsed;
-             delete fakeMessage.contentFormatted;
-          }, [content]);
+          // STEP 2: Generate a truly unique ID for every single render
+          // This forces the RowManager to treat every keystroke as a brand new message
+          const uniqueId = React.useMemo(() => Math.random().toString(36), [text]);
 
           return (
             <RN.View style={{ marginTop: 10 }}>
               <TextInput
-                value={content} // This prevents the text from clearing
-                placeholder="Edit content..."
-                onChange={(v: string) => setContent(v)}
+                value={text}
+                placeholder="Edit message..."
+                onChange={(v: string) => setText(v)}
                 multiline={true}
-                autoFocus={true}
                 style={{ 
                   color: "#fff", 
                   backgroundColor: "rgba(255,255,255,0.05)", 
@@ -75,9 +61,21 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 borderRadius: 8,
               }}>
                 <ChatItemWrapper
-                  key={`preview-${content.length}`} // Nudge refresh
+                  key={uniqueId} // Complete re-mount on every character
                   rowGenerator={new RowManager()}
-                  message={fakeMessage}
+                  message={new MessageRecord({
+                    id: uniqueId, // No link to the real message ID
+                    channel_id: channelId,
+                    author: capturedAuthor,
+                    timestamp: capturedTimestamp,
+                    content: text,
+                    // Wipe all possible internal caches
+                    content_parsed: undefined,
+                    content_formatted: undefined,
+                    _contentMarkup: undefined,
+                    contentParsed: undefined,
+                    contentFormatted: undefined
+                  })}
                 />
               </RN.View>
             </RN.View>
