@@ -11,7 +11,19 @@ const LazyActionSheet = findByProps("openLazy", "hideActionSheet");
 const { FormRow, FormIcon } = Forms;
 
 const TextInput = findByProps("render", "displayName")?.default || findByName("TextInput");
-const Dispatcher = findByProps("dispatch", "subscribe");
+const MessageStore = findByProps("getMessage");
+
+// This map holds your edits in memory so they don't disappear
+const localEdits = new Map<string, string>();
+
+// 1. The "Source of Truth" Patch
+// This ensures that even if you scroll away or switch channels, your edit stays.
+const unpatchStore = MessageStore ? after("getMessage", MessageStore, ([channelId, messageId], message) => {
+  if (message && localEdits.has(messageId)) {
+    return { ...message, content: localEdits.get(messageId) };
+  }
+  return message;
+}) : null;
 
 const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const message = msg?.message;
@@ -21,10 +33,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
     const unpatchInner = after("default", instance, (_, component) => {
       React.useEffect(() => () => unpatchInner(), []);
 
-      const buttons = findInReactTree(
-        component,
-        (x) => x?.[0]?.type?.name === "ButtonRow",
-      );
+      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
 
       const openEditModal = () => {
         let currentText = message.content;
@@ -34,20 +43,11 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           confirmText: "Edit",
           cancelText: "Cancel",
           onConfirm: () => {
-            // 1. Update the local object memory directly
+            // Save the edit to our local map
+            localEdits.set(message.id, currentText);
+            
+            // Update the object in-place for the current view
             message.content = currentText;
-
-            // 2. Client-side only Dispatch
-            // We only send the ID, Channel ID, and Content.
-            // This tells the UI "re-render this" without hitting the API.
-            Dispatcher.dispatch({
-              type: "MESSAGE_UPDATE",
-              message: { 
-                id: message.id, 
-                channel_id: message.channel_id, 
-                content: currentText 
-              },
-            });
 
             showToast("Local edit applied!", getAssetIDByName("Check"));
           },
@@ -87,9 +87,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
       if (buttons) {
         buttons.push(copyIdButton, clientEditButton);
       } else {
-        const actionSheetContainer = findInReactTree(
-          component,
-          (x) => Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup",
+        const actionSheetContainer = findInReactTree(component, (x) => 
+          Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup"
         );
         if (actionSheetContainer?.[1]) {
           actionSheetContainer[1].props.children.push(copyIdButton, clientEditButton);
@@ -99,4 +98,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   });
 });
 
-export const onUnload = () => unpatch();
+export const onUnload = () => {
+  unpatch();
+  if (unpatchStore) unpatchStore();
+};
