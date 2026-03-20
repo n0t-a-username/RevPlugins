@@ -60,8 +60,8 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
                 height: 19,
                 justifyContent: "center",
                 marginHorizontal: 1,
-                // Moving the ping down 2 pixels to center it with text
-                transform: [{ translateY: 2 }]
+                // Moved back up 1.5px (from 2.0 to 0.5)
+                transform: [{ translateY: 0.5 }]
             }}>
                 <RN.Text style={{ color: "#dee0fc", fontFamily: "ggsans-Medium", fontSize: 15, includeFontPadding: false }}>
                     {part}
@@ -90,7 +90,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
   const displayName = member?.nick || author.globalName || author.username;
   const avatarUrl = author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
-  const decorationData = author.avatarDecorationData;
   const primaryGuild = author.primaryGuild;
   const guildTag = primaryGuild?.tag;
   const guildBadgeUrl = primaryGuild?.badge 
@@ -119,6 +118,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
               <TextInput
                 value={text}
                 placeholder="Edit message..."
+                // Changed placeholder from default (black) to light gray
+                placeholderTextColor="#a1a1a1"
                 onChange={(v: any) => setText(v?.nativeEvent?.text ?? v ?? "")}
                 multiline={true}
                 autoFocus={true}
@@ -150,7 +151,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 </RN.View>
 
                 <RN.View style={{ flex: 1 }}>
-                  {/* Pulling name row and content 2px closer */}
                   <RN.View style={{ flexDirection: "row", alignItems: "center", marginBottom: -3 }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
                       <RN.Text numberOfLines={1} style={{ color: roleColor, fontFamily: nameFont, fontSize: 16, flexShrink: 1 }}>
