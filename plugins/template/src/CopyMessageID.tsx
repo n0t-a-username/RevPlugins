@@ -14,14 +14,13 @@ const TextInput = findByProps("render", "displayName")?.default || findByName("T
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
 
-// Font Mapping for Display Names (Discord's new Identity fonts)
 const getDisplayFont = (fontId: number) => {
   switch (fontId) {
-    case 1: return "ggsans-Bold"; // Default Bold
-    case 2: return "Cursive";     // Script style
-    case 3: return "Comic Sans MS"; // The one in your JSON example
-    case 4: return "monospace";   // Code style
-    default: return "ggsans-Bold";
+    case 1: return "ggsans-Semibold"; 
+    case 2: return "Cursive";     
+    case 3: return "Comic Sans MS"; 
+    case 4: return "monospace";   
+    default: return "ggsans-Semibold";
   }
 };
 
@@ -36,9 +35,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const displayName = member?.nick || author.globalName || author.username;
   const avatarUrl = author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
 
-  // Custom Font Logic from JSON
   const fontId = author.displayNameStyles?.fontId;
-  const nameFont = fontId ? getDisplayFont(fontId) : "ggsans-Bold";
+  const nameFont = fontId ? getDisplayFont(fontId) : "ggsans-Semibold";
 
   const decorationData = author.avatarDecorationData;
   const primaryGuild = author.primaryGuild;
@@ -90,14 +88,15 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                 </RN.View>
                 
                 <RN.View style={{ flex: 1 }}>
-                  <RN.View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 2 }}>
+                  {/* Reduced marginBottom to bring name and content closer */}
+                  <RN.View style={{ flexDirection: "row", alignItems: "baseline", marginBottom: 0 }}>
                     <RN.View style={{ flexDirection: "row", alignItems: "center", flexShrink: 1 }}>
                       <RN.Text 
                         numberOfLines={1} 
                         ellipsizeMode="tail"
                         style={{ 
                           color: roleColor, 
-                          fontFamily: nameFont, // Uses custom font or ggsans-Bold
+                          fontFamily: nameFont, 
                           fontSize: 16, 
                           includeFontPadding: false, 
                           flexShrink: 1 
@@ -119,7 +118,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                           {guildBadgeUrl && (
                             <RN.Image source={{ uri: guildBadgeUrl }} style={{ width: 12, height: 12, marginRight: 3 }} />
                           )}
-                          <RN.Text style={{ color: "#caccce", fontSize: 11, fontFamily: "ggsans-Bold", includeFontPadding: false }}>
+                          <RN.Text style={{ color: "#caccce", fontSize: 11, fontFamily: "ggsans-Semibold", includeFontPadding: false }}>
                             {guildTag}
                           </RN.Text>
                         </RN.View>
@@ -134,8 +133,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                   <RN.Text style={{ 
                     color: "#dbdee1", 
                     fontSize: 16, 
-                    lineHeight: 22, 
-                    fontFamily: "ggsans-Medium", // User's requested font for message body
+                    lineHeight: 20, // Tightened slightly to move closer to name
+                    fontFamily: "ggsans-Medium",
                     paddingBottom: 4, 
                     includeFontPadding: false 
                   }}>
