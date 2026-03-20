@@ -14,17 +14,16 @@ const TextInput = findByProps("render", "displayName")?.default || findByName("T
 const GuildMemberStore = findByProps("getMember", "getNick");
 const SelectedGuildStore = findByProps("getGuildId");
 
-// Updated mapping: Ensuring 1 and 2 are handled distinctly.
+// Updated mapping based on the "weird system" ID jumps
 const getDisplayFont = (fontId: number) => {
   switch (fontId) {
-    case 1: return "ZillaSlab-SemiBold";
-    case 2: return "ZillaSlab-SemiBold"; // Added as a duplicate check since 2 was defaulting
-    case 3: return "CherryBombOne-Normal";
-    case 4: return "Chicle-Normal";
-    case 5: return "MuseoModerno-Medium";
-    case 6: return "NeoCastel-Normal";
-    case 7: return "PixelifySans-Normal";
-    case 8: return "Sinistre-Normal"; // Included 8 just in case Sinistre is the tail end
+    case 12: return "ZillaSlab-SemiBold";   // Case 1/2 is 12
+    case 3:  return "CherryBombOne-Normal"; // (Assuming 3 stayed the same)
+    case 4:  return "Chicle-Normal";        // (Assuming 4 stayed the same)
+    case 6:  return "MuseoModerno-Medium";  // Case 5 is 6
+    case 5:  return "NeoCastel-Normal";     // (Keeping 5 as Neo as fallback)
+    case 8:  return "PixelifySans-Normal";  // Case 7 is 8
+    case 10: return "Sinistre-Normal";      // Case 8 is 10
     default: return "ggsans-Semibold";
   }
 };
@@ -40,7 +39,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   const displayName = member?.nick || author.globalName || author.username;
   const avatarUrl = author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
 
-  // Strict check on the fontId from the message author
   const fontId = author?.displayNameStyles?.fontId;
   const nameFont = (fontId !== undefined && fontId !== null) ? getDisplayFont(fontId) : "ggsans-Semibold";
 
