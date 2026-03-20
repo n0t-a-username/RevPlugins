@@ -25,6 +25,8 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
     const unpatchInner = after("default", instance, (_, component) => {
       React.useEffect(() => () => unpatchInner(), []);
 
+      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
+
       const openScreenshotPreview = () => {
         const Sandbox = () => {
           const [text, setText] = React.useState(initialContent);
@@ -37,6 +39,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
           const handleTextChange = (v: any) => {
             if (typeof v === "string") setText(v);
             else if (v?.nativeEvent?.text !== undefined) setText(v.nativeEvent.text);
+            else if (v?.text !== undefined) setText(v.text);
           };
 
           return (
@@ -52,57 +55,50 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                   backgroundColor: "rgba(255,255,255,0.07)", 
                   padding: 12, 
                   borderRadius: 8,
-                  marginBottom: 20
+                  marginBottom: 20,
+                  fontSize: 16
                 }}
               />
               
-              {/* CONTAINER */}
               <RN.View style={{ 
                 paddingVertical: 10, 
                 paddingHorizontal: 12,
                 backgroundColor: "#313338", 
                 borderRadius: 8,
-                flexDirection: "row",
-                alignItems: "flex-start" // Align avatar to top
+                flexDirection: "row"
               }}>
-                {/* AVATAR */}
                 <RN.Image 
                   source={{ uri: avatarUrl }} 
                   style={{ width: 40, height: 40, borderRadius: 20, marginRight: 14 }} 
                 />
-
                 <RN.View style={{ flex: 1 }}>
-                  {/* HEADER ROW (Name + Time) */}
                   <RN.View style={{ 
                     flexDirection: "row", 
-                    alignItems: "center", // Perfectly centers time string with name string
-                    marginBottom: 2 
+                    alignItems: "center", // Centered with name
+                    marginBottom: 1 // Tight spacing
                   }}>
                     <RN.Text style={{ 
                       color: "#fff", 
-                      fontWeight: "700", // Discord names are quite bold
+                      fontWeight: "700", 
                       fontSize: 15, 
                       marginRight: 6,
-                      includeFontPadding: false
+                      includeFontPadding: false 
                     }}>
                       {username}
                     </RN.Text>
                     <RN.Text style={{ 
                       color: "#949ba4", 
                       fontSize: 11,
-                      fontWeight: "400",
-                      includeFontPadding: false
+                      includeFontPadding: false 
                     }}>
                       {formattedTime}
                     </RN.Text>
                   </RN.View>
-
-                  {/* MESSAGE TEXT */}
                   <RN.Text style={{ 
                     color: "#dbdee1", 
                     fontSize: 15, 
-                    lineHeight: 18, // Reduced spacing between header and text
-                    includeFontPadding: false
+                    lineHeight: 18, // Compact leading
+                    includeFontPadding: false 
                   }}>
                     {text}
                   </RN.Text>
@@ -132,9 +128,28 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
         />
       );
 
-      const buttons = findInReactTree(component, (x) => x?.[0]?.type?.name === "ButtonRow");
+      const copyIdButton = (
+        <FormRow
+          key="copy-message-id"
+          label="Copy Message ID"
+          leading={<FormIcon source={getAssetIDByName("IdIcon")} />}
+          onPress={() => {
+            clipboard.setString(String(message.id));
+            showToast("Copied Message ID", getAssetIDByName("toast_copy_link"));
+            LazyActionSheet.hideActionSheet();
+          }}
+        />
+      );
+
       if (buttons) {
-        buttons.push(previewButton);
+        buttons.push(copyIdButton, previewButton);
+      } else {
+        const actionSheetContainer = findInReactTree(component, (x) => 
+          Array.isArray(x) && x[0]?.type?.name === "ActionSheetRowGroup"
+        );
+        if (actionSheetContainer?.[1]) {
+          actionSheetContainer[1].props.children.push(copyIdButton, previewButton);
+        }
       }
     });
   });
