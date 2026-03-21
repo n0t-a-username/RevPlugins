@@ -16,10 +16,9 @@ storage.SnowPerformance ??= false;
 
 let patches = [];
 let snowTimeout = null;
+let isBursting = false; // Prevents the double-trigger
 
-// Move particle generation inside the component to ensure clean state
-const ParticleItem = React.memo(({ index, active }: { index: number, active: boolean }) => {
-    // Generate static values once per mount
+const ParticleItem = React.memo(({ active }: { active: boolean }) => {
     const config = React.useMemo(() => ({
         x: Math.random() * SCREEN_WIDTH,
         size: 12 + Math.random() * 18,
@@ -42,7 +41,8 @@ const ParticleItem = React.memo(({ index, active }: { index: number, active: boo
                 useNativeDriver: true,
                 easing: Easing.linear
             }).start(({ finished }) => {
-                // Only loop if we are still "active" and still mounted
+                // If we are still in the 4s "active" window, loop.
+                // Otherwise, let this be the last fall.
                 if (finished && active && isMounted) {
                     runAnimation();
                 }
@@ -50,7 +50,10 @@ const ParticleItem = React.memo(({ index, active }: { index: number, active: boo
         };
 
         runAnimation();
-        return () => { isMounted = false; animValue.stopAnimation(); };
+        return () => { 
+            isMounted = false; 
+            animValue.stopAnimation(); 
+        };
     }, [active]);
 
     return (
@@ -72,19 +75,16 @@ const FallingParticles = () => {
     const [active, setActive] = React.useState(true);
 
     React.useEffect(() => {
-        // 4 seconds of generation/looping
+        // 4 seconds of "active" spawning/looping
         const timer = setTimeout(() => setActive(false), 4000);
         return () => clearTimeout(timer);
     }, []);
 
-    // Create a static array of 50 indices
     const particles = React.useMemo(() => Array.from({ length: 50 }, (_, i) => i), []);
 
     return (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
-            {particles.map(i => (
-                <ParticleItem key={i} index={i} active={active} />
-            ))}
+            {particles.map(i => <ParticleItem key={i} active={active} />)}
         </View>
     );
 };
@@ -95,16 +95,19 @@ export default {
             patches.push(before("addReaction", ReactionModule, (args) => {
                 const [,, emoji] = args;
                 if (emoji?.name === "❄️") {
+                    // If a burst is already happening, don't start a new one
+                    if (isBursting) return;
+                    isBursting = true;
+
                     if (snowTimeout) clearTimeout(snowTimeout);
                     
-                    storage.SnowEnabled = false;
-                    setTimeout(() => {
-                        storage.SnowEnabled = true;
-                        // 7s total (4s active + 3s to fall off screen)
-                        snowTimeout = setTimeout(() => {
-                            storage.SnowEnabled = false;
-                        }, 7000);
-                    }, 32); 
+                    storage.SnowEnabled = true;
+
+                    // 7s total (4s active + 3s drain)
+                    snowTimeout = setTimeout(() => {
+                        storage.SnowEnabled = false;
+                        isBursting = false; // Allow next burst
+                    }, 7000);
                 }
             }));
         }
@@ -134,6 +137,7 @@ export default {
     onUnload: () => {
         patches.forEach(u => u());
         if (snowTimeout) clearTimeout(snowTimeout);
+        isBursting = false;
         storage.SnowEnabled = false;
     },
     settings: Settings
