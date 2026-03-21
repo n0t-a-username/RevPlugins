@@ -1,32 +1,23 @@
-import { after, before } from "@vendetta/patcher";
+import { before } from "@vendetta/patcher";
 import { React, ReactNative } from "@vendetta/metro/common";
-import { findByProps, findByName } from "@vendetta/metro";
+import { findByProps } from "@vendetta/metro";
+import { General } from "@vendetta/ui/components";
 import { storage } from "@vendetta/plugin";
-// Ensure this matches your filename exactly (Case-Sensitive)
 import Settings from "./Settings"; 
 
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// Safety check for all Metro modules
 const ReactionModule = findByProps("addReaction");
-const General = findByProps("View")?.View ? findByProps("View") : null;
 
 let patches = [];
 let lastBurstTime = 0;
+// Moving this outside the component ensures we don't duplicate on re-renders
+let activeParticles = []; 
 
-// Initialize storage safely
 storage.SnowEnabled ??= false;
-storage.SnowPerformance ??= false;
 
-const ParticleItem = React.memo(() => {
-    const config = React.useMemo(() => ({
-        x: Math.random() * SCREEN_WIDTH,
-        size: storage.SnowPerformance ? 12 : (15 + Math.random() * 20),
-        duration: 3000 + Math.random() * 3000,
-        opacity: 0.6 + Math.random() * 0.4,
-    }), []);
-
+const ParticleItem = React.memo(({ data }: { data: any }) => {
     const animValue = React.useRef(new Animated.Value(-50)).current;
 
     React.useEffect(() => {
@@ -36,7 +27,7 @@ const ParticleItem = React.memo(() => {
             animValue.setValue(-50);
             Animated.timing(animValue, {
                 toValue: SCREEN_HEIGHT + 50,
-                duration: config.duration,
+                duration: data.duration,
                 useNativeDriver: true,
                 easing: Easing.linear
             }).start(({ finished }) => {
@@ -49,36 +40,36 @@ const ParticleItem = React.memo(() => {
 
     return (
         <Animated.View style={{
-            position: "absolute", left: config.x, top: 0,
-            width: config.size, height: config.size, opacity: config.opacity,
+            position: "absolute", left: data.x, top: 0,
+            width: data.size, height: data.size, opacity: data.opacity,
             transform: [{ translateY: animValue }]
         }}>
-            {!storage.SnowPerformance ? (
-                <Image source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-            ) : (
-                <View style={{ width: '100%', height: '100%', borderRadius: config.size / 2, backgroundColor: 'white' }} />
-            )}
+            <Image 
+                source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} 
+                style={{ width: '100%', height: '100%' }} 
+                resizeMode="contain" 
+            />
         </Animated.View>
     );
 });
 
 const SnowOverlay = () => {
-    // Polling is the safest way to react to storage changes across different UI stacks
-    const [active, setActive] = React.useState(false);
-    
-    React.useEffect(() => {
-        const t = setInterval(() => {
-            if (storage.SnowEnabled !== active) setActive(storage.SnowEnabled);
-        }, 500);
-        return () => clearInterval(t);
-    }, [active]);
+    // We use a simple state to mount/unmount the particles
+    const [show, setShow] = React.useState(false);
 
-    if (!active) return null;
+    React.useEffect(() => {
+        const check = setInterval(() => {
+            if (storage.SnowEnabled !== show) setShow(storage.SnowEnabled);
+        }, 500);
+        return () => clearInterval(check);
+    }, [show]);
+
+    if (!show) return null;
 
     return (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            {Array.from({ length: 50 }).map((_, i) => (
-                <ParticleItem key={`${lastBurstTime}-${i}`} />
+            {activeParticles.map((p, i) => (
+                <ParticleItem key={`${lastBurstTime}-${i}`} data={p} />
             ))}
         </View>
     );
@@ -86,54 +77,52 @@ const SnowOverlay = () => {
 
 export default {
     onLoad: () => {
-        try {
-            // 1. Reaction Patch (with extensive safety checks)
-            if (ReactionModule?.addReaction) {
-                patches.push(before("addReaction", ReactionModule, (args) => {
-                    const emoji = args?.[2]; // Standard position for emoji object
-                    if (emoji?.name === "❄️") {
-                        const now = Date.now();
-                        if (now - lastBurstTime < 10000) return;
-                        lastBurstTime = now;
-                        storage.SnowEnabled = true;
-                        setTimeout(() => { storage.SnowEnabled = false; }, 15000);
-                    }
-                }));
-            }
+        if (ReactionModule?.addReaction) {
+            patches.push(before("addReaction", ReactionModule, (args) => {
+                const emoji = args?.[2];
+                if (emoji?.name === "❄️") {
+                    const now = Date.now();
+                    if (now - lastBurstTime < 10000) return;
+                    
+                    lastBurstTime = now;
+                    // Create exactly 40 particles and stop
+                    activeParticles = Array.from({ length: 40 }, () => ({
+                        x: Math.random() * SCREEN_WIDTH,
+                        size: 15 + Math.random() * 15,
+                        duration: 3000 + Math.random() * 2000,
+                        opacity: 0.5 + Math.random() * 0.5
+                    }));
 
-            // 2. The most stable injection point: General.View
-            // We use a try-catch inside the patch to prevent the whole app from crashing
-            if (General?.View) {
-                patches.push(after("render", General.View, (args, res) => {
-                    try {
-                        if (!res?.props) return res;
-                        
-                        // Only inject into the root-level background view (flex: 1)
-                        const style = ReactNative.StyleSheet.flatten(res.props.style);
-                        if (style?.flex !== 1) return res;
+                    storage.SnowEnabled = true;
+                    setTimeout(() => { 
+                        storage.SnowEnabled = false; 
+                        activeParticles = [];
+                    }, 12000);
+                }
+            }));
+        }
 
-                        const children = Array.isArray(res.props.children) ? res.props.children : [res.props.children];
-                        if (children.some(c => c?.key === "snow-logic-root")) return res;
+        if (General?.View) {
+            patches.push(after("render", General.View, (args, res) => {
+                if (!res?.props) return res;
+                const style = StyleSheet.flatten(res.props.style);
+                if (style?.flex !== 1) return res;
 
-                        res.props.children = [
-                            ...children,
-                            React.createElement(SnowOverlay, { key: "snow-logic-root" })
-                        ];
-                    } catch (e) {
-                        // Fail silently inside the render loop to keep the app alive
-                    }
-                    return res;
-                }));
-            }
-        } catch (err) {
-            // If anything goes wrong during onLoad, we still want the plugin to "enable" 
-            // even if it does nothing, so the user can see it's active.
-            console.error("[SnowPlugin] Failed to initialize patches:", err);
+                const children = Array.isArray(res.props.children) ? res.props.children : [res.props.children];
+                if (children.some(c => c?.key === "snow-fixed-layer")) return res;
+
+                res.props.children = [
+                    ...children,
+                    React.createElement(SnowOverlay, { key: "snow-fixed-layer" })
+                ];
+                return res;
+            }));
         }
     },
     onUnload: () => {
         patches.forEach(p => p?.());
         storage.SnowEnabled = false;
+        activeParticles = [];
     },
     settings: Settings
 };
