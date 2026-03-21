@@ -1,123 +1,143 @@
-import { after, before } from "@vendetta/patcher";
+import { before } from "@vendetta/patcher";
 import { React, ReactNative } from "@vendetta/metro/common";
-import { findByProps, findByName } from "@vendetta/metro";
+import { General } from "@vendetta/ui/components";
+import settings from "./settings.js";
 import { storage } from "@vendetta/plugin";
-import { useProxy } from "@vendetta/storage";
-import Settings from "./Settings";
 
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-const ReactionModule = findByProps("addReaction");
-// This is the component that renders the actual chat messages
-const MessagesList = findByName("MessagesList", false);
-
-storage.SnowEnabled = false; 
+const USE_SNOWFLAKE_IMAGE = !storage.SnowPerformance;
 let patches = [];
-let lastBurstTime = 0;
+const persistentParticles = [];
+let initialized = false;
 
-const ParticleItem = React.memo(({ startTime }: { startTime: number }) => {
-    const config = React.useMemo(() => ({
+// --- Logic remains the same, just made more robust ---
+
+function createParticle(index, startFromCurrent = false) {
+    const startY = startFromCurrent ? Math.random() * SCREEN_HEIGHT : -50;
+    const animValue = new Animated.Value(startY);
+    const rotationValue = new Animated.Value(0);
+    
+    return {
+        id: index,
         x: Math.random() * SCREEN_WIDTH,
-        size: 10 + Math.random() * 20,
-        duration: 3000 + Math.random() * 3000,
-        opacity: 0.4 + Math.random() * 0.6,
-        initialDelay: Math.random() * 5000 
-    }), []);
+        size: USE_SNOWFLAKE_IMAGE ? (10 + Math.random() * 25) : (5 + Math.random() * 20),
+        duration: 4000 + Math.random() * 6000,
+        animValue,
+        rotationValue,
+        startY,
+        opacity: USE_SNOWFLAKE_IMAGE ? (0.6 + Math.random() * 0.4) : 1,
+        rotation: Math.random() * 360,
+        shouldRotate: USE_SNOWFLAKE_IMAGE && Math.random() > 0.4,
+        rotationSpeed: 4000 + Math.random() * 8000,
+        rotationDirection: Math.random() > 0.5 ? 1 : -1,
+    };
+}
 
-    const animValue = React.useRef(new Animated.Value(-50)).current;
+function startParticleAnimation(particle) {
+    const animate = () => {
+        particle.animValue.setValue(-50);
+        if (particle.shouldRotate) particle.rotationValue.setValue(0);
 
-    React.useEffect(() => {
-        let isMounted = true;
-        const run = (isFirstRun = false) => {
-            if (!isMounted) return;
-            animValue.setValue(-50);
-            
-            const startTiming = () => {
-                Animated.timing(animValue, {
-                    toValue: SCREEN_HEIGHT + 50,
-                    duration: config.duration,
+        // Main Fall
+        Animated.timing(particle.animValue, {
+            toValue: SCREEN_HEIGHT + 50,
+            duration: particle.duration,
+            useNativeDriver: true,
+            easing: Easing.linear
+        }).start(({ finished }) => { if (finished) animate(); });
+
+        // Rotation
+        if (particle.shouldRotate) {
+            Animated.loop(
+                Animated.timing(particle.rotationValue, {
+                    toValue: particle.rotationDirection * 360,
+                    duration: particle.rotationSpeed,
                     useNativeDriver: true,
                     easing: Easing.linear
-                }).start(({ finished }) => {
-                    if (finished && isMounted && (Date.now() - startTime < 10000)) {
-                        run(false);
-                    }
-                });
-            };
+                })
+            ).start();
+        }
+    };
 
-            if (isFirstRun) setTimeout(startTiming, config.initialDelay);
-            else startTiming();
-        };
+    // Initial partial fall so snow doesn't all start at the top on load
+    Animated.timing(particle.animValue, {
+        toValue: SCREEN_HEIGHT + 50,
+        duration: particle.duration * ((SCREEN_HEIGHT + 50 - particle.startY) / (SCREEN_HEIGHT + 100)),
+        useNativeDriver: true,
+        easing: Easing.linear
+    }).start(({ finished }) => { if (finished) animate(); });
+}
 
-        run(true);
-        return () => { isMounted = false; animValue.stopAnimation(); };
-    }, []);
+function initializeParticles() {
+    if (initialized) return;
+    for (let i = 0; i < 80; i++) {
+        const p = createParticle(i, true);
+        persistentParticles.push(p);
+        startParticleAnimation(p);
+    }
+    initialized = true;
+}
+
+const ParticleItem = React.memo(({ particle }: { particle: any }) => {
+    const rotation = particle.rotationValue.interpolate({
+        inputRange: [0, 360],
+        outputRange: [`${particle.rotation}deg`, `${particle.rotation + 360}deg`]
+    });
 
     return (
         <Animated.View style={{
-            position: "absolute", left: config.x, top: 0,
-            width: config.size, height: config.size, opacity: config.opacity,
-            transform: [{ translateY: animValue }]
+            position: "absolute", left: particle.x, top: 0,
+            width: particle.size, height: particle.size, opacity: particle.opacity,
+            transform: [
+                { translateY: particle.animValue },
+                { rotate: particle.shouldRotate ? rotation : `${particle.rotation}deg` }
+            ]
         }}>
-            <Image 
-                source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} 
-                style={{ width: '100%', height: '100%' }} 
-                resizeMode="contain" 
-            />
+            {USE_SNOWFLAKE_IMAGE ? (
+                <Image source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+            ) : (
+                <View style={{ width: '100%', height: '100%', borderRadius: particle.size / 2, backgroundColor: 'white' }} />
+            )}
         </Animated.View>
     );
 });
 
-const SnowWrapper = () => {
-    useProxy(storage);
-    return storage.SnowEnabled ? (
+const SnowOverlay = () => {
+    return (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
-            {Array.from({ length: 50 }).map((_, i) => (
-                <ParticleItem key={`${lastBurstTime}-${i}`} startTime={lastBurstTime} />
-            ))}
+            {persistentParticles.map(p => <ParticleItem key={p.id} particle={p} />)}
         </View>
-    ) : null;
+    );
 };
 
 export default {
     onLoad: () => {
-        if (ReactionModule) {
-            patches.push(before("addReaction", ReactionModule, (args) => {
-                const [,, emoji] = args;
-                if (emoji?.name === "❄️") {
-                    const now = Date.now();
-                    if (now - lastBurstTime < 10000) return;
-                    
-                    lastBurstTime = now;
-                    storage.SnowEnabled = true;
+        initializeParticles();
 
-                    setTimeout(() => {
-                        storage.SnowEnabled = false;
-                    }, 15000); 
-                }
-            }));
-        }
+        patches.push(
+            before("render", General.View, (args) => {
+                const [wrapper] = args;
+                // We target the root-most View by looking for flex: 1 without specific sub-types
+                // This makes it show up EVERYWHERE (Settings, DMs, Server List)
+                if (!wrapper?.style?.some?.(s => s?.flex === 1)) return;
 
-        // Patch the MessagesList to include the snow
-        if (MessagesList) {
-            patches.push(after("default", MessagesList, (args, res) => {
-                // If there's no render result or we are already injected, skip
-                if (!res) return;
-                
-                // We wrap the original MessagesList result and our Snow in a fragment or View
-                return (
-                    <View style={{ flex: 1 }}>
-                        {res}
-                        <SnowWrapper />
-                    </View>
-                );
-            }));
-        }
+                // Stop the "Double Injection" or "Restart" by checking for our key
+                const children = Array.isArray(wrapper.children) ? wrapper.children : [wrapper.children];
+                if (children.some(c => c?.key === "persistent-snow-overlay")) return;
+
+                wrapper.children = [
+                    ...children,
+                    React.createElement(SnowOverlay, { key: "persistent-snow-overlay" })
+                ];
+            })
+        );
     },
     onUnload: () => {
-        patches.forEach(u => u());
-        storage.SnowEnabled = false;
+        patches.forEach(p => p());
+        persistentParticles.length = 0;
+        initialized = false;
     },
-    settings: Settings
+    settings
 };
