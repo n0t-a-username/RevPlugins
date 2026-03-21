@@ -1,10 +1,10 @@
 {
-    "name": "Let it Snow",
-    "description": "Render Snowflakes on the screen",
+    "name": "Reactor",
+    "description": "Creates effects on certain reactions!",
     "authors": [
         {
-            "name": "Bwlok",
-            "id": "501827585806827520"
+            "name": "Merb",
+            "id": "297161891817167"
         }
     ],
     "main": "src/index.tsx",
