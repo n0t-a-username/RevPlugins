@@ -6,7 +6,7 @@ import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import Settings from "./Settings";
 
-const { View, Animated, Dimensions, Easing, Image } = ReactNative;
+const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const ReactionModule = findByProps("addReaction");
@@ -23,14 +23,14 @@ function createParticle(index) {
     return {
         id: index,
         x: Math.random() * SCREEN_WIDTH,
-        size: 10 + Math.random() * 20,
-        duration: 2500 + Math.random() * 2000,
+        size: 12 + Math.random() * 18,
+        duration: 2800 + Math.random() * 2200, // Slightly slower for better visibility
         animValue: new Animated.Value(-50),
         opacity: 0.6 + Math.random() * 0.4,
     };
 }
 
-function startSingleFall(particle, active, onDone) {
+function startSingleFall(particle, activeRef, onDone) {
     particle.animValue.setValue(-50);
     Animated.timing(particle.animValue, {
         toValue: SCREEN_HEIGHT + 50,
@@ -39,10 +39,11 @@ function startSingleFall(particle, active, onDone) {
         easing: Easing.linear
     }).start(({ finished }) => {
         if (finished) {
-            if (active.current) {
-                startSingleFall(particle, active, onDone);
+            // Check the ref to see if we should loop again
+            if (activeRef.current) {
+                startSingleFall(particle, activeRef, onDone);
             } else {
-                onDone();
+                onDone(); // Exit and hide
             }
         }
     });
@@ -78,7 +79,6 @@ const ParticleItem = React.memo(({ particle, isActive }: { particle: any, isActi
 });
 
 const FallingParticles = () => {
-    useProxy(storage);
     const [active, setActive] = React.useState(true);
 
     React.useEffect(() => {
@@ -87,13 +87,13 @@ const FallingParticles = () => {
             initialized = true;
         }
         
-        // Stop "creating" (looping) after 3 seconds
-        const timer = setTimeout(() => setActive(false), 3000);
+        // 4 seconds of "New" snow generation
+        const timer = setTimeout(() => setActive(false), 4000);
         return () => clearTimeout(timer);
     }, []);
 
     return (
-        <View pointerEvents="none" style={{ ...ReactNative.StyleSheet.absoluteFillObject, zIndex: 9999 }}>
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
             {persistentParticles.map(p => (
                 <ParticleItem key={p.id} particle={p} isActive={active} />
             ))}
@@ -109,15 +109,15 @@ export default {
                 if (emoji?.name === "❄️") {
                     if (snowTimeout) clearTimeout(snowTimeout);
                     
-                    // Force restart logic
+                    // Reset state to trigger a fresh mount
                     storage.SnowEnabled = false;
                     setTimeout(() => {
                         storage.SnowEnabled = true;
-                        // 3s generation + 2s fall time = 5s total mount
+                        // Extended duration: 4s active + 3s for final descent
                         snowTimeout = setTimeout(() => {
                             storage.SnowEnabled = false;
-                        }, 5000);
-                    }, 16); // One frame delay
+                        }, 7000);
+                    }, 32); 
                 }
             }));
         }
@@ -147,6 +147,7 @@ export default {
     onUnload: () => {
         patches.forEach(u => u());
         if (snowTimeout) clearTimeout(snowTimeout);
+        storage.SnowEnabled = false;
     },
     settings: Settings
 };
