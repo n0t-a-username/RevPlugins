@@ -1,16 +1,21 @@
 import { before } from "@vendetta/patcher";
-import { React, ReactNative, flux as Dispatcher } from "@vendetta/metro/common";
+import { React, ReactNative } from "@vendetta/metro/common";
 import { findByProps } from "@vendetta/metro";
 import { General } from "@vendetta/ui/components";
 import { storage } from "@vendetta/plugin";
+import { useProxy } from "@vendetta/storage";
 import Settings from "./Settings";
 
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const ReactionModule = findByProps("addReaction");
+
+storage.SnowEnabled = false; 
+storage.SnowPerformance ??= false;
+
 let patches = [];
-let isBursting = false;
+let lastBurstTime = 0; // The "Gatekeeper" variable
 
 const ParticleItem = React.memo(({ active }: { active: boolean }) => {
     const config = React.useMemo(() => ({
@@ -51,19 +56,12 @@ const ParticleItem = React.memo(({ active }: { active: boolean }) => {
     );
 });
 
-const FallingParticles = ({ onFinish }: { onFinish: () => void }) => {
+const FallingParticles = () => {
     const [active, setActive] = React.useState(true);
 
     React.useEffect(() => {
-        // 4s of generation
-        const activeTimer = setTimeout(() => setActive(false), 4000);
-        // 7s total until unmount
-        const finishTimer = setTimeout(onFinish, 7000);
-        
-        return () => {
-            clearTimeout(activeTimer);
-            clearTimeout(finishTimer);
-        };
+        const timer = setTimeout(() => setActive(false), 4000); // 4s of spawning
+        return () => clearTimeout(timer);
     }, []);
 
     const particles = React.useMemo(() => Array.from({ length: 50 }, (_, i) => i), []);
@@ -75,38 +73,22 @@ const FallingParticles = ({ onFinish }: { onFinish: () => void }) => {
     );
 };
 
-// Singleton Controller to prevent double-mounts
-const SnowController = () => {
-    const [show, setShow] = React.useState(false);
-
-    React.useEffect(() => {
-        const trigger = () => {
-            if (isBursting) return;
-            isBursting = true;
-            setShow(true);
-        };
-
-        // Listen for a custom internal event
-        Dispatcher.subscribe("LET_IT_SNOW_TRIGGER", trigger);
-        return () => Dispatcher.unsubscribe("LET_IT_SNOW_TRIGGER", trigger);
-    }, []);
-
-    if (!show) return null;
-
-    return <FallingParticles onFinish={() => {
-        setShow(false);
-        isBursting = false;
-    }} />;
-};
-
 export default {
     onLoad: () => {
         if (ReactionModule) {
             patches.push(before("addReaction", ReactionModule, (args) => {
                 const [,, emoji] = args;
                 if (emoji?.name === "❄️") {
-                    // Fire a custom dispatcher event instead of setting storage
-                    Dispatcher.dispatch({ type: "LET_IT_SNOW_TRIGGER" });
+                    const now = Date.now();
+                    // If less than 7 seconds have passed, ignore the request
+                    if (now - lastBurstTime < 7000) return;
+                    
+                    lastBurstTime = now;
+                    storage.SnowEnabled = true;
+
+                    setTimeout(() => {
+                        storage.SnowEnabled = false;
+                    }, 7000); // 7s total duration
                 }
             }));
         }
@@ -121,16 +103,22 @@ export default {
                 if (child?.type?.name !== "NativeStackViewInner") return;
                 if (!child?.props?.state?.routeNames?.includes("main")) return;
 
+                const SnowWrapper = () => {
+                    useProxy(storage);
+                    return storage.SnowEnabled ? <FallingParticles /> : null;
+                };
+
                 const children = Array.isArray(wrapper.children) ? wrapper.children : [wrapper.children];
                 if (!children.some(c => c?.key === "snow-logic")) {
-                    wrapper.children = [...children, React.createElement(SnowController, { key: "snow-logic" })];
+                    wrapper.children = [...children, React.createElement(SnowWrapper, { key: "snow-logic" })];
                 }
             })
         );
     },
     onUnload: () => {
         patches.forEach(u => u());
-        isBursting = false;
+        lastBurstTime = 0;
+        storage.SnowEnabled = false;
     },
     settings: Settings
 };
