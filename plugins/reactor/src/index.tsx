@@ -9,8 +9,7 @@ import Settings from "./Settings";
 const { View, Animated, Dimensions, Easing, Image } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-const ReactionModule = findByProps("addReaction");
-
+// Default storage to prevent undefined checks
 storage.SnowEnabled = false; 
 storage.SnowPerformance ??= false;
 
@@ -20,20 +19,18 @@ let initialized = false;
 let snowTimeout = null;
 
 function createParticle(index) {
-    const animValue = new Animated.Value(-50);
-    const rotationValue = new Animated.Value(0);
-    const x = Math.random() * SCREEN_WIDTH;
-    const size = 10 + Math.random() * 20;
-    const duration = 3500 + Math.random() * 2500;
-    const opacity = 0.6 + Math.random() * 0.4;
-    const rotation = Math.random() * 360;
-    const shouldRotate = Math.random() > 0.4;
-    const rotationSpeed = 3000 + Math.random() * 5000;
-    const rotationDirection = Math.random() > 0.5 ? 1 : -1;
-
     return {
-        id: index, x, size, duration, animValue, rotationValue,
-        opacity, rotation, shouldRotate, rotationSpeed, rotationDirection
+        id: index,
+        x: Math.random() * SCREEN_WIDTH,
+        size: 10 + Math.random() * 20,
+        duration: 3500 + Math.random() * 2500,
+        animValue: new Animated.Value(-50),
+        rotationValue: new Animated.Value(0),
+        opacity: 0.6 + Math.random() * 0.4,
+        rotation: Math.random() * 360,
+        shouldRotate: Math.random() > 0.4,
+        rotationSpeed: 3000 + Math.random() * 5000,
+        rotationDirection: Math.random() > 0.5 ? 1 : -1
     };
 }
 
@@ -41,7 +38,6 @@ function startSingleFall(particle, onDone) {
     particle.animValue.setValue(-50);
     particle.rotationValue.setValue(0);
 
-    // Rotation Loop
     if (particle.shouldRotate) {
         Animated.timing(particle.rotationValue, {
             toValue: particle.rotationDirection * 360,
@@ -51,7 +47,6 @@ function startSingleFall(particle, onDone) {
         }).start();
     }
 
-    // Falling Animation
     Animated.timing(particle.animValue, {
         toValue: SCREEN_HEIGHT + 50,
         duration: particle.duration,
@@ -62,14 +57,6 @@ function startSingleFall(particle, onDone) {
     });
 }
 
-function initializeParticles() {
-    if (initialized) return;
-    initialized = true;
-    for (let i = 0; i < 40; i++) {
-        persistentParticles.push(createParticle(i));
-    }
-}
-
 const ParticleItem = React.memo(({ particle, active }: { particle: any, active: boolean }) => {
     const [isVisible, setIsVisible] = React.useState(false);
 
@@ -78,12 +65,8 @@ const ParticleItem = React.memo(({ particle, active }: { particle: any, active: 
             setIsVisible(true);
             const runIteration = () => {
                 startSingleFall(particle, () => {
-                    // Only restart if the parent says we're still active
-                    if (active) {
-                        runIteration();
-                    } else {
-                        setIsVisible(false);
-                    }
+                    if (active) runIteration();
+                    else setIsVisible(false);
                 });
             };
             runIteration();
@@ -116,14 +99,13 @@ const ParticleItem = React.memo(({ particle, active }: { particle: any, active: 
 });
 
 const FallingParticles = () => {
-    useProxy(storage);
-    // storage.SnowEnabled controls the mounting, but we need an "active" prop 
-    // to tell particles when to stop looping and just finish their fall.
     const [active, setActive] = React.useState(true);
 
     React.useEffect(() => {
-        initializeParticles();
-        // After 3 seconds, stop starting new loops
+        if (!initialized) {
+            for (let i = 0; i < 40; i++) persistentParticles.push(createParticle(i));
+            initialized = true;
+        }
         const timer = setTimeout(() => setActive(false), 3000);
         return () => clearTimeout(timer);
     }, []);
@@ -139,47 +121,53 @@ const FallingParticles = () => {
 
 export default {
     onLoad: () => {
-        if (ReactionModule) {
-            patches.push(before("addReaction", ReactionModule, (args) => {
-                const [,, emoji] = args;
-                if (emoji?.name === "❄️") {
-                    if (snowTimeout) clearTimeout(snowTimeout);
-                    
-                    // Remount the component to start a fresh burst
-                    storage.SnowEnabled = false;
-                    setTimeout(() => {
-                        storage.SnowEnabled = true;
-                        // Hard clear after 5 seconds (3s active + 2s drain)
-                        snowTimeout = setTimeout(() => {
-                            storage.SnowEnabled = false;
-                        }, 5000);
-                    }, 10);
-                }
-            }));
+        try {
+            // Use a safer search for the reaction module
+            const ReactionModule = findByProps("addReaction");
+            if (ReactionModule) {
+                patches.push(before("addReaction", ReactionModule, (args) => {
+                    const [,, emoji] = args;
+                    if (emoji?.name === "❄️") {
+                        if (snowTimeout) clearTimeout(snowTimeout);
+                        storage.SnowEnabled = false;
+                        setTimeout(() => {
+                            storage.SnowEnabled = true;
+                            snowTimeout = setTimeout(() => {
+                                storage.SnowEnabled = false;
+                            }, 5000);
+                        }, 50);
+                    }
+                }));
+            }
+
+            // Patching the View safely
+            if (General?.View) {
+                patches.push(
+                    before("render", General.View, (args) => {
+                        const [wrapper] = args;
+                        if (!wrapper?.style?.some(s => s?.flex === 1)) return;
+
+                        let child = wrapper.children;
+                        if (Array.isArray(child)) child = child.find(c => c?.type?.name === "NativeStackViewInner");
+                        if (child?.type?.name !== "NativeStackViewInner") return;
+                        if (!child?.props?.state?.routeNames?.includes("main")) return;
+
+                        const SnowWrapper = () => {
+                            useProxy(storage);
+                            return storage.SnowEnabled ? <FallingParticles /> : null;
+                        };
+
+                        const currentChildren = Array.isArray(wrapper.children) ? wrapper.children : [wrapper.children];
+                        wrapper.children = [...currentChildren, React.createElement(SnowWrapper, { key: "snow-effect" })];
+                    })
+                );
+            }
+        } catch (e) {
+            console.error("[LetItSnow] Failed to patch:", e);
         }
-
-        patches.push(
-            before("render", General.View, (args) => {
-                const [wrapper] = args;
-                if (!wrapper?.style?.some(s => s?.flex === 1)) return;
-
-                let child = wrapper.children;
-                if (Array.isArray(child)) child = child.find(c => c?.type?.name === "NativeStackViewInner");
-                if (child?.type?.name !== "NativeStackViewInner") return;
-                if (!child?.props?.state?.routeNames?.includes("main")) return;
-
-                const SnowWrapper = () => {
-                    useProxy(storage);
-                    return storage.SnowEnabled ? <FallingParticles /> : null;
-                };
-
-                const currentChildren = Array.isArray(wrapper.children) ? wrapper.children : [wrapper.children];
-                wrapper.children = [...currentChildren, React.createElement(SnowWrapper, { key: "snow-effect" })];
-            })
-        );
     },
     onUnload: () => {
-        for (const unpatch of patches) unpatch();
+        patches.forEach(unpatch => unpatch());
         if (snowTimeout) clearTimeout(snowTimeout);
     },
     settings: Settings
