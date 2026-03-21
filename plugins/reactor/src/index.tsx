@@ -1,22 +1,16 @@
 import { before } from "@vendetta/patcher";
-import { React, ReactNative } from "@vendetta/metro/common";
+import { React, ReactNative, flux as Dispatcher } from "@vendetta/metro/common";
 import { findByProps } from "@vendetta/metro";
 import { General } from "@vendetta/ui/components";
 import { storage } from "@vendetta/plugin";
-import { useProxy } from "@vendetta/storage";
 import Settings from "./Settings";
 
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const ReactionModule = findByProps("addReaction");
-
-storage.SnowEnabled = false; 
-storage.SnowPerformance ??= false;
-
 let patches = [];
-let snowTimeout = null;
-let isBursting = false; // Prevents the double-trigger
+let isBursting = false;
 
 const ParticleItem = React.memo(({ active }: { active: boolean }) => {
     const config = React.useMemo(() => ({
@@ -30,30 +24,20 @@ const ParticleItem = React.memo(({ active }: { active: boolean }) => {
 
     React.useEffect(() => {
         let isMounted = true;
-
-        const runAnimation = () => {
+        const run = () => {
             if (!isMounted) return;
             animValue.setValue(-50);
-            
             Animated.timing(animValue, {
                 toValue: SCREEN_HEIGHT + 50,
                 duration: config.duration,
                 useNativeDriver: true,
                 easing: Easing.linear
             }).start(({ finished }) => {
-                // If we are still in the 4s "active" window, loop.
-                // Otherwise, let this be the last fall.
-                if (finished && active && isMounted) {
-                    runAnimation();
-                }
+                if (finished && active && isMounted) run();
             });
         };
-
-        runAnimation();
-        return () => { 
-            isMounted = false; 
-            animValue.stopAnimation(); 
-        };
+        run();
+        return () => { isMounted = false; animValue.stopAnimation(); };
     }, [active]);
 
     return (
@@ -62,22 +46,24 @@ const ParticleItem = React.memo(({ active }: { active: boolean }) => {
             width: config.size, height: config.size, opacity: config.opacity,
             transform: [{ translateY: animValue }]
         }}>
-            <Image
-                source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }}
-                style={{ width: '100%', height: '100%' }}
-                resizeMode="contain"
-            />
+            <Image source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
         </Animated.View>
     );
 });
 
-const FallingParticles = () => {
+const FallingParticles = ({ onFinish }: { onFinish: () => void }) => {
     const [active, setActive] = React.useState(true);
 
     React.useEffect(() => {
-        // 4 seconds of "active" spawning/looping
-        const timer = setTimeout(() => setActive(false), 4000);
-        return () => clearTimeout(timer);
+        // 4s of generation
+        const activeTimer = setTimeout(() => setActive(false), 4000);
+        // 7s total until unmount
+        const finishTimer = setTimeout(onFinish, 7000);
+        
+        return () => {
+            clearTimeout(activeTimer);
+            clearTimeout(finishTimer);
+        };
     }, []);
 
     const particles = React.useMemo(() => Array.from({ length: 50 }, (_, i) => i), []);
@@ -89,25 +75,38 @@ const FallingParticles = () => {
     );
 };
 
+// Singleton Controller to prevent double-mounts
+const SnowController = () => {
+    const [show, setShow] = React.useState(false);
+
+    React.useEffect(() => {
+        const trigger = () => {
+            if (isBursting) return;
+            isBursting = true;
+            setShow(true);
+        };
+
+        // Listen for a custom internal event
+        Dispatcher.subscribe("LET_IT_SNOW_TRIGGER", trigger);
+        return () => Dispatcher.unsubscribe("LET_IT_SNOW_TRIGGER", trigger);
+    }, []);
+
+    if (!show) return null;
+
+    return <FallingParticles onFinish={() => {
+        setShow(false);
+        isBursting = false;
+    }} />;
+};
+
 export default {
     onLoad: () => {
         if (ReactionModule) {
             patches.push(before("addReaction", ReactionModule, (args) => {
                 const [,, emoji] = args;
                 if (emoji?.name === "❄️") {
-                    // If a burst is already happening, don't start a new one
-                    if (isBursting) return;
-                    isBursting = true;
-
-                    if (snowTimeout) clearTimeout(snowTimeout);
-                    
-                    storage.SnowEnabled = true;
-
-                    // 7s total (4s active + 3s drain)
-                    snowTimeout = setTimeout(() => {
-                        storage.SnowEnabled = false;
-                        isBursting = false; // Allow next burst
-                    }, 7000);
+                    // Fire a custom dispatcher event instead of setting storage
+                    Dispatcher.dispatch({ type: "LET_IT_SNOW_TRIGGER" });
                 }
             }));
         }
@@ -122,23 +121,16 @@ export default {
                 if (child?.type?.name !== "NativeStackViewInner") return;
                 if (!child?.props?.state?.routeNames?.includes("main")) return;
 
-                const SnowWrapper = () => {
-                    useProxy(storage);
-                    return storage.SnowEnabled ? <FallingParticles /> : null;
-                };
-
                 const children = Array.isArray(wrapper.children) ? wrapper.children : [wrapper.children];
                 if (!children.some(c => c?.key === "snow-logic")) {
-                    wrapper.children = [...children, React.createElement(SnowWrapper, { key: "snow-logic" })];
+                    wrapper.children = [...children, React.createElement(SnowController, { key: "snow-logic" })];
                 }
             })
         );
     },
     onUnload: () => {
         patches.forEach(u => u());
-        if (snowTimeout) clearTimeout(snowTimeout);
         isBursting = false;
-        storage.SnowEnabled = false;
     },
     settings: Settings
 };
