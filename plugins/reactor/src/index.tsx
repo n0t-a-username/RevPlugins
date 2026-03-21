@@ -1,73 +1,39 @@
 import { after, before } from "@vendetta/patcher";
 import { React, ReactNative } from "@vendetta/metro/common";
-import { findByProps, findByName } from "@vendetta/metro";
+import { findByProps, findByStoreName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
+import { logger } from "@vendetta/utils"; // Use this to check logs
 import Settings from "./Settings"; 
 
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-const ReactionModule = findByProps("addReaction");
-// Fallback to a very common root component if General.View is being finicky
-const AppContainer = findByName("App", false) || findByProps("AppLayerContainer");
+// Find the reaction module more aggressively
+const ReactionModule = findByProps("addReaction") || findByProps("addEmojiReaction");
+// Find the layout container
+const Layout = findByProps("AppLayerContainer") || findByProps("Layout");
 
 let patches = [];
-let particles = [];
 let lastBurstTime = 0;
 
-// Ensure storage defaults are set so the plugin doesn't crash on load
 if (storage.SnowEnabled === undefined) storage.SnowEnabled = false;
-if (storage.SnowPerformance === undefined) storage.SnowPerformance = false;
 
-function createParticle(index) {
-    const isImg = !storage.SnowPerformance;
-    return {
-        id: index,
+const ParticleItem = React.memo(({ id }: { id: number }) => {
+    const config = React.useMemo(() => ({
         x: Math.random() * SCREEN_WIDTH,
-        size: isImg ? (10 + Math.random() * 25) : (5 + Math.random() * 15),
+        size: storage.SnowPerformance ? 10 : (15 + Math.random() * 20),
         duration: 3000 + Math.random() * 3000,
-        animValue: new Animated.Value(-50),
-        opacity: isImg ? (0.6 + Math.random() * 0.4) : 1,
-    };
-}
+        opacity: 0.5 + Math.random() * 0.5,
+    }), []);
 
-const SnowOverlay = () => {
-    // We use local state to trigger a re-render when the global storage changes
-    const [active, setActive] = React.useState(false);
-    const [trigger, setTrigger] = React.useState(0);
+    const animValue = React.useRef(new Animated.Value(-50)).current;
 
-    React.useEffect(() => {
-        const interval = setInterval(() => {
-            if (storage.SnowEnabled !== active) {
-                setActive(storage.SnowEnabled);
-                if (storage.SnowEnabled) {
-                    // Refresh particles on each new burst
-                    particles = Array.from({ length: 50 }, (_, i) => createParticle(i));
-                    setTrigger(Date.now());
-                }
-            }
-        }, 500); // Check every 500ms for the "reaction" flag
-        return () => clearInterval(interval);
-    }, [active]);
-
-    if (!active) return null;
-
-    return (
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
-            {particles.map((p) => (
-                <ParticleComponent key={`${trigger}-${p.id}`} p={p} />
-            ))}
-        </View>
-    );
-};
-
-const ParticleComponent = ({ p }) => {
     React.useEffect(() => {
         const run = () => {
-            p.animValue.setValue(-50);
-            Animated.timing(p.animValue, {
+            animValue.setValue(-50);
+            Animated.timing(animValue, {
                 toValue: SCREEN_HEIGHT + 50,
-                duration: p.duration,
+                duration: config.duration,
                 useNativeDriver: true,
                 easing: Easing.linear
             }).start(({ finished }) => {
@@ -79,46 +45,79 @@ const ParticleComponent = ({ p }) => {
 
     return (
         <Animated.View style={{
-            position: "absolute", left: p.x, top: 0,
-            width: p.size, height: p.size, opacity: p.opacity,
-            transform: [{ translateY: p.animValue }]
+            position: "absolute", left: config.x, top: 0,
+            width: config.size, height: config.size, opacity: config.opacity,
+            transform: [{ translateY: animValue }]
         }}>
             {!storage.SnowPerformance ? (
                 <Image source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} style={{ width: '100%', height: '100%' }} />
             ) : (
-                <View style={{ width: '100%', height: '100%', borderRadius: p.size / 2, backgroundColor: 'white' }} />
+                <View style={{ width: '100%', height: '100%', borderRadius: config.size / 2, backgroundColor: 'white' }} />
             )}
         </Animated.View>
+    );
+});
+
+const SnowOverlay = () => {
+    // We force a re-render when storage.SnowEnabled changes
+    const [isVisible, setIsVisible] = React.useState(false);
+
+    React.useEffect(() => {
+        const check = setInterval(() => {
+            if (storage.SnowEnabled !== isVisible) setIsVisible(storage.SnowEnabled);
+        }, 300);
+        return () => clearInterval(check);
+    }, [isVisible]);
+
+    if (!isVisible) return null;
+
+    return (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            {Array.from({ length: 50 }).map((_, i) => (
+                <ParticleItem key={`${lastBurstTime}-${i}`} id={i} />
+            ))}
+        </View>
     );
 };
 
 export default {
     onLoad: () => {
-        // 1. Reaction Patch
+        logger.log("Snow Plugin Loading...");
+
         if (ReactionModule) {
-            patches.push(before("addReaction", ReactionModule, (args) => {
-                const [,, emoji] = args;
-                if (emoji?.name === "❄️") {
-                    if (Date.now() - lastBurstTime < 10000) return;
-                    lastBurstTime = Date.now();
-                    storage.SnowEnabled = true;
-                    setTimeout(() => { storage.SnowEnabled = false; }, 15000);
+            logger.log("ReactionModule found!");
+            // Try patching both common reaction methods
+            const methods = ["addReaction", "addEmojiReaction"];
+            
+            methods.forEach(method => {
+                if (ReactionModule[method]) {
+                    patches.push(before(method, ReactionModule, (args) => {
+                        // Emoji is usually the 3rd or 4th argument depending on version
+                        const emoji = args.find(a => a?.name === "❄️" || a?.id === "❄️");
+                        
+                        if (emoji) {
+                            logger.log("Snowflake reaction detected!");
+                            const now = Date.now();
+                            if (now - lastBurstTime < 10000) return;
+                            
+                            lastBurstTime = now;
+                            storage.SnowEnabled = true;
+                            setTimeout(() => { storage.SnowEnabled = false; }, 15000);
+                        }
+                    }));
                 }
-            }));
+            });
+        } else {
+            logger.error("ReactionModule NOT found.");
         }
 
-        // 2. Root Injection
-        // We use 'after' on the App container to ensure we are the last thing rendered (on top)
-        if (AppContainer) {
-            patches.push(after("default", AppContainer, (_, res) => {
+        // Inject into the top-level layout
+        if (Layout?.AppLayerContainer) {
+            patches.push(after("AppLayerContainer", Layout, (_, res) => {
                 if (!res) return res;
                 const children = Array.isArray(res.props.children) ? res.props.children : [res.props.children];
-                
-                if (!children.some(c => c?.key === "snow-root")) {
-                    res.props.children = [
-                        ...children,
-                        React.createElement(SnowOverlay, { key: "snow-root" })
-                    ];
+                if (!children.some(c => c?.key === "snow-overlay")) {
+                    res.props.children = [...children, React.createElement(SnowOverlay, { key: "snow-overlay" })];
                 }
                 return res;
             }));
