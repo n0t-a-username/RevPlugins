@@ -1,7 +1,6 @@
-import { before } from "@vendetta/patcher";
+import { after, before } from "@vendetta/patcher";
 import { React, ReactNative } from "@vendetta/metro/common";
-import { findByProps } from "@vendetta/metro";
-import { General } from "@vendetta/ui/components";
+import { findByProps, findByName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import Settings from "./Settings";
@@ -10,8 +9,10 @@ const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const ReactionModule = findByProps("addReaction");
-storage.SnowEnabled = false; 
+// This is the component that renders the actual chat messages
+const MessagesList = findByName("MessagesList", false);
 
+storage.SnowEnabled = false; 
 let patches = [];
 let lastBurstTime = 0;
 
@@ -19,16 +20,15 @@ const ParticleItem = React.memo(({ startTime }: { startTime: number }) => {
     const config = React.useMemo(() => ({
         x: Math.random() * SCREEN_WIDTH,
         size: 10 + Math.random() * 20,
-        duration: 3000 + Math.random() * 2000,
+        duration: 3000 + Math.random() * 3000,
         opacity: 0.4 + Math.random() * 0.6,
-        initialDelay: Math.random() * 4000 
+        initialDelay: Math.random() * 5000 
     }), []);
 
     const animValue = React.useRef(new Animated.Value(-50)).current;
 
     React.useEffect(() => {
         let isMounted = true;
-
         const run = (isFirstRun = false) => {
             if (!isMounted) return;
             animValue.setValue(-50);
@@ -40,7 +40,6 @@ const ParticleItem = React.memo(({ startTime }: { startTime: number }) => {
                     useNativeDriver: true,
                     easing: Easing.linear
                 }).start(({ finished }) => {
-                    // Check if the 10s "active" window is still open
                     if (finished && isMounted && (Date.now() - startTime < 10000)) {
                         run(false);
                     }
@@ -52,12 +51,7 @@ const ParticleItem = React.memo(({ startTime }: { startTime: number }) => {
         };
 
         run(true);
-
-        // This is the "Clear on Exit" magic
-        return () => { 
-            isMounted = false; 
-            animValue.stopAnimation(); 
-        };
+        return () => { isMounted = false; animValue.stopAnimation(); };
     }, []);
 
     return (
@@ -75,14 +69,15 @@ const ParticleItem = React.memo(({ startTime }: { startTime: number }) => {
     );
 });
 
-const FallingParticles = ({ startTime }: { startTime: number }) => {
-    const particles = React.useMemo(() => Array.from({ length: 50 }, (_, i) => i), []);
-
-    return (
+const SnowWrapper = () => {
+    useProxy(storage);
+    return storage.SnowEnabled ? (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
-            {particles.map(i => <ParticleItem key={i} startTime={startTime} />)}
+            {Array.from({ length: 50 }).map((_, i) => (
+                <ParticleItem key={`${lastBurstTime}-${i}`} startTime={lastBurstTime} />
+            ))}
         </View>
-    );
+    ) : null;
 };
 
 export default {
@@ -104,31 +99,21 @@ export default {
             }));
         }
 
-        // Patch the specific Chat View container
-        patches.push(
-            before("render", General.View, (args) => {
-                const [wrapper] = args;
-                if (!wrapper?.style?.some?.(s => s?.flex === 1)) return;
-
-                let child = wrapper.children;
-                if (Array.isArray(child)) child = child.find(c => c?.type?.name === "NativeStackViewInner");
-                if (child?.type?.name !== "NativeStackViewInner") return;
+        // Patch the MessagesList to include the snow
+        if (MessagesList) {
+            patches.push(after("default", MessagesList, (args, res) => {
+                // If there's no render result or we are already injected, skip
+                if (!res) return;
                 
-                // Only render if we are in the main chat/home route
-                if (!child?.props?.state?.routeNames?.includes("main")) return;
-
-                const SnowWrapper = () => {
-                    useProxy(storage);
-                    // Use a key that changes with the burst so it resets properly
-                    return storage.SnowEnabled ? <FallingParticles key={lastBurstTime} startTime={lastBurstTime} /> : null;
-                };
-
-                const children = Array.isArray(wrapper.children) ? wrapper.children : [wrapper.children];
-                if (!children.some(c => c?.key === "chat-snow")) {
-                    wrapper.children = [...children, React.createElement(SnowWrapper, { key: "chat-snow" })];
-                }
-            })
-        );
+                // We wrap the original MessagesList result and our Snow in a fragment or View
+                return (
+                    <View style={{ flex: 1 }}>
+                        {res}
+                        <SnowWrapper />
+                    </View>
+                );
+            }));
+        }
     },
     onUnload: () => {
         patches.forEach(u => u());
