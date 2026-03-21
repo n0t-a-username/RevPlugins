@@ -1617,6 +1617,36 @@ commands.push(
 );
 
 
+// ---- /bot-tag ----
+commands.push(
+  registerCommand({
+    name: "bot-tag",
+    displayName: "bot-tag",
+    description: "Toggle the blue BOT tag on your own name (Local Only)",
+    options: [
+      {
+        name: "enabled",
+        displayName: "enabled",
+        description: "true = show tag, false = hide tag",
+        required: true,
+        type: 5,
+      },
+    ],
+    applicationId: "-1",
+    inputType: 1,
+    type: 1,
+    execute: (args, ctx) => {
+      const enabled = args.find(a => a.name === "enabled")?.value ?? false;
+      storage.botTagSpoof = enabled;
+
+      return {
+        content: `🤖 Bot Tag Spoofing: **${enabled ? "ON" : "OFF"}** (Switch channels to refresh)`,
+      };
+    },
+  })
+);
+
+
 /* =========================
    PLUGIN LIFECYCLE (FINAL)
 ========================= */
@@ -1628,6 +1658,7 @@ export default {
   onLoad: () => {
     // Initialize storage if it doesn't exist
     storage.nitroSpoof ??= false;
+    storage.botTagSpoof ??= false;
 
     // 1. Sidebar Entry (Bemmo Tab)
     try { 
@@ -1639,7 +1670,6 @@ export default {
     // 2. Nitro Spoof (Conditional)
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        // Only apply if the toggle in Settings is ON
         if (user && storage.nitroSpoof) {
           user.premiumType = 2; 
           user.premiumState = {
@@ -1654,7 +1684,24 @@ export default {
       logger.error("Nitro failed", e); 
     }
 
-    // 3. Services (Copy ID, RPC, Logger)
+    // 3. Bot Tag Spoof (Standalone)
+    try {
+      unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
+        if (user && storage.botTagSpoof) {
+          Object.defineProperty(user, "bot", {
+            get: () => true,
+            set: () => {}, 
+            configurable: true,
+            enumerable: true
+          });
+        }
+        return user;
+      }));
+    } catch (e) { 
+      logger.error("Bot tag spoof failed", e); 
+    }
+
+    // 4. Services (Copy ID, RPC, Logger)
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
