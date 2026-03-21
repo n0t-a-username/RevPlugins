@@ -5,12 +5,10 @@ import { semanticColors } from "@vendetta/ui";
 import { getAssetIDByName } from "@vendetta/ui/assets";
 import { Forms } from "@vendetta/ui/components";
 
-
 const { ScrollView, View, Text, Image } = RN;
 const { FormRow, FormSwitchRow } = Forms;
 
 storage.SnowPerformance ??= false;
-
 
 const styles = stylesheet.createThemedStyleSheet({
   versionText: {
@@ -25,13 +23,6 @@ const styles = stylesheet.createThemedStyleSheet({
     fontWeight: "600",
     color: semanticColors.TEXT_MUTED,
   },
-  authText: {
-    fontSize: 15,
-    lineHeight: 20,
-    fontWeight: "600",
-    padding: 15,
-    color: semanticColors.TEXT_BRAND,
-  },
   titleContainer: {
     marginBottom: 8,
     marginHorizontal: 0,
@@ -45,46 +36,6 @@ const styles = stylesheet.createThemedStyleSheet({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-  },
-  addButton: {
-    backgroundColor: semanticColors.BUTTON_POSITIVE_BACKGROUND,
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  addButtonText: {
-    color: "#FFFFFF",
-    fontSize: 18,
-    fontWeight: "bold",
-    lineHeight: 20,
-  },
-  deleteButton: {
-    backgroundColor: semanticColors.BUTTON_DANGER_BACKGROUND,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  deleteButtonText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  loadingContainer: {
-    padding: 20,
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 8,
-    fontSize: 14,
-    color: semanticColors.TEXT_MUTED,
-  },
-  emptyText: {
-    padding: 20,
-    textAlign: "center",
-    fontSize: 14,
-    color: semanticColors.TEXT_MUTED,
   },
   container: {
     flexDirection: "row",
@@ -112,13 +63,12 @@ const styles = stylesheet.createThemedStyleSheet({
     paddingLeft: 50,
     color: semanticColors.HEADER_SECONDARY,
   },
-  info: {
-    height: 45,
-    paddingTop: 3,
-    paddingBottom: 3,
-    justifyContent: "center",
-    alignItems: "center"
-  },
+  helpText: {
+    padding: 16,
+    fontSize: 14,
+    color: semanticColors.TEXT_NORMAL,
+    lineHeight: 20,
+  }
 });
 
 function BetterTableRowGroup({
@@ -180,15 +130,11 @@ function BetterTableRowGroup({
   );
 }
 
-
-
 export default function Settings() {
   useProxy(storage);
 
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: semanticColors.BACKGROUND_PRIMARY }}
-    >
+    <ScrollView style={{ flex: 1, backgroundColor: semanticColors.BACKGROUND_PRIMARY }}>
 
       <View style={styles.container}>
         <Image
@@ -201,10 +147,17 @@ export default function Settings() {
         </View>
       </View>
 
-      <BetterTableRowGroup >
+      <BetterTableRowGroup title="How to use">
+        <Text style={styles.helpText}>
+          React to any message with a ❄️ emoji to toggle the snow overlay. 
+          Removing your reaction will stop the snow!
+        </Text>
+      </BetterTableRowGroup>
+
+      <BetterTableRowGroup title="Optimization">
         <FormSwitchRow
           label="Enable Performance mode"
-          subLabel="Reduce animations and rendering to a minimum. Requires a restart"
+          subLabel="Switches high-res snowflakes for simple circles. Updates instantly."
           value={storage.SnowPerformance}
           onValueChange={(v) => {
             storage.SnowPerformance = v;
@@ -212,25 +165,17 @@ export default function Settings() {
         />
       </BetterTableRowGroup>
 
-      <BetterTableRowGroup
-        title="More Options"
-      >
+      <BetterTableRowGroup title="More Options">
         <FormRow
           label="Source"
-          leading={
-            <FormRow.Icon
-              source={getAssetIDByName("img_account_sync_github_white")}
-            />
-          }
+          leading={<FormRow.Icon source={getAssetIDByName("img_account_sync_github_white")} />}
           trailing={<FormRow.Icon source={getAssetIDByName("ic_launch")} />}
           onPress={() => RN.Linking.openURL("https://github.com/bwlok/revenge-plugins/tree/master/plugins/LetItSnow")}
         />
       </BetterTableRowGroup>
 
       <RN.View style={{ height: 16 }} />
-
-      <RN.Text style={styles.versionText}>Version 0.0.1</RN.Text>
-
+      <RN.Text style={styles.versionText}>Version 0.0.2</RN.Text>
       <RN.View style={{ height: 32 }} />
     </ScrollView>
   );
