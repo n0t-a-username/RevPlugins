@@ -31,7 +31,7 @@ const getDisplayFont = (fontId: number) => {
   }
 };
 
-const DiscordText = ({ text, style, selfName }: { text: string, style: any, selfName: string }) => {
+const DiscordText = ({ text, style, selfName, nameFont }: { text: string, style: any, selfName: string, nameFont: string }) => {
   const emojiRegex = /(\u00a9|\u00ae|[\u2000-\u3300]|\ud83c[\ud000-\udfff]|\ud83d[\ud000-\udfff]|\ud83e[\ud000-\udfff])/g;
   const mentionRegex = /(@[^\s]+)/g;
 
@@ -61,10 +61,15 @@ const DiscordText = ({ text, style, selfName }: { text: string, style: any, self
                 height: 19,
                 justifyContent: "center",
                 marginHorizontal: 1,
-                // Adjusted translateY to 4 to move it down significantly to center it
                 transform: [{ translateY: 4 }]
             }}>
-                <RN.Text style={{ color: "#dee0fc", fontFamily: "ggsans-Medium", fontSize: 15, includeFontPadding: false }}>
+                <RN.Text style={{ 
+                    color: "#dee0fc", 
+                    // Now using the same font as the names
+                    fontFamily: nameFont, 
+                    fontSize: 15, 
+                    includeFontPadding: false 
+                }}>
                     {part}
                 </RN.Text>
             </RN.View>
@@ -166,6 +171,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                   <DiscordText 
                     text={text || " "} 
                     selfName={myName}
+                    nameFont={nameFont} // Passing font down to the pings
                     style={{ color: "#dbdee1", fontSize: 16, lineHeight: 22, fontFamily: "ggsans-Medium", includeFontPadding: false }} 
                   />
                 </RN.View>
