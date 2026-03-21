@@ -7,9 +7,9 @@ import Settings from "./Settings";
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// We find these inside onLoad to prevent top-level reference crashes
-let ReactionModule;
-let GeneralView;
+// Constants to prevent lag
+const MAX_PARTICLES = 25; 
+const BURST_DURATION = 12000;
 
 let patches = [];
 let lastBurstTime = 0;
@@ -23,7 +23,7 @@ const ParticleItem = React.memo(({ data }: { data: any }) => {
     React.useEffect(() => {
         let isMounted = true;
         const run = () => {
-            if (!isMounted) return;
+            if (!isMounted || !storage.SnowEnabled) return;
             animValue.setValue(-50);
             Animated.timing(animValue, {
                 toValue: SCREEN_HEIGHT + 50,
@@ -53,33 +53,36 @@ const ParticleItem = React.memo(({ data }: { data: any }) => {
     );
 });
 
-const SnowOverlay = () => {
-    const [show, setShow] = React.useState(false);
+const SnowOverlay = React.memo(() => {
+    const [renderTrigger, setRenderTrigger] = React.useState(0);
 
+    // Use a listener-style effect to avoid the "Interval Lag"
     React.useEffect(() => {
-        const check = setInterval(() => {
-            if (storage.SnowEnabled !== show) setShow(storage.SnowEnabled);
-        }, 500);
-        return () => clearInterval(check);
-    }, [show]);
+        const interval = setInterval(() => {
+            if (storage.SnowEnabled && activeParticles.length > 0) {
+                setRenderTrigger(prev => prev + 1);
+            } else if (!storage.SnowEnabled && renderTrigger !== 0) {
+                setRenderTrigger(0);
+            }
+        }, 1000);
+        return () => clearInterval(interval);
+    }, [renderTrigger]);
 
-    if (!show || activeParticles.length === 0) return null;
+    if (!storage.SnowEnabled || activeParticles.length === 0) return null;
 
     return (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
             {activeParticles.map((p, i) => (
-                <ParticleItem key={`${lastBurstTime}-${i}`} data={p} />
+                <ParticleItem key={`snow-${i}`} data={p} />
             ))}
         </View>
     );
-};
+});
 
 export default {
     onLoad: () => {
-        // Find modules safely inside onLoad
-        ReactionModule = findByProps("addReaction");
+        const ReactionModule = findByProps("addReaction");
         const GeneralModule = findByProps("View");
-        GeneralView = GeneralModule?.View;
 
         if (ReactionModule) {
             patches.push(before("addReaction", ReactionModule, (args) => {
@@ -89,40 +92,35 @@ export default {
                     if (now - lastBurstTime < 10000) return;
                     
                     lastBurstTime = now;
-                    activeParticles = Array.from({ length: 30 }, () => ({
+                    // Create once, use globally
+                    activeParticles = Array.from({ length: MAX_PARTICLES }, () => ({
                         x: Math.random() * SCREEN_WIDTH,
                         size: 15 + Math.random() * 10,
-                        duration: 3500 + Math.random() * 2000,
-                        opacity: 0.5 + Math.random() * 0.4
+                        duration: 4000 + Math.random() * 2000,
+                        opacity: 0.4 + Math.random() * 0.4
                     }));
 
                     storage.SnowEnabled = true;
                     setTimeout(() => { 
                         storage.SnowEnabled = false; 
                         activeParticles = [];
-                    }, 12000);
+                    }, BURST_DURATION);
                 }
             }));
         }
 
-        if (GeneralView) {
-            patches.push(after("render", GeneralView, (args, res) => {
-                if (!res?.props) return res;
+        if (GeneralModule?.View) {
+            patches.push(after("render", GeneralModule.View, (args, res) => {
+                if (!res?.props || !storage.SnowEnabled) return res;
                 
-                // Check if it's a main container
                 const style = StyleSheet.flatten(res.props.style);
-                if (style?.flex !== 1) return res;
+                if (style?.flex !== 1 || res.props.children?.some?.(c => c?.key === "snow-fixed-layer")) return res;
 
-                // Stop injection if it's a specific UI element we don't want to double up on
-                if (res.type?.name === "Text" || res.type?.name === "Image") return res;
-
-                const children = Array.isArray(res.props.children) ? res.props.children : [res.props.children];
-                if (children.some(c => c?.key === "snow-fixed-layer")) return res;
-
-                res.props.children = [
-                    ...children,
-                    React.createElement(SnowOverlay, { key: "snow-fixed-layer" })
-                ];
+                // Only inject into major layout containers to prevent the "Double Spawn" seen in your video
+                if (res.props.onLayout || res.props.navigation) {
+                    res.props.children = React.Children.toArray(res.props.children);
+                    res.props.children.push(React.createElement(SnowOverlay, { key: "snow-fixed-layer" }));
+                }
                 return res;
             }));
         }
