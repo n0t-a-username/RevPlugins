@@ -34,7 +34,6 @@ if (typeof storage.eventGiveawayPing !== "string") {
 if (!Array.isArray(storage.messageLogs)) {
   storage.messageLogs = [];
 }
-// Initialize Nitro toggle
 if (typeof storage.nitroSpoof !== "boolean") {
   storage.nitroSpoof = false;
 }
@@ -64,8 +63,14 @@ export default function Settings() {
 
   const [containerWidth, setContainerWidth] = React.useState(0);
   const slideAnim = React.useRef(new Animated.Value(0)).current;
+  
+  // Ref to control the ScrollView position
+  const scrollRef = React.useRef<any>(null);
 
   React.useEffect(() => {
+    // Reset scroll to top immediately when the page state changes
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+
     const pageMap = { main: 0, raidMessages: 1, messageLogs: 2 };
     Animated.timing(slideAnim, {
       toValue: pageMap[selectedPage],
@@ -188,18 +193,28 @@ export default function Settings() {
   );
 
   return (
-    <View style={{ flex: 1 }} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
-      <ScrollView style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: "#111" }} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
+      <ScrollView 
+        ref={scrollRef} 
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1 }}
+      >
         <Animated.View
           style={{
             flexDirection: "row",
-            width: containerWidth * 3 || "300%",
+            width: containerWidth ? containerWidth * 3 : "300%",
             transform: [{ translateX }],
           }}
         >
-          <View style={{ width: containerWidth || "100%" }}>{renderMainPage()}</View>
-          <View style={{ width: containerWidth || "100%" }}>{selectedPage === "raidMessages" ? renderRaidMessagesPage() : null}</View>
-          <View style={{ width: containerWidth || "100%" }}>{selectedPage === "messageLogs" ? renderMessageLogsPage() : null}</View>
+          <View style={{ width: containerWidth || "100%" }}>
+            {renderMainPage()}
+          </View>
+          <View style={{ width: containerWidth || "100%" }}>
+            {selectedPage === "raidMessages" ? renderRaidMessagesPage() : <View />}
+          </View>
+          <View style={{ width: containerWidth || "100%" }}>
+            {selectedPage === "messageLogs" ? renderMessageLogsPage() : <View />}
+          </View>
         </Animated.View>
       </ScrollView>
     </View>
