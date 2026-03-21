@@ -1,35 +1,38 @@
 import { after, before } from "@vendetta/patcher";
 import { React, ReactNative } from "@vendetta/metro/common";
-import { findByProps, findByStoreName } from "@vendetta/metro";
+import { findByProps, findByName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
-import { logger } from "@vendetta/utils"; // Use this to check logs
+// Ensure this matches your filename exactly (Case-Sensitive)
 import Settings from "./Settings"; 
 
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// Find the reaction module more aggressively
-const ReactionModule = findByProps("addReaction") || findByProps("addEmojiReaction");
-// Find the layout container
-const Layout = findByProps("AppLayerContainer") || findByProps("Layout");
+// Safety check for all Metro modules
+const ReactionModule = findByProps("addReaction");
+const General = findByProps("View")?.View ? findByProps("View") : null;
 
 let patches = [];
 let lastBurstTime = 0;
 
-if (storage.SnowEnabled === undefined) storage.SnowEnabled = false;
+// Initialize storage safely
+storage.SnowEnabled ??= false;
+storage.SnowPerformance ??= false;
 
-const ParticleItem = React.memo(({ id }: { id: number }) => {
+const ParticleItem = React.memo(() => {
     const config = React.useMemo(() => ({
         x: Math.random() * SCREEN_WIDTH,
-        size: storage.SnowPerformance ? 10 : (15 + Math.random() * 20),
+        size: storage.SnowPerformance ? 12 : (15 + Math.random() * 20),
         duration: 3000 + Math.random() * 3000,
-        opacity: 0.5 + Math.random() * 0.5,
+        opacity: 0.6 + Math.random() * 0.4,
     }), []);
 
     const animValue = React.useRef(new Animated.Value(-50)).current;
 
     React.useEffect(() => {
+        let isMounted = true;
         const run = () => {
+            if (!isMounted) return;
             animValue.setValue(-50);
             Animated.timing(animValue, {
                 toValue: SCREEN_HEIGHT + 50,
@@ -37,10 +40,11 @@ const ParticleItem = React.memo(({ id }: { id: number }) => {
                 useNativeDriver: true,
                 easing: Easing.linear
             }).start(({ finished }) => {
-                if (finished && storage.SnowEnabled) run();
+                if (finished && isMounted && storage.SnowEnabled) run();
             });
         };
         run();
+        return () => { isMounted = false; animValue.stopAnimation(); };
     }, []);
 
     return (
@@ -50,7 +54,7 @@ const ParticleItem = React.memo(({ id }: { id: number }) => {
             transform: [{ translateY: animValue }]
         }}>
             {!storage.SnowPerformance ? (
-                <Image source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} style={{ width: '100%', height: '100%' }} />
+                <Image source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
             ) : (
                 <View style={{ width: '100%', height: '100%', borderRadius: config.size / 2, backgroundColor: 'white' }} />
             )}
@@ -59,22 +63,22 @@ const ParticleItem = React.memo(({ id }: { id: number }) => {
 });
 
 const SnowOverlay = () => {
-    // We force a re-render when storage.SnowEnabled changes
-    const [isVisible, setIsVisible] = React.useState(false);
-
+    // Polling is the safest way to react to storage changes across different UI stacks
+    const [active, setActive] = React.useState(false);
+    
     React.useEffect(() => {
-        const check = setInterval(() => {
-            if (storage.SnowEnabled !== isVisible) setIsVisible(storage.SnowEnabled);
-        }, 300);
-        return () => clearInterval(check);
-    }, [isVisible]);
+        const t = setInterval(() => {
+            if (storage.SnowEnabled !== active) setActive(storage.SnowEnabled);
+        }, 500);
+        return () => clearInterval(t);
+    }, [active]);
 
-    if (!isVisible) return null;
+    if (!active) return null;
 
     return (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
             {Array.from({ length: 50 }).map((_, i) => (
-                <ParticleItem key={`${lastBurstTime}-${i}`} id={i} />
+                <ParticleItem key={`${lastBurstTime}-${i}`} />
             ))}
         </View>
     );
@@ -82,49 +86,53 @@ const SnowOverlay = () => {
 
 export default {
     onLoad: () => {
-        logger.log("Snow Plugin Loading...");
+        try {
+            // 1. Reaction Patch (with extensive safety checks)
+            if (ReactionModule?.addReaction) {
+                patches.push(before("addReaction", ReactionModule, (args) => {
+                    const emoji = args?.[2]; // Standard position for emoji object
+                    if (emoji?.name === "❄️") {
+                        const now = Date.now();
+                        if (now - lastBurstTime < 10000) return;
+                        lastBurstTime = now;
+                        storage.SnowEnabled = true;
+                        setTimeout(() => { storage.SnowEnabled = false; }, 15000);
+                    }
+                }));
+            }
 
-        if (ReactionModule) {
-            logger.log("ReactionModule found!");
-            // Try patching both common reaction methods
-            const methods = ["addReaction", "addEmojiReaction"];
-            
-            methods.forEach(method => {
-                if (ReactionModule[method]) {
-                    patches.push(before(method, ReactionModule, (args) => {
-                        // Emoji is usually the 3rd or 4th argument depending on version
-                        const emoji = args.find(a => a?.name === "❄️" || a?.id === "❄️");
+            // 2. The most stable injection point: General.View
+            // We use a try-catch inside the patch to prevent the whole app from crashing
+            if (General?.View) {
+                patches.push(after("render", General.View, (args, res) => {
+                    try {
+                        if (!res?.props) return res;
                         
-                        if (emoji) {
-                            logger.log("Snowflake reaction detected!");
-                            const now = Date.now();
-                            if (now - lastBurstTime < 10000) return;
-                            
-                            lastBurstTime = now;
-                            storage.SnowEnabled = true;
-                            setTimeout(() => { storage.SnowEnabled = false; }, 15000);
-                        }
-                    }));
-                }
-            });
-        } else {
-            logger.error("ReactionModule NOT found.");
-        }
+                        // Only inject into the root-level background view (flex: 1)
+                        const style = ReactNative.StyleSheet.flatten(res.props.style);
+                        if (style?.flex !== 1) return res;
 
-        // Inject into the top-level layout
-        if (Layout?.AppLayerContainer) {
-            patches.push(after("AppLayerContainer", Layout, (_, res) => {
-                if (!res) return res;
-                const children = Array.isArray(res.props.children) ? res.props.children : [res.props.children];
-                if (!children.some(c => c?.key === "snow-overlay")) {
-                    res.props.children = [...children, React.createElement(SnowOverlay, { key: "snow-overlay" })];
-                }
-                return res;
-            }));
+                        const children = Array.isArray(res.props.children) ? res.props.children : [res.props.children];
+                        if (children.some(c => c?.key === "snow-logic-root")) return res;
+
+                        res.props.children = [
+                            ...children,
+                            React.createElement(SnowOverlay, { key: "snow-logic-root" })
+                        ];
+                    } catch (e) {
+                        // Fail silently inside the render loop to keep the app alive
+                    }
+                    return res;
+                }));
+            }
+        } catch (err) {
+            // If anything goes wrong during onLoad, we still want the plugin to "enable" 
+            // even if it does nothing, so the user can see it's active.
+            console.error("[SnowPlugin] Failed to initialize patches:", err);
         }
     },
     onUnload: () => {
-        patches.forEach(p => p());
+        patches.forEach(p => p?.());
         storage.SnowEnabled = false;
     },
     settings: Settings
