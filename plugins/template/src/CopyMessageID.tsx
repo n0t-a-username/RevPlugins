@@ -18,15 +18,18 @@ const getEmojiURL = (char: string) => {
   return `https://cdn.jsdelivr.net/gh/twitter/twemoji@latest/assets/72x72/${codePoints}.png`;
 };
 
-const getDisplayFont = (fontId: number) => {
+const getDisplayFont = (fontId: number, isDM: boolean) => {
+  // If in DMs, 3 is Cherry Bomb. Otherwise, we use the standard mapping.
+  if (isDM && fontId === 3) return "CherryBombOne-Normal";
+  
   switch (fontId) {
     case 12: return "ZillaSlab-SemiBold";
-    case 10: return "CherryBombOne-Normal"; // Updated mapping
+    case 10: return "CherryBombOne-Normal"; 
+    case 3:  return "Sinistre-Normal"; 
     case 4:  return "Chicle-Normal";
     case 6:  return "MuseoModerno-Medium";
     case 7:  return "NeoCastel-Normal"; 
     case 8:  return "PixelifySans-Normal";
-    case 3:  return "Sinistre-Normal";
     default: return "ggsans-Semibold";
   }
 };
@@ -86,12 +89,13 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
   if (key !== "MessageLongPressActionSheet" || !message) return;
 
   const guildId = SelectedGuildStore.getGuildId();
+  const isDM = !guildId; // Determine if we are in a DM
   const member = guildId ? GuildMemberStore.getMember(guildId, message.author.id) : null;
   const author = message.author;
 
   const authorDisplayName = member?.nick || author.globalName || author.username;
   const avatarUrl = author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
-  const decorationData = author.avatarDecorationData; // Restored
+  const decorationData = author.avatarDecorationData;
   const primaryGuild = author.primaryGuild;
   const guildTag = primaryGuild?.tag;
   const guildBadgeUrl = primaryGuild?.badge 
@@ -99,7 +103,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
     : null;
 
   const fontId = author?.displayNameStyles?.fontId;
-  const nameFont = (fontId !== undefined && fontId !== null) ? getDisplayFont(fontId) : "ggsans-Semibold";
+  const nameFont = (fontId !== undefined && fontId !== null) ? getDisplayFont(fontId, isDM) : "ggsans-Semibold";
   const roleColor = member?.colorString || "#ffffff"; 
 
   const currentUser = UserStore.getCurrentUser();
@@ -150,7 +154,6 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
                 <RN.View style={{ width: 40, height: 40, marginRight: 12 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
-                  {/* Restored Profile Decoration */}
                   {decorationData && (
                     <RN.Image 
                       source={{ uri: `https://cdn.discordapp.com/avatar-decoration-presets/${decorationData.asset}.png` }} 
