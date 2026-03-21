@@ -1,40 +1,32 @@
 import { before } from "@vendetta/patcher";
 import { React, ReactNative } from "@vendetta/metro/common";
 import { General } from "@vendetta/ui/components";
-import Settings from "./Settings";
 import { storage } from "@vendetta/plugin";
+import { useProxy } from "@vendetta/storage";
+import Settings from "./Settings"; // Matches your filename casing
 
 const { View, Animated, Dimensions, Easing } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const { Image } = ReactNative;
 
-const USE_SNOWFLAKE_IMAGE = !storage.SnowPerformance;
-
 let patches = [];
-
 const persistentParticles = [];
 let initialized = false;
 
 function createParticle(index, startFromCurrent = false) {
     const startY = startFromCurrent ? Math.random() * SCREEN_HEIGHT : -50;
     const animValue = new Animated.Value(startY);
-    const rotationValue = USE_SNOWFLAKE_IMAGE ? new Animated.Value(0) : null;
+    
+    // We initialize both, but logic in ParticleItem determines which to show
+    const rotationValue = new Animated.Value(0);
     const x = Math.random() * SCREEN_WIDTH;
-    let size;
-    if (USE_SNOWFLAKE_IMAGE) {
-      size = 10 + Math.random() * 2.5 * (Math.random()*10);
-    } else {
-      size = 5 + Math.random() * 2 * (Math.random()*10);
-    }
+    
+    // Randomize initial stats
+    const size = 10 + Math.random() * 20;
     const duration = 4000 + Math.random() * 6000;
-    let opacity
-    if (USE_SNOWFLAKE_IMAGE) {
-      opacity = 0.6 + Math.random() * 0.4; // 0.6-1.0
-    } else {
-      opacity = 1;
-    }
+    const opacity = 0.6 + Math.random() * 0.4;
     const rotation = Math.random() * 360;
-    const shouldRotate = USE_SNOWFLAKE_IMAGE && Math.random() > 0.4;
+    const shouldRotate = Math.random() > 0.4;
     const rotationSpeed = 4000 + Math.random() * 8000;
     const rotationDirection = Math.random() > 0.5 ? 1 : -1;
 
@@ -55,9 +47,8 @@ function createParticle(index, startFromCurrent = false) {
     };
 }
 
-function startRotationAnimation(particle) {
-    if (!USE_SNOWFLAKE_IMAGE || !particle.shouldRotate) return;
-
+function startAnimations(particle) {
+    // Rotation Logic
     const rotate = () => {
         particle.rotationValue.setValue(0);
         Animated.timing(particle.rotationValue, {
@@ -65,58 +56,46 @@ function startRotationAnimation(particle) {
             duration: particle.rotationSpeed,
             useNativeDriver: true,
             easing: Easing.linear
-        }).start(({finished}) => {
-            if (finished) {
-                rotate();
-            }
-        });
+        }).start(({finished}) => { if (finished) rotate(); });
     };
+    if (particle.shouldRotate) rotate();
 
-    rotate();
-}
-
-function startParticleAnimation(particle) {
-    if (USE_SNOWFLAKE_IMAGE) {
-        startRotationAnimation(particle);
-    }
-
+    // Falling Logic
     const animate = () => {
         particle.animValue.setValue(-50);
         Animated.timing(particle.animValue, {
             toValue: SCREEN_HEIGHT + 50,
             duration: particle.duration,
-            useNativeDriver: true
-        }).start(({finished}) => {
-            if (finished) {
-                animate();
-            }
-        });
+            useNativeDriver: true,
+            easing: Easing.linear
+        }).start(({finished}) => { if (finished) animate(); });
     };
 
+    // Initial drop from current position
     Animated.timing(particle.animValue, {
         toValue: SCREEN_HEIGHT + 50,
         duration: particle.duration * ((SCREEN_HEIGHT + 50 - particle.startY) / (SCREEN_HEIGHT + 100)),
-        useNativeDriver: true
-    }).start(({finished}) => {
-        if (finished) {
-            animate();
-        }
-    });
+        useNativeDriver: true,
+        easing: Easing.linear
+    }).start(({finished}) => { if (finished) animate(); });
 }
 
 function initializeParticles() {
     if (initialized) return;
     initialized = true;
-
-    for (let i = 0; i < 80; i++) {
+    for (let i = 0; i < 60; i++) {
         const particle = createParticle(i, true);
         persistentParticles.push(particle);
-        startParticleAnimation(particle);
+        startAnimations(particle);
     }
 }
 
 const ParticleItem = React.memo(({ particle }: { particle: any }) => {
-    if (USE_SNOWFLAKE_IMAGE) {
+    useProxy(storage); // This makes the snowflake react to the settings toggle immediately
+    
+    const isPerformance = storage.SnowPerformance;
+
+    if (!isPerformance) {
         const animatedRotation = particle.rotationValue.interpolate({
             inputRange: [0, 360],
             outputRange: [`${particle.rotation}deg`, `${particle.rotation + 360}deg`]
@@ -139,26 +118,24 @@ const ParticleItem = React.memo(({ particle }: { particle: any }) => {
             >
                 <Image
                     source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }}
-                    style={{
-                        width: '100%',
-                        height: '100%',
-                    }}
+                    style={{ width: '100%', height: '100%' }}
                     resizeMode="contain"
                 />
             </Animated.View>
         );
     } else {
+        // Simple circles for performance mode
         return (
             <Animated.View
                 style={{
                     position: "absolute",
                     left: particle.x,
                     top: 0,
-                    width: particle.size,
-                    height: particle.size,
-                    borderRadius: particle.size / 2,
-                    backgroundColor: particle.color,
-                    opacity: particle.opacity,
+                    width: particle.size / 3,
+                    height: particle.size / 3,
+                    borderRadius: 10,
+                    backgroundColor: 'white',
+                    opacity: 0.5,
                     transform: [{ translateY: particle.animValue }]
                 }}
             />
@@ -176,16 +153,11 @@ const FallingParticles = () => {
             pointerEvents="none"
             style={{
                 position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
+                top: 0, left: 0, right: 0, bottom: 0,
                 zIndex: 9999,
             }}
         >
-          {persistentParticles.map(particle => (
-              <ParticleItem key={particle.id} particle={particle} />
-          ))}
+          {persistentParticles.map(p => <ParticleItem key={p.id} particle={p} />)}
         </View>
     );
 };
@@ -202,8 +174,6 @@ export default {
           if (!hasFlexOne) return;
 
           let child = wrapper.children;
-
-          //If ViewBackground plugin
           if (Array.isArray(child)) {
               child = child.find(c => c?.type?.name === "NativeStackViewInner");
           }
@@ -219,14 +189,13 @@ export default {
 
           wrapper.children = [
               ...currentChildren,
-              React.createElement(FallingParticles, { key: "persistent-overlay" })
+              React.createElement(FallingParticles, { key: "snow-overlay" })
           ];
       })
     );
-
   },
   onUnload: () => {
-          for (const x of patches) x();
+      for (const unpatch of patches) unpatch();
   },
-  settings
+  settings: Settings
 }
