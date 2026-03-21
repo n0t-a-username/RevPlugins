@@ -21,12 +21,12 @@ const getEmojiURL = (char: string) => {
 const getDisplayFont = (fontId: number) => {
   switch (fontId) {
     case 12: return "ZillaSlab-SemiBold";
-    case 3:  return "CherryBombOne-Normal";
+    case 10: return "CherryBombOne-Normal"; // Updated mapping
     case 4:  return "Chicle-Normal";
     case 6:  return "MuseoModerno-Medium";
     case 7:  return "NeoCastel-Normal"; 
     case 8:  return "PixelifySans-Normal";
-    case 10: return "Sinistre-Normal";
+    case 3:  return "Sinistre-Normal";
     default: return "ggsans-Semibold";
   }
 };
@@ -65,7 +65,6 @@ const DiscordText = ({ text, style, selfName, nameFont }: { text: string, style:
             }}>
                 <RN.Text style={{ 
                     color: "#dee0fc", 
-                    // Now using the same font as the names
                     fontFamily: nameFont, 
                     fontSize: 15, 
                     includeFontPadding: false 
@@ -92,6 +91,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
   const authorDisplayName = member?.nick || author.globalName || author.username;
   const avatarUrl = author.getAvatarURL?.() || `https://cdn.discordapp.com/embed/avatars/0.png`;
+  const decorationData = author.avatarDecorationData; // Restored
   const primaryGuild = author.primaryGuild;
   const guildTag = primaryGuild?.tag;
   const guildBadgeUrl = primaryGuild?.badge 
@@ -150,6 +150,13 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
 
                 <RN.View style={{ width: 40, height: 40, marginRight: 12 }}>
                   <RN.Image source={{ uri: avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                  {/* Restored Profile Decoration */}
+                  {decorationData && (
+                    <RN.Image 
+                      source={{ uri: `https://cdn.discordapp.com/avatar-decoration-presets/${decorationData.asset}.png` }} 
+                      style={{ position: "absolute", width: 48, height: 48, top: -4, left: -4, zIndex: 1 }} 
+                    />
+                  )}
                 </RN.View>
 
                 <RN.View style={{ flex: 1 }}>
@@ -171,7 +178,7 @@ const unpatch = before("openLazy", LazyActionSheet, ([component, key, msg]) => {
                   <DiscordText 
                     text={text || " "} 
                     selfName={myName}
-                    nameFont={nameFont} // Passing font down to the pings
+                    nameFont={nameFont}
                     style={{ color: "#dbdee1", fontSize: 16, lineHeight: 22, fontFamily: "ggsans-Medium", includeFontPadding: false }} 
                   />
                 </RN.View>
