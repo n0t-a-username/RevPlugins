@@ -15,59 +15,49 @@ storage.SnowEnabled = false;
 storage.SnowPerformance ??= false;
 
 let patches = [];
-const persistentParticles = [];
-let initialized = false;
 let snowTimeout = null;
 
-function createParticle(index) {
-    return {
-        id: index,
+// Move particle generation inside the component to ensure clean state
+const ParticleItem = React.memo(({ index, active }: { index: number, active: boolean }) => {
+    // Generate static values once per mount
+    const config = React.useMemo(() => ({
         x: Math.random() * SCREEN_WIDTH,
         size: 12 + Math.random() * 18,
-        duration: 2800 + Math.random() * 2200, // Slightly slower for better visibility
-        animValue: new Animated.Value(-50),
+        duration: 2500 + Math.random() * 2500,
         opacity: 0.6 + Math.random() * 0.4,
-    };
-}
+    }), []);
 
-function startSingleFall(particle, activeRef, onDone) {
-    particle.animValue.setValue(-50);
-    Animated.timing(particle.animValue, {
-        toValue: SCREEN_HEIGHT + 50,
-        duration: particle.duration,
-        useNativeDriver: true,
-        easing: Easing.linear
-    }).start(({ finished }) => {
-        if (finished) {
-            // Check the ref to see if we should loop again
-            if (activeRef.current) {
-                startSingleFall(particle, activeRef, onDone);
-            } else {
-                onDone(); // Exit and hide
-            }
-        }
-    });
-}
-
-const ParticleItem = React.memo(({ particle, isActive }: { particle: any, isActive: boolean }) => {
-    const [visible, setVisible] = React.useState(false);
-    const activeRef = React.useRef(isActive);
+    const animValue = React.useRef(new Animated.Value(-50)).current;
 
     React.useEffect(() => {
-        activeRef.current = isActive;
-        if (isActive && !visible) {
-            setVisible(true);
-            startSingleFall(particle, activeRef, () => setVisible(false));
-        }
-    }, [isActive]);
+        let isMounted = true;
 
-    if (!visible) return null;
+        const runAnimation = () => {
+            if (!isMounted) return;
+            animValue.setValue(-50);
+            
+            Animated.timing(animValue, {
+                toValue: SCREEN_HEIGHT + 50,
+                duration: config.duration,
+                useNativeDriver: true,
+                easing: Easing.linear
+            }).start(({ finished }) => {
+                // Only loop if we are still "active" and still mounted
+                if (finished && active && isMounted) {
+                    runAnimation();
+                }
+            });
+        };
+
+        runAnimation();
+        return () => { isMounted = false; animValue.stopAnimation(); };
+    }, [active]);
 
     return (
         <Animated.View style={{
-            position: "absolute", left: particle.x, top: 0,
-            width: particle.size, height: particle.size, opacity: particle.opacity,
-            transform: [{ translateY: particle.animValue }]
+            position: "absolute", left: config.x, top: 0,
+            width: config.size, height: config.size, opacity: config.opacity,
+            transform: [{ translateY: animValue }]
         }}>
             <Image
                 source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }}
@@ -82,20 +72,18 @@ const FallingParticles = () => {
     const [active, setActive] = React.useState(true);
 
     React.useEffect(() => {
-        if (!initialized) {
-            for (let i = 0; i < 50; i++) persistentParticles.push(createParticle(i));
-            initialized = true;
-        }
-        
-        // 4 seconds of "New" snow generation
+        // 4 seconds of generation/looping
         const timer = setTimeout(() => setActive(false), 4000);
         return () => clearTimeout(timer);
     }, []);
 
+    // Create a static array of 50 indices
+    const particles = React.useMemo(() => Array.from({ length: 50 }, (_, i) => i), []);
+
     return (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
-            {persistentParticles.map(p => (
-                <ParticleItem key={p.id} particle={p} isActive={active} />
+            {particles.map(i => (
+                <ParticleItem key={i} index={i} active={active} />
             ))}
         </View>
     );
@@ -109,11 +97,10 @@ export default {
                 if (emoji?.name === "❄️") {
                     if (snowTimeout) clearTimeout(snowTimeout);
                     
-                    // Reset state to trigger a fresh mount
                     storage.SnowEnabled = false;
                     setTimeout(() => {
                         storage.SnowEnabled = true;
-                        // Extended duration: 4s active + 3s for final descent
+                        // 7s total (4s active + 3s to fall off screen)
                         snowTimeout = setTimeout(() => {
                             storage.SnowEnabled = false;
                         }, 7000);
