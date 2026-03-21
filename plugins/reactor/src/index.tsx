@@ -1,148 +1,128 @@
-import { before } from "@vendetta/patcher";
+import { after, before } from "@vendetta/patcher";
 import { React, ReactNative } from "@vendetta/metro/common";
-import { findByProps } from "@vendetta/metro";
+import { findByProps, findByName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 import Settings from "./Settings"; 
 
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// We use the Portal to inject at the highest possible layer
-const Portal = findByProps("Portal");
 const ReactionModule = findByProps("addReaction");
-const USE_SNOWFLAKE_IMAGE = !storage.SnowPerformance;
+// Fallback to a very common root component if General.View is being finicky
+const AppContainer = findByName("App", false) || findByProps("AppLayerContainer");
 
 let patches = [];
-const persistentParticles = [];
+let particles = [];
 let lastBurstTime = 0;
 
+// Ensure storage defaults are set so the plugin doesn't crash on load
+if (storage.SnowEnabled === undefined) storage.SnowEnabled = false;
+if (storage.SnowPerformance === undefined) storage.SnowPerformance = false;
+
 function createParticle(index) {
+    const isImg = !storage.SnowPerformance;
     return {
         id: index,
         x: Math.random() * SCREEN_WIDTH,
-        size: USE_SNOWFLAKE_IMAGE ? (10 + Math.random() * 25) : (5 + Math.random() * 20),
-        duration: 3500 + Math.random() * 2500,
+        size: isImg ? (10 + Math.random() * 25) : (5 + Math.random() * 15),
+        duration: 3000 + Math.random() * 3000,
         animValue: new Animated.Value(-50),
-        rotationValue: new Animated.Value(0),
-        opacity: USE_SNOWFLAKE_IMAGE ? (0.6 + Math.random() * 0.4) : 1,
-        rotation: Math.random() * 360,
-        shouldRotate: USE_SNOWFLAKE_IMAGE && Math.random() > 0.4,
-        rotationSpeed: 4000 + Math.random() * 8000,
-        rotationDirection: Math.random() > 0.5 ? 1 : -1,
+        opacity: isImg ? (0.6 + Math.random() * 0.4) : 1,
     };
 }
 
-const ParticleItem = React.memo(({ particle }: { particle: any }) => {
-    const rotation = particle.rotationValue.interpolate({
-        inputRange: [-360, 360],
-        outputRange: [`${particle.rotation - 360}deg`, `${particle.rotation + 360}deg`]
-    });
+const SnowOverlay = () => {
+    // We use local state to trigger a re-render when the global storage changes
+    const [active, setActive] = React.useState(false);
+    const [trigger, setTrigger] = React.useState(0);
 
     React.useEffect(() => {
+        const interval = setInterval(() => {
+            if (storage.SnowEnabled !== active) {
+                setActive(storage.SnowEnabled);
+                if (storage.SnowEnabled) {
+                    // Refresh particles on each new burst
+                    particles = Array.from({ length: 50 }, (_, i) => createParticle(i));
+                    setTrigger(Date.now());
+                }
+            }
+        }, 500); // Check every 500ms for the "reaction" flag
+        return () => clearInterval(interval);
+    }, [active]);
+
+    if (!active) return null;
+
+    return (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
+            {particles.map((p) => (
+                <ParticleComponent key={`${trigger}-${p.id}`} p={p} />
+            ))}
+        </View>
+    );
+};
+
+const ParticleComponent = ({ p }) => {
+    React.useEffect(() => {
         const run = () => {
-            particle.animValue.setValue(-50);
-            Animated.timing(particle.animValue, {
+            p.animValue.setValue(-50);
+            Animated.timing(p.animValue, {
                 toValue: SCREEN_HEIGHT + 50,
-                duration: particle.duration,
+                duration: p.duration,
                 useNativeDriver: true,
                 easing: Easing.linear
             }).start(({ finished }) => {
                 if (finished && storage.SnowEnabled) run();
             });
-
-            if (particle.shouldRotate) {
-                particle.rotationValue.setValue(0);
-                Animated.timing(particle.rotationValue, {
-                    toValue: particle.rotationDirection * 360,
-                    duration: particle.rotationSpeed,
-                    useNativeDriver: true,
-                    easing: Easing.linear
-                }).start();
-            }
         };
         run();
     }, []);
 
     return (
         <Animated.View style={{
-            position: "absolute", left: particle.x, top: 0,
-            width: particle.size, height: particle.size, opacity: particle.opacity,
-            transform: [
-                { translateY: particle.animValue },
-                { rotate: particle.shouldRotate ? rotation : `${particle.rotation}deg` }
-            ]
+            position: "absolute", left: p.x, top: 0,
+            width: p.size, height: p.size, opacity: p.opacity,
+            transform: [{ translateY: p.animValue }]
         }}>
-            {USE_SNOWFLAKE_IMAGE ? (
-                <Image source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+            {!storage.SnowPerformance ? (
+                <Image source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} style={{ width: '100%', height: '100%' }} />
             ) : (
-                <View style={{ width: '100%', height: '100%', borderRadius: particle.size / 2, backgroundColor: 'white' }} />
+                <View style={{ width: '100%', height: '100%', borderRadius: p.size / 2, backgroundColor: 'white' }} />
             )}
         </Animated.View>
-    );
-});
-
-const SnowOverlay = () => {
-    // Re-trigger the component when snow is enabled
-    const [, forceUpdate] = React.useReducer(x => x + 1, 0);
-    
-    React.useEffect(() => {
-        if (storage.SnowEnabled) forceUpdate();
-    }, [storage.SnowEnabled]);
-
-    if (!storage.SnowEnabled) return null;
-
-    return (
-        <Portal>
-            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-                {persistentParticles.map(p => <ParticleItem key={`${lastBurstTime}-${p.id}`} particle={p} />)}
-            </View>
-        </Portal>
     );
 };
 
 export default {
     onLoad: () => {
-        storage.SnowEnabled = false;
-
+        // 1. Reaction Patch
         if (ReactionModule) {
             patches.push(before("addReaction", ReactionModule, (args) => {
                 const [,, emoji] = args;
                 if (emoji?.name === "❄️") {
-                    const now = Date.now();
-                    if (now - lastBurstTime < 10000) return;
-                    
-                    lastBurstTime = now;
-                    persistentParticles.length = 0;
-                    
-                    for (let i = 0; i < 60; i++) {
-                        persistentParticles.push(createParticle(i));
-                    }
-                    
+                    if (Date.now() - lastBurstTime < 10000) return;
+                    lastBurstTime = Date.now();
                     storage.SnowEnabled = true;
-
-                    setTimeout(() => {
-                        storage.SnowEnabled = false;
-                        persistentParticles.length = 0;
-                    }, 15000); 
+                    setTimeout(() => { storage.SnowEnabled = false; }, 15000);
                 }
             }));
         }
 
-        // We still need to mount the "Listener" component once at the root
-        patches.push(
-            before("render", General.View, (args) => {
-                const [wrapper] = args;
-                if (!wrapper?.style?.some?.(s => s?.flex === 1)) return;
-
-                const children = Array.isArray(wrapper.children) ? wrapper.children : [wrapper.children];
-                if (children.some(c => c?.key === "snow-portal-gate")) return;
-
-                wrapper.children = [
-                    ...children,
-                    React.createElement(SnowOverlay, { key: "snow-portal-gate" })
-                ];
-            })
-        );
+        // 2. Root Injection
+        // We use 'after' on the App container to ensure we are the last thing rendered (on top)
+        if (AppContainer) {
+            patches.push(after("default", AppContainer, (_, res) => {
+                if (!res) return res;
+                const children = Array.isArray(res.props.children) ? res.props.children : [res.props.children];
+                
+                if (!children.some(c => c?.key === "snow-root")) {
+                    res.props.children = [
+                        ...children,
+                        React.createElement(SnowOverlay, { key: "snow-root" })
+                    ];
+                }
+                return res;
+            }));
+        }
     },
     onUnload: () => {
         patches.forEach(p => p());
