@@ -1,8 +1,9 @@
 import { before } from "@vendetta/patcher";
 import { React, ReactNative } from "@vendetta/metro/common";
 import { General } from "@vendetta/ui/components";
-import settings from "./settings.js";
 import { storage } from "@vendetta/plugin";
+// Changed import to be extension-agnostic for the bundler
+import Settings from "./Settings"; 
 
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -12,17 +13,19 @@ let patches = [];
 const persistentParticles = [];
 let initialized = false;
 
-// --- Logic remains the same, just made more robust ---
-
 function createParticle(index, startFromCurrent = false) {
     const startY = startFromCurrent ? Math.random() * SCREEN_HEIGHT : -50;
     const animValue = new Animated.Value(startY);
     const rotationValue = new Animated.Value(0);
     
+    const size = USE_SNOWFLAKE_IMAGE 
+        ? (10 + Math.random() * 2.5 * (Math.random() * 10)) 
+        : (5 + Math.random() * 2 * (Math.random() * 10));
+
     return {
         id: index,
         x: Math.random() * SCREEN_WIDTH,
-        size: USE_SNOWFLAKE_IMAGE ? (10 + Math.random() * 25) : (5 + Math.random() * 20),
+        size,
         duration: 4000 + Math.random() * 6000,
         animValue,
         rotationValue,
@@ -40,7 +43,6 @@ function startParticleAnimation(particle) {
         particle.animValue.setValue(-50);
         if (particle.shouldRotate) particle.rotationValue.setValue(0);
 
-        // Main Fall
         Animated.timing(particle.animValue, {
             toValue: SCREEN_HEIGHT + 50,
             duration: particle.duration,
@@ -48,7 +50,6 @@ function startParticleAnimation(particle) {
             easing: Easing.linear
         }).start(({ finished }) => { if (finished) animate(); });
 
-        // Rotation
         if (particle.shouldRotate) {
             Animated.loop(
                 Animated.timing(particle.rotationValue, {
@@ -61,7 +62,7 @@ function startParticleAnimation(particle) {
         }
     };
 
-    // Initial partial fall so snow doesn't all start at the top on load
+    // Initial fall to populate the screen immediately
     Animated.timing(particle.animValue, {
         toValue: SCREEN_HEIGHT + 50,
         duration: particle.duration * ((SCREEN_HEIGHT + 50 - particle.startY) / (SCREEN_HEIGHT + 100)),
@@ -82,8 +83,8 @@ function initializeParticles() {
 
 const ParticleItem = React.memo(({ particle }: { particle: any }) => {
     const rotation = particle.rotationValue.interpolate({
-        inputRange: [0, 360],
-        outputRange: [`${particle.rotation}deg`, `${particle.rotation + 360}deg`]
+        inputRange: [-360, 360],
+        outputRange: [`${particle.rotation - 360}deg`, `${particle.rotation + 360}deg`]
     });
 
     return (
@@ -96,9 +97,18 @@ const ParticleItem = React.memo(({ particle }: { particle: any }) => {
             ]
         }}>
             {USE_SNOWFLAKE_IMAGE ? (
-                <Image source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                <Image 
+                    source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} 
+                    style={{ width: '100%', height: '100%' }} 
+                    resizeMode="contain" 
+                />
             ) : (
-                <View style={{ width: '100%', height: '100%', borderRadius: particle.size / 2, backgroundColor: 'white' }} />
+                <View style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    borderRadius: particle.size / 2, 
+                    backgroundColor: 'white' 
+                }} />
             )}
         </Animated.View>
     );
@@ -119,11 +129,9 @@ export default {
         patches.push(
             before("render", General.View, (args) => {
                 const [wrapper] = args;
-                // We target the root-most View by looking for flex: 1 without specific sub-types
-                // This makes it show up EVERYWHERE (Settings, DMs, Server List)
+                // Target the background-level View that persists across UI changes
                 if (!wrapper?.style?.some?.(s => s?.flex === 1)) return;
 
-                // Stop the "Double Injection" or "Restart" by checking for our key
                 const children = Array.isArray(wrapper.children) ? wrapper.children : [wrapper.children];
                 if (children.some(c => c?.key === "persistent-snow-overlay")) return;
 
@@ -139,5 +147,5 @@ export default {
         persistentParticles.length = 0;
         initialized = false;
     },
-    settings
+    settings: Settings
 };
