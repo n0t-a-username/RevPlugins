@@ -1,18 +1,18 @@
-import { before } from "@vendetta/patcher";
+import { after, before } from "@vendetta/patcher";
 import { React, ReactNative } from "@vendetta/metro/common";
 import { findByProps } from "@vendetta/metro";
-import { General } from "@vendetta/ui/components";
 import { storage } from "@vendetta/plugin";
 import Settings from "./Settings"; 
 
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-const ReactionModule = findByProps("addReaction");
+// We find these inside onLoad to prevent top-level reference crashes
+let ReactionModule;
+let GeneralView;
 
 let patches = [];
 let lastBurstTime = 0;
-// Moving this outside the component ensures we don't duplicate on re-renders
 let activeParticles = []; 
 
 storage.SnowEnabled ??= false;
@@ -54,7 +54,6 @@ const ParticleItem = React.memo(({ data }: { data: any }) => {
 });
 
 const SnowOverlay = () => {
-    // We use a simple state to mount/unmount the particles
     const [show, setShow] = React.useState(false);
 
     React.useEffect(() => {
@@ -64,7 +63,7 @@ const SnowOverlay = () => {
         return () => clearInterval(check);
     }, [show]);
 
-    if (!show) return null;
+    if (!show || activeParticles.length === 0) return null;
 
     return (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
@@ -77,7 +76,12 @@ const SnowOverlay = () => {
 
 export default {
     onLoad: () => {
-        if (ReactionModule?.addReaction) {
+        // Find modules safely inside onLoad
+        ReactionModule = findByProps("addReaction");
+        const GeneralModule = findByProps("View");
+        GeneralView = GeneralModule?.View;
+
+        if (ReactionModule) {
             patches.push(before("addReaction", ReactionModule, (args) => {
                 const emoji = args?.[2];
                 if (emoji?.name === "❄️") {
@@ -85,12 +89,11 @@ export default {
                     if (now - lastBurstTime < 10000) return;
                     
                     lastBurstTime = now;
-                    // Create exactly 40 particles and stop
-                    activeParticles = Array.from({ length: 40 }, () => ({
+                    activeParticles = Array.from({ length: 30 }, () => ({
                         x: Math.random() * SCREEN_WIDTH,
-                        size: 15 + Math.random() * 15,
-                        duration: 3000 + Math.random() * 2000,
-                        opacity: 0.5 + Math.random() * 0.5
+                        size: 15 + Math.random() * 10,
+                        duration: 3500 + Math.random() * 2000,
+                        opacity: 0.5 + Math.random() * 0.4
                     }));
 
                     storage.SnowEnabled = true;
@@ -102,11 +105,16 @@ export default {
             }));
         }
 
-        if (General?.View) {
-            patches.push(after("render", General.View, (args, res) => {
+        if (GeneralView) {
+            patches.push(after("render", GeneralView, (args, res) => {
                 if (!res?.props) return res;
+                
+                // Check if it's a main container
                 const style = StyleSheet.flatten(res.props.style);
                 if (style?.flex !== 1) return res;
+
+                // Stop injection if it's a specific UI element we don't want to double up on
+                if (res.type?.name === "Text" || res.type?.name === "Image") return res;
 
                 const children = Array.isArray(res.props.children) ? res.props.children : [res.props.children];
                 if (children.some(c => c?.key === "snow-fixed-layer")) return res;
