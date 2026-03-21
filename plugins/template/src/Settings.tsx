@@ -193,7 +193,7 @@ export default function Settings() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#111" }} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
+    <View style={{ flex: 1 }} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
       <ScrollView 
         ref={scrollRef} 
         style={{ flex: 1 }}
