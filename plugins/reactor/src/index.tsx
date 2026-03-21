@@ -6,22 +6,18 @@ import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import Settings from "./Settings";
 
-const { View, Animated, Dimensions, Easing, Image } = ReactNative;
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-
-// Default storage to prevent undefined checks
-storage.SnowEnabled = false; 
-storage.SnowPerformance ??= false;
-
+// Move these into a scope where they won't crash on boot
+let SCREEN_WIDTH, SCREEN_HEIGHT;
 let patches = [];
 const persistentParticles = [];
 let initialized = false;
 let snowTimeout = null;
 
+// Helper to create particles safely
 function createParticle(index) {
     return {
         id: index,
-        x: Math.random() * SCREEN_WIDTH,
+        x: Math.random() * (SCREEN_WIDTH || 400),
         size: 10 + Math.random() * 20,
         duration: 3500 + Math.random() * 2500,
         animValue: new Animated.Value(-50),
@@ -34,24 +30,25 @@ function createParticle(index) {
     };
 }
 
-function startSingleFall(particle, onDone) {
+// Separate Animation Logic
+const startSingleFall = (particle, onDone) => {
     particle.animValue.setValue(-50);
     particle.rotationValue.setValue(0);
 
     if (particle.shouldRotate) {
-        Animated.timing(particle.rotationValue, {
+        ReactNative.Animated.timing(particle.rotationValue, {
             toValue: particle.rotationDirection * 360,
             duration: particle.rotationSpeed,
             useNativeDriver: true,
-            easing: Easing.linear
+            easing: ReactNative.Easing.linear
         }).start();
     }
 
-    Animated.timing(particle.animValue, {
-        toValue: SCREEN_HEIGHT + 50,
+    ReactNative.Animated.timing(particle.animValue, {
+        toValue: (SCREEN_HEIGHT || 800) + 50,
         duration: particle.duration,
         useNativeDriver: true,
-        easing: Easing.linear
+        easing: ReactNative.Easing.linear
     }).start(({ finished }) => {
         if (finished && onDone) onDone();
     });
@@ -81,7 +78,7 @@ const ParticleItem = React.memo(({ particle, active }: { particle: any, active: 
     });
 
     return (
-        <Animated.View style={{
+        <ReactNative.Animated.View style={{
             position: "absolute", left: particle.x, top: 0,
             width: particle.size, height: particle.size, opacity: particle.opacity,
             transform: [
@@ -89,12 +86,12 @@ const ParticleItem = React.memo(({ particle, active }: { particle: any, active: 
                 { rotate: particle.shouldRotate ? animatedRotation : `${particle.rotation}deg` }
             ]
         }}>
-            <Image
+            <ReactNative.Image
                 source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }}
                 style={{ width: '100%', height: '100%' }}
                 resizeMode="contain"
             />
-        </Animated.View>
+        </ReactNative.Animated.View>
     );
 });
 
@@ -111,18 +108,25 @@ const FallingParticles = () => {
     }, []);
 
     return (
-        <View pointerEvents="none" style={{ position: "absolute", inset: 0, zIndex: 9999 }}>
+        <ReactNative.View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }}>
             {persistentParticles.map(p => (
                 <ParticleItem key={p.id} particle={p} active={active} />
             ))}
-        </View>
+        </ReactNative.View>
     );
 };
 
 export default {
     onLoad: () => {
+        // Initialize dimensions inside onLoad
+        const dims = ReactNative.Dimensions.get("window");
+        SCREEN_WIDTH = dims.width;
+        SCREEN_HEIGHT = dims.height;
+
+        storage.SnowEnabled = false;
+
         try {
-            // Use a safer search for the reaction module
+            // 1. Safe Reaction Patch
             const ReactionModule = findByProps("addReaction");
             if (ReactionModule) {
                 patches.push(before("addReaction", ReactionModule, (args) => {
@@ -140,10 +144,11 @@ export default {
                 }));
             }
 
-            // Patching the View safely
-            if (General?.View) {
+            // 2. Safe View Patch
+            const ViewComponent = General?.View || findByProps("View")?.View;
+            if (ViewComponent) {
                 patches.push(
-                    before("render", General.View, (args) => {
+                    before("render", ViewComponent, (args) => {
                         const [wrapper] = args;
                         if (!wrapper?.style?.some(s => s?.flex === 1)) return;
 
@@ -162,12 +167,12 @@ export default {
                     })
                 );
             }
-        } catch (e) {
-            console.error("[LetItSnow] Failed to patch:", e);
+        } catch (err) {
+            console.error("[LetItSnow] Load Error:", err);
         }
     },
     onUnload: () => {
-        patches.forEach(unpatch => unpatch());
+        patches.forEach(u => u());
         if (snowTimeout) clearTimeout(snowTimeout);
     },
     settings: Settings
