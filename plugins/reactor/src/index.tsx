@@ -12,12 +12,11 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const ReactionModule = findByProps("addReaction");
 
 storage.SnowEnabled = false; 
-storage.SnowPerformance ??= false;
 
 let patches = [];
-let lastBurstTime = 0; // The "Gatekeeper" variable
+let lastBurstTime = 0;
 
-const ParticleItem = React.memo(({ active }: { active: boolean }) => {
+const ParticleItem = React.memo(({ startTime }: { startTime: number }) => {
     const config = React.useMemo(() => ({
         x: Math.random() * SCREEN_WIDTH,
         size: 12 + Math.random() * 18,
@@ -32,18 +31,24 @@ const ParticleItem = React.memo(({ active }: { active: boolean }) => {
         const run = () => {
             if (!isMounted) return;
             animValue.setValue(-50);
+            
             Animated.timing(animValue, {
                 toValue: SCREEN_HEIGHT + 50,
                 duration: config.duration,
                 useNativeDriver: true,
                 easing: Easing.linear
             }).start(({ finished }) => {
-                if (finished && active && isMounted) run();
+                // Check if we are still within the 4-second "spawn window"
+                // since this specific burst started
+                const elapsed = Date.now() - startTime;
+                if (finished && isMounted && elapsed < 4000) {
+                    run();
+                }
             });
         };
         run();
         return () => { isMounted = false; animValue.stopAnimation(); };
-    }, [active]);
+    }, []);
 
     return (
         <Animated.View style={{
@@ -56,19 +61,14 @@ const ParticleItem = React.memo(({ active }: { active: boolean }) => {
     );
 });
 
-const FallingParticles = () => {
-    const [active, setActive] = React.useState(true);
-
-    React.useEffect(() => {
-        const timer = setTimeout(() => setActive(false), 4000); // 4s of spawning
-        return () => clearTimeout(timer);
-    }, []);
-
+const FallingParticles = ({ startTime }: { startTime: number }) => {
+    // We create the particles once. They will loop internally 
+    // until they realize the 4s window has closed.
     const particles = React.useMemo(() => Array.from({ length: 50 }, (_, i) => i), []);
 
     return (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
-            {particles.map(i => <ParticleItem key={i} active={active} />)}
+            {particles.map(i => <ParticleItem key={i} startTime={startTime} />)}
         </View>
     );
 };
@@ -80,15 +80,17 @@ export default {
                 const [,, emoji] = args;
                 if (emoji?.name === "❄️") {
                     const now = Date.now();
-                    // If less than 7 seconds have passed, ignore the request
-                    if (now - lastBurstTime < 7000) return;
+                    // Lock the burst so it can't double-trigger for 8 seconds
+                    if (now - lastBurstTime < 8000) return;
                     
                     lastBurstTime = now;
                     storage.SnowEnabled = true;
 
+                    // Keep the component mounted long enough for even the slowest
+                    // flake to finish its final 5-second fall after the 4s window.
                     setTimeout(() => {
                         storage.SnowEnabled = false;
-                    }, 7000); // 7s total duration
+                    }, 9000); 
                 }
             }));
         }
@@ -105,7 +107,8 @@ export default {
 
                 const SnowWrapper = () => {
                     useProxy(storage);
-                    return storage.SnowEnabled ? <FallingParticles /> : null;
+                    // Pass the global lastBurstTime so particles know when they "started"
+                    return storage.SnowEnabled ? <FallingParticles startTime={lastBurstTime} /> : null;
                 };
 
                 const children = Array.isArray(wrapper.children) ? wrapper.children : [wrapper.children];
@@ -117,7 +120,6 @@ export default {
     },
     onUnload: () => {
         patches.forEach(u => u());
-        lastBurstTime = 0;
         storage.SnowEnabled = false;
     },
     settings: Settings
