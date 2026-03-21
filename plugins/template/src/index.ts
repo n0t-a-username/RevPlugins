@@ -1617,34 +1617,58 @@ commands.push(
 );
 
 
-// ---- /bot-tag ----
+// ---- /tags ----
 commands.push(
   registerCommand({
-    name: "bot-tag",
-    displayName: "bot-tag",
-    description: "Toggle the blue BOT tag on your own name (Local Only)",
+    name: "tags",
+    displayName: "tags",
+    description: "Toggle BOT or SYSTEM tags on your name (Local Only)",
     options: [
+      {
+        name: "type",
+        displayName: "type",
+        description: "Which tag to toggle",
+        required: true,
+        type: 3, // String
+        choices: [
+          { name: "Bot", displayName: "Bot", value: "bot" },
+          { name: "System", displayName: "System", value: "system" },
+          { name: "None", displayName: "None (Disable All)", value: "none" }
+        ]
+      },
       {
         name: "enabled",
         displayName: "enabled",
-        description: "true = show tag, false = hide tag",
-        required: true,
-        type: 5,
-      },
+        description: "True to enable, False to disable",
+        required: false,
+        type: 5, // Boolean
+      }
     ],
     applicationId: "-1",
     inputType: 1,
     type: 1,
     execute: (args, ctx) => {
-      const enabled = args.find(a => a.name === "enabled")?.value ?? false;
-      storage.botTagSpoof = enabled;
+      const type = args.find(a => a.name === "type")?.value;
+      const enabled = args.find(a => a.name === "enabled")?.value ?? true;
 
+      if (type === "none") {
+        storage.botTagSpoof = false;
+        storage.systemTagSpoof = false;
+      } else if (type === "bot") {
+        storage.botTagSpoof = enabled;
+      } else if (type === "system") {
+        storage.systemTagSpoof = enabled;
+      }
+
+      const status = type === "none" ? "All tags disabled" : `${type.toUpperCase()} tag set to ${enabled}`;
+      
       return {
-        content: `🤖 Bot Tag Spoofing: **${enabled ? "ON" : "OFF"}** (Switch channels to refresh)`,
+        content: `🏷️ **${status}**. (Switch channels to refresh UI)`,
       };
     },
   })
 );
+
 
 
 /* =========================
@@ -1659,6 +1683,7 @@ export default {
     // Initialize storage if it doesn't exist
     storage.nitroSpoof ??= false;
     storage.botTagSpoof ??= false;
+    storage.systemTagSpoof ??= false;
 
     // 1. Sidebar Entry (Bemmo Tab)
     try { 
@@ -1684,10 +1709,13 @@ export default {
       logger.error("Nitro failed", e); 
     }
 
-    // 3. Bot Tag Spoof (Standalone)
+    // 3. Identity Tag Spoofing (Bot & System)
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        if (user && storage.botTagSpoof) {
+        if (!user) return user;
+
+        // Apply Bot Tag
+        if (storage.botTagSpoof) {
           Object.defineProperty(user, "bot", {
             get: () => true,
             set: () => {}, 
@@ -1695,10 +1723,21 @@ export default {
             enumerable: true
           });
         }
+
+        // Apply System Tag
+        if (storage.systemTagSpoof) {
+          Object.defineProperty(user, "system", {
+            get: () => true,
+            set: () => {}, 
+            configurable: true,
+            enumerable: true
+          });
+        }
+
         return user;
       }));
     } catch (e) { 
-      logger.error("Bot tag spoof failed", e); 
+      logger.error("Identity tag spoof failed", e); 
     }
 
     // 4. Services (Copy ID, RPC, Logger)
