@@ -1,22 +1,24 @@
 import { before } from "@vendetta/patcher";
-import { React, ReactNative, flux as Dispatcher } from "@vendetta/metro/common";
+import { React, ReactNative } from "@vendetta/metro/common";
+import { findByProps } from "@vendetta/metro";
 import { General } from "@vendetta/ui/components";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
-import { getCurrentUser } from "@vendetta/metro/common";
 import Settings from "./Settings";
 
-const { View, Animated, Dimensions, Easing } = ReactNative;
+const { View, Animated, Dimensions, Easing, Image } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const { Image } = ReactNative;
 
-// Initialize storage defaults
-storage.SnowEnabled ??= false;
+// Find the module responsible for adding reactions
+const ReactionModule = findByProps("addReaction");
+
+storage.SnowEnabled = false; 
 storage.SnowPerformance ??= false;
 
 let patches = [];
 const persistentParticles = [];
 let initialized = false;
+let snowTimeout = null;
 
 function createParticle(index, startFromCurrent = false) {
     const startY = startFromCurrent ? Math.random() * SCREEN_HEIGHT : -50;
@@ -24,11 +26,11 @@ function createParticle(index, startFromCurrent = false) {
     const rotationValue = new Animated.Value(0);
     const x = Math.random() * SCREEN_WIDTH;
     const size = 10 + Math.random() * 20;
-    const duration = 4000 + Math.random() * 6000;
+    const duration = 3000 + Math.random() * 4000;
     const opacity = 0.6 + Math.random() * 0.4;
     const rotation = Math.random() * 360;
     const shouldRotate = Math.random() > 0.4;
-    const rotationSpeed = 4000 + Math.random() * 8000;
+    const rotationSpeed = 3000 + Math.random() * 5000;
     const rotationDirection = Math.random() > 0.5 ? 1 : -1;
 
     return {
@@ -124,35 +126,35 @@ const FallingParticles = () => {
 
 export default {
     onLoad: () => {
-        const handleReaction = (ev) => {
-            const self = getCurrentUser();
-            // Safer check: only proceed if self exists and IDs match
-            if (ev.emoji.name === "❄️" && self && ev.userId === self.id) {
-                storage.SnowEnabled = (ev.type === "MESSAGE_REACTION_ADD");
-            }
-        };
+        // Patch the actual reaction action
+        if (ReactionModule) {
+            patches.push(before("addReaction", ReactionModule, (args) => {
+                const [channelId, messageId, emoji] = args;
+                
+                // Trigger only if the emoji name is snowflake
+                if (emoji?.name === "❄️") {
+                    if (snowTimeout) clearTimeout(snowTimeout);
+                    
+                    storage.SnowEnabled = true;
+                    
+                    snowTimeout = setTimeout(() => {
+                        storage.SnowEnabled = false;
+                    }, 10000); // 10 second burst
+                }
+            }));
+        }
 
-        Dispatcher.subscribe("MESSAGE_REACTION_ADD", handleReaction);
-        Dispatcher.subscribe("MESSAGE_REACTION_REMOVE", handleReaction);
-        
-        patches.push(() => {
-            Dispatcher.unsubscribe("MESSAGE_REACTION_ADD", handleReaction);
-            Dispatcher.unsubscribe("MESSAGE_REACTION_REMOVE", handleReaction);
-        });
-
+        // UI Injection
         patches.push(
             before("render", General.View, (args) => {
                 const [wrapper] = args;
                 if (!wrapper || !Array.isArray(wrapper.style)) return;
-                
-                // Only inject on the main app view
                 if (!wrapper.style.some(s => s?.flex === 1)) return;
 
                 let child = wrapper.children;
                 if (Array.isArray(child)) {
                     child = child.find(c => c?.type?.name === "NativeStackViewInner");
                 }
-                
                 if (child?.type?.name !== "NativeStackViewInner") return;
 
                 const routes = child?.props?.state?.routeNames;
@@ -164,15 +166,13 @@ export default {
                 };
 
                 const currentChildren = Array.isArray(wrapper.children) ? wrapper.children : [wrapper.children];
-                
-                // Ensure we don't double-inject by checking keys if needed, 
-                // though React.createElement with a stable key usually handles this.
-                wrapper.children = [...currentChildren, React.createElement(SnowWrapper, { key: "snow-logic" })];
+                wrapper.children = [...currentChildren, React.createElement(SnowWrapper, { key: "snow-effect" })];
             })
         );
     },
     onUnload: () => {
         for (const unpatch of patches) unpatch();
+        if (snowTimeout) clearTimeout(snowTimeout);
     },
     settings: Settings
 };
