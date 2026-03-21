@@ -1,11 +1,12 @@
-import { after } from "@vendetta/patcher";
+import { before } from "@vendetta/patcher";
 import { React, ReactNative } from "@vendetta/metro/common";
-import { findByProps, findByName } from "@vendetta/metro";
+import { findByProps } from "@vendetta/metro";
+import { General } from "@vendetta/ui/components";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import Settings from "./Settings";
 
-const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
+const { View, Animated, Dimensions, Easing, Image } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const ReactionModule = findByProps("addReaction");
@@ -14,45 +15,52 @@ storage.SnowEnabled = false;
 storage.SnowPerformance ??= false;
 
 let patches = [];
-let snowTimeout = null;
 const persistentParticles = [];
+let initialized = false;
+let snowTimeout = null;
 
 function createParticle(index) {
     return {
         id: index,
         x: Math.random() * SCREEN_WIDTH,
         size: 10 + Math.random() * 20,
-        duration: 3000 + Math.random() * 2000,
+        duration: 2500 + Math.random() * 2000,
         animValue: new Animated.Value(-50),
         opacity: 0.6 + Math.random() * 0.4,
     };
 }
 
-const ParticleItem = React.memo(({ particle, active }) => {
-    const [isVisible, setIsVisible] = React.useState(false);
+function startSingleFall(particle, active, onDone) {
+    particle.animValue.setValue(-50);
+    Animated.timing(particle.animValue, {
+        toValue: SCREEN_HEIGHT + 50,
+        duration: particle.duration,
+        useNativeDriver: true,
+        easing: Easing.linear
+    }).start(({ finished }) => {
+        if (finished) {
+            if (active.current) {
+                startSingleFall(particle, active, onDone);
+            } else {
+                onDone();
+            }
+        }
+    });
+}
+
+const ParticleItem = React.memo(({ particle, isActive }: { particle: any, isActive: boolean }) => {
+    const [visible, setVisible] = React.useState(false);
+    const activeRef = React.useRef(isActive);
 
     React.useEffect(() => {
-        if (active) {
-            setIsVisible(true);
-            const run = () => {
-                particle.animValue.setValue(-50);
-                Animated.timing(particle.animValue, {
-                    toValue: SCREEN_HEIGHT + 50,
-                    duration: particle.duration,
-                    useNativeDriver: true,
-                    easing: Easing.linear
-                }).start(({ finished }) => {
-                    if (finished && active) run();
-                    else setIsVisible(false);
-                });
-            };
-            run();
-        } else {
-            // If not active, let current animation finish, then hide
+        activeRef.current = isActive;
+        if (isActive && !visible) {
+            setVisible(true);
+            startSingleFall(particle, activeRef, () => setVisible(false));
         }
-    }, [active]);
+    }, [isActive]);
 
-    if (!isVisible) return null;
+    if (!visible) return null;
 
     return (
         <Animated.View style={{
@@ -70,35 +78,27 @@ const ParticleItem = React.memo(({ particle, active }) => {
 });
 
 const FallingParticles = () => {
+    useProxy(storage);
     const [active, setActive] = React.useState(true);
 
     React.useEffect(() => {
-        if (persistentParticles.length === 0) {
-            for (let i = 0; i < 40; i++) persistentParticles.push(createParticle(i));
+        if (!initialized) {
+            for (let i = 0; i < 50; i++) persistentParticles.push(createParticle(i));
+            initialized = true;
         }
+        
+        // Stop "creating" (looping) after 3 seconds
         const timer = setTimeout(() => setActive(false), 3000);
         return () => clearTimeout(timer);
     }, []);
 
     return (
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
+        <View pointerEvents="none" style={{ ...ReactNative.StyleSheet.absoluteFillObject, zIndex: 9999 }}>
             {persistentParticles.map(p => (
-                <ParticleItem key={p.id} particle={p} active={active} />
+                <ParticleItem key={p.id} particle={p} isActive={active} />
             ))}
         </View>
     );
-};
-
-const SnowWrapper = () => {
-    useProxy(storage);
-    // Use a unique key based on a timestamp to force a clean remount on every burst
-    const [burstKey, setBurstKey] = React.useState(0);
-
-    React.useEffect(() => {
-        if (storage.SnowEnabled) setBurstKey(Date.now());
-    }, [storage.SnowEnabled]);
-
-    return storage.SnowEnabled ? <FallingParticles key={burstKey} /> : null;
 };
 
 export default {
@@ -109,28 +109,40 @@ export default {
                 if (emoji?.name === "❄️") {
                     if (snowTimeout) clearTimeout(snowTimeout);
                     
-                    // Simple toggle to trigger the useEffect in SnowWrapper
-                    storage.SnowEnabled = true;
-                    
-                    snowTimeout = setTimeout(() => {
-                        storage.SnowEnabled = false;
-                    }, 5000);
+                    // Force restart logic
+                    storage.SnowEnabled = false;
+                    setTimeout(() => {
+                        storage.SnowEnabled = true;
+                        // 3s generation + 2s fall time = 5s total mount
+                        snowTimeout = setTimeout(() => {
+                            storage.SnowEnabled = false;
+                        }, 5000);
+                    }, 16); // One frame delay
                 }
             }));
         }
 
-        // Patch the main App component instead of General.View
-        // This avoids the "flashing" because it only renders once
-        const App = findByName("App", false);
-        if (App) {
-            patches.push(after("default", App, (args, res) => {
-                // Find the main container in the React tree and append our wrapper
-                if (!res?.props?.children) return;
-                
-                const children = Array.isArray(res.props.children) ? res.props.children : [res.props.children];
-                res.props.children = [...children, React.createElement(SnowWrapper)];
-            }));
-        }
+        patches.push(
+            before("render", General.View, (args) => {
+                const [wrapper] = args;
+                if (!wrapper?.style?.some?.(s => s?.flex === 1)) return;
+
+                let child = wrapper.children;
+                if (Array.isArray(child)) child = child.find(c => c?.type?.name === "NativeStackViewInner");
+                if (child?.type?.name !== "NativeStackViewInner") return;
+                if (!child?.props?.state?.routeNames?.includes("main")) return;
+
+                const SnowWrapper = () => {
+                    useProxy(storage);
+                    return storage.SnowEnabled ? <FallingParticles /> : null;
+                };
+
+                const children = Array.isArray(wrapper.children) ? wrapper.children : [wrapper.children];
+                if (!children.some(c => c?.key === "snow-logic")) {
+                    wrapper.children = [...children, React.createElement(SnowWrapper, { key: "snow-logic" })];
+                }
+            })
+        );
     },
     onUnload: () => {
         patches.forEach(u => u());
