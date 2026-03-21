@@ -9,6 +9,6 @@
     ],
     "main": "src/index.tsx",
     "vendetta": {
-        "icon": "wumpus_snowglobe_premium120"
+        "icon": "PencilIcon"
     }
 }
