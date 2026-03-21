@@ -124,11 +124,10 @@ const FallingParticles = () => {
 
 export default {
     onLoad: () => {
-        const self = getCurrentUser();
-
         const handleReaction = (ev) => {
-            // Only trigger if YOU added/removed the ❄️ reaction
-            if (ev.emoji.name === "❄️" && ev.userId === self.id) {
+            const self = getCurrentUser();
+            // Safer check: only proceed if self exists and IDs match
+            if (ev.emoji.name === "❄️" && self && ev.userId === self.id) {
                 storage.SnowEnabled = (ev.type === "MESSAGE_REACTION_ADD");
             }
         };
@@ -145,22 +144,29 @@ export default {
             before("render", General.View, (args) => {
                 const [wrapper] = args;
                 if (!wrapper || !Array.isArray(wrapper.style)) return;
+                
+                // Only inject on the main app view
                 if (!wrapper.style.some(s => s?.flex === 1)) return;
 
                 let child = wrapper.children;
-                if (Array.isArray(child)) child = child.find(c => c?.type?.name === "NativeStackViewInner");
+                if (Array.isArray(child)) {
+                    child = child.find(c => c?.type?.name === "NativeStackViewInner");
+                }
+                
                 if (child?.type?.name !== "NativeStackViewInner") return;
 
                 const routes = child?.props?.state?.routeNames;
                 if (!routes?.includes("main")) return;
 
-                // We wrap this in a functional component that uses storage proxy
                 const SnowWrapper = () => {
                     useProxy(storage);
                     return storage.SnowEnabled ? <FallingParticles /> : null;
                 };
 
                 const currentChildren = Array.isArray(wrapper.children) ? wrapper.children : [wrapper.children];
+                
+                // Ensure we don't double-inject by checking keys if needed, 
+                // though React.createElement with a stable key usually handles this.
                 wrapper.children = [...currentChildren, React.createElement(SnowWrapper, { key: "snow-logic" })];
             })
         );
