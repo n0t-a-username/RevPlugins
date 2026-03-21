@@ -1617,60 +1617,6 @@ commands.push(
 );
 
 
-// ---- /tags ----
-commands.push(
-  registerCommand({
-    name: "tags",
-    displayName: "tags",
-    description: "Toggle BOT or SYSTEM tags on your name (Local Only)",
-    options: [
-      {
-        name: "type",
-        displayName: "type",
-        description: "Which tag to toggle",
-        required: true,
-        type: 3, // String
-        choices: [
-          { name: "Bot", displayName: "Bot", value: "bot" },
-          { name: "System", displayName: "System", value: "system" },
-          { name: "None", displayName: "None (Disable All)", value: "none" }
-        ]
-      },
-      {
-        name: "enabled",
-        displayName: "enabled",
-        description: "True to enable, False to disable",
-        required: false,
-        type: 5, // Boolean
-      }
-    ],
-    applicationId: "-1",
-    inputType: 1,
-    type: 1,
-    execute: (args, ctx) => {
-      const type = args.find(a => a.name === "type")?.value;
-      const enabled = args.find(a => a.name === "enabled")?.value ?? true;
-
-      if (type === "none") {
-        storage.botTagSpoof = false;
-        storage.systemTagSpoof = false;
-      } else if (type === "bot") {
-        storage.botTagSpoof = enabled;
-      } else if (type === "system") {
-        storage.systemTagSpoof = enabled;
-      }
-
-      const status = type === "none" ? "All tags disabled" : `${type.toUpperCase()} tag set to ${enabled}`;
-      
-      return {
-        content: `🏷️ **${status}**. (Switch channels to refresh UI)`,
-      };
-    },
-  })
-);
-
-
-
 /* =========================
    PLUGIN LIFECYCLE (FINAL)
 ========================= */
@@ -1682,8 +1628,6 @@ export default {
   onLoad: () => {
     // Initialize storage if it doesn't exist
     storage.nitroSpoof ??= false;
-    storage.botTagSpoof ??= false;
-    storage.systemTagSpoof ??= false;
 
     // 1. Sidebar Entry (Bemmo Tab)
     try { 
@@ -1695,6 +1639,7 @@ export default {
     // 2. Nitro Spoof (Conditional)
     try {
       unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
+        // Only apply if the toggle in Settings is ON
         if (user && storage.nitroSpoof) {
           user.premiumType = 2; 
           user.premiumState = {
@@ -1709,38 +1654,7 @@ export default {
       logger.error("Nitro failed", e); 
     }
 
-    // 3. Identity Tag Spoofing (Bot & System)
-    try {
-      unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        if (!user) return user;
-
-        // Apply Bot Tag
-        if (storage.botTagSpoof) {
-          Object.defineProperty(user, "bot", {
-            get: () => true,
-            set: () => {}, 
-            configurable: true,
-            enumerable: true
-          });
-        }
-
-        // Apply System Tag
-        if (storage.systemTagSpoof) {
-          Object.defineProperty(user, "system", {
-            get: () => true,
-            set: () => {}, 
-            configurable: true,
-            enumerable: true
-          });
-        }
-
-        return user;
-      }));
-    } catch (e) { 
-      logger.error("Identity tag spoof failed", e); 
-    }
-
-    // 4. Services (Copy ID, RPC, Logger)
+    // 3. Services (Copy ID, RPC, Logger)
     try {
       CopyMessageID.onLoad?.(); 
       RichPresence.startRichPresence();
