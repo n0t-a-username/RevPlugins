@@ -9,9 +9,13 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const ReactionModule = findByProps("addReaction");
 const GeneralModule = findByProps("View");
+// Navigation module to get the current channel ID
+const NavigationNative = findByProps("useNavigationState");
 
 let patches = [];
 let lastBurstTime = 0;
+let snowTimer = null;
+let activeChannelId = null; // Track which channel the snow belongs to
 
 storage.SnowEnabled ??= false;
 
@@ -39,13 +43,8 @@ const Particle = ({ data }) => {
                 if (finished && isMounted && storage.SnowEnabled) run();
             });
         };
-
         if (storage.SnowEnabled) run();
-        return () => { 
-            isMounted = false; 
-            data.anim.stopAnimation(); 
-            data.anim.setValue(-100);
-        };
+        return () => { isMounted = false; data.anim.stopAnimation(); };
     }, [storage.SnowEnabled]);
 
     return (
@@ -54,28 +53,21 @@ const Particle = ({ data }) => {
             width: data.size, height: data.size, opacity: data.opacity,
             transform: [{ translateY: data.anim }]
         }}>
-            <Image 
-                source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} 
-                style={{ width: '100%', height: '100%' }} 
-                resizeMode="contain" 
-            />
+            <Image source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
         </Animated.View>
     );
 };
 
-// This component acts as the actual "Snow Layer"
-const SnowOverlay = () => {
+const SnowOverlay = ({ currentChannelId }) => {
     const [, forceUpdate] = React.useReducer(x => x + 1, 0);
 
     React.useEffect(() => {
-        const interval = setInterval(() => {
-            // Force a re-render so we catch the storage change instantly
-            forceUpdate();
-        }, 250);
+        const interval = setInterval(() => forceUpdate(), 300);
         return () => clearInterval(interval);
     }, []);
 
-    if (!storage.SnowEnabled) return null;
+    // Only render if snow is enabled AND we are in the correct channel
+    if (!storage.SnowEnabled || currentChannelId !== activeChannelId) return null;
 
     return (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 999 }]}>
@@ -88,15 +80,25 @@ export default {
     onLoad: () => {
         if (ReactionModule) {
             patches.push(before("addReaction", ReactionModule, (args) => {
+                const channelId = args?.[0];
                 const emoji = args?.[2];
+                
                 if (emoji?.name === "❄️") {
                     const now = Date.now();
                     if (now - lastBurstTime < 5000) return;
                     
                     lastBurstTime = now;
+                    activeChannelId = channelId; // Lock snow to this channel
                     storage.SnowEnabled = true;
-                    // Stop after 12 seconds
-                    setTimeout(() => { storage.SnowEnabled = false; }, 12000);
+
+                    // Clear any existing timer to prevent indefinite snow
+                    if (snowTimer) clearTimeout(snowTimer);
+                    
+                    snowTimer = setTimeout(() => { 
+                        storage.SnowEnabled = false; 
+                        activeChannelId = null;
+                        snowTimer = null;
+                    }, 12000);
                 }
             }));
         }
@@ -105,16 +107,21 @@ export default {
             patches.push(after("render", GeneralModule.View, (args, res) => {
                 if (!res?.props) return res;
                 
+                // Get the channelId from the view's context if available
+                const channelId = res.props?.channelId || res.props?.channel?.id;
                 const style = StyleSheet.flatten(res.props.style);
-                // Target the main chat area (usually flex: 1 with an onLayout)
+                
                 if (style?.flex !== 1 || !res.props.onLayout) return res;
 
                 const children = React.Children.toArray(res.props.children);
-                if (children.some(c => c?.key === "snow-direct-layer")) return res;
+                if (children.some(c => c?.key === "snow-locked-layer")) return res;
 
                 res.props.children = [
                     ...children,
-                    React.createElement(SnowOverlay, { key: "snow-direct-layer" })
+                    React.createElement(SnowOverlay, { 
+                        key: "snow-locked-layer",
+                        currentChannelId: channelId 
+                    })
                 ];
                 return res;
             }));
@@ -122,7 +129,9 @@ export default {
     },
     onUnload: () => {
         patches.forEach(p => p?.());
+        if (snowTimer) clearTimeout(snowTimer);
         storage.SnowEnabled = false;
+        activeChannelId = null;
         PARTICLE_POOL.forEach(p => p.anim.setValue(-100));
     },
     settings: Settings
