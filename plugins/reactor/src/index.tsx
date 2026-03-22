@@ -7,16 +7,16 @@ import Settings from "./Settings";
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
+// Portal allows us to render outside the chat's local UI tree
+const { Portal } = findByProps("Portal");
 const ReactionModule = findByProps("addReaction");
 const GeneralModule = findByProps("View");
 
 let patches = [];
 let lastBurstTime = 0;
 
-// Initialize storage safely
 storage.SnowEnabled ??= false;
 
-// Pre-define particle data outside of render to prevent lag/re-generation
 const PARTICLE_COUNT = 25;
 const PARTICLE_POOL = Array.from({ length: PARTICLE_COUNT }, () => ({
     x: Math.random() * SCREEN_WIDTH,
@@ -62,22 +62,24 @@ const Particle = ({ data }) => {
 };
 
 const SnowOverlay = () => {
-    // We use local state to sync with storage for smooth mounting
     const [active, setActive] = React.useState(storage.SnowEnabled);
 
     React.useEffect(() => {
         const check = setInterval(() => {
             if (storage.SnowEnabled !== active) setActive(storage.SnowEnabled);
-        }, 500);
+        }, 300); // Faster polling for instant response
         return () => clearInterval(check);
     }, [active]);
 
     if (!active) return null;
 
+    // Wrapping in Portal forces it to the top layer immediately
     return (
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            {PARTICLE_POOL.map((p, i) => <Particle key={i} data={p} />)}
-        </View>
+        <Portal>
+            <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
+                {PARTICLE_POOL.map((p, i) => <Particle key={i} data={p} />)}
+            </View>
+        </Portal>
     );
 };
 
@@ -88,12 +90,11 @@ export default {
                 const emoji = args?.[2];
                 if (emoji?.name === "❄️") {
                     const now = Date.now();
-                    if (now - lastBurstTime < 10000) return;
+                    if (now - lastBurstTime < 5000) return;
                     
                     lastBurstTime = now;
                     storage.SnowEnabled = true;
 
-                    // Stop snow after 12 seconds
                     setTimeout(() => { 
                         storage.SnowEnabled = false; 
                     }, 12000);
@@ -103,18 +104,18 @@ export default {
 
         if (GeneralModule?.View) {
             patches.push(after("render", GeneralModule.View, (args, res) => {
-                if (!res?.props || !storage.SnowEnabled) return res;
+                if (!res?.props) return res;
                 
                 const style = StyleSheet.flatten(res.props.style);
-                // Target the message list container specifically
+                // We only need one stable mount point to host the Portal
                 if (style?.flex !== 1 || !res.props.onLayout) return res;
 
                 const children = React.Children.toArray(res.props.children);
-                if (children.some(c => c?.key === "snow-unified-layer")) return res;
+                if (children.some(c => c?.key === "snow-portal-host")) return res;
 
                 res.props.children = [
                     ...children,
-                    React.createElement(SnowOverlay, { key: "snow-unified-layer" })
+                    React.createElement(SnowOverlay, { key: "snow-portal-host" })
                 ];
                 return res;
             }));
