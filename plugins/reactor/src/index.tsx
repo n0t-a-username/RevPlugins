@@ -7,8 +7,9 @@ import Settings from "./Settings";
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// Portal allows us to render outside the chat's local UI tree
-const { Portal } = findByProps("Portal");
+// We search for the Portal component specifically within the module
+const PortalModule = findByProps("Portal");
+const ActualPortal = PortalModule?.Portal; // Most Vendetta environments nest the component here
 const ReactionModule = findByProps("addReaction");
 const GeneralModule = findByProps("View");
 
@@ -17,10 +18,10 @@ let lastBurstTime = 0;
 
 storage.SnowEnabled ??= false;
 
-const PARTICLE_COUNT = 25;
+const PARTICLE_COUNT = 20;
 const PARTICLE_POOL = Array.from({ length: PARTICLE_COUNT }, () => ({
     x: Math.random() * SCREEN_WIDTH,
-    size: 15 + Math.random() * 15,
+    size: 15 + Math.random() * 12,
     duration: 3500 + Math.random() * 2500,
     opacity: 0.4 + Math.random() * 0.4,
     anim: new Animated.Value(-50)
@@ -41,7 +42,6 @@ const Particle = ({ data }) => {
                 if (finished && isMounted && storage.SnowEnabled) run();
             });
         };
-
         if (storage.SnowEnabled) run();
         return () => { isMounted = false; data.anim.stopAnimation(); };
     }, [storage.SnowEnabled]);
@@ -67,19 +67,17 @@ const SnowOverlay = () => {
     React.useEffect(() => {
         const check = setInterval(() => {
             if (storage.SnowEnabled !== active) setActive(storage.SnowEnabled);
-        }, 300); // Faster polling for instant response
+        }, 300);
         return () => clearInterval(check);
     }, [active]);
 
-    if (!active) return null;
+    if (!active || !ActualPortal) return null;
 
-    // Wrapping in Portal forces it to the top layer immediately
-    return (
-        <Portal>
-            <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
-                {PARTICLE_POOL.map((p, i) => <Particle key={i} data={p} />)}
-            </View>
-        </Portal>
+    // Use React.createElement to safely handle the Portal component
+    return React.createElement(ActualPortal, {}, 
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
+            {PARTICLE_POOL.map((p, i) => <Particle key={i} data={p} />)}
+        </View>
     );
 };
 
@@ -91,13 +89,9 @@ export default {
                 if (emoji?.name === "❄️") {
                     const now = Date.now();
                     if (now - lastBurstTime < 5000) return;
-                    
                     lastBurstTime = now;
                     storage.SnowEnabled = true;
-
-                    setTimeout(() => { 
-                        storage.SnowEnabled = false; 
-                    }, 12000);
+                    setTimeout(() => { storage.SnowEnabled = false; }, 12000);
                 }
             }));
         }
@@ -105,9 +99,7 @@ export default {
         if (GeneralModule?.View) {
             patches.push(after("render", GeneralModule.View, (args, res) => {
                 if (!res?.props) return res;
-                
                 const style = StyleSheet.flatten(res.props.style);
-                // We only need one stable mount point to host the Portal
                 if (style?.flex !== 1 || !res.props.onLayout) return res;
 
                 const children = React.Children.toArray(res.props.children);
