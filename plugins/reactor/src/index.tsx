@@ -7,9 +7,6 @@ import Settings from "./Settings";
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// We search for the Portal component specifically within the module
-const PortalModule = findByProps("Portal");
-const ActualPortal = PortalModule?.Portal; // Most Vendetta environments nest the component here
 const ReactionModule = findByProps("addReaction");
 const GeneralModule = findByProps("View");
 
@@ -21,10 +18,10 @@ storage.SnowEnabled ??= false;
 const PARTICLE_COUNT = 20;
 const PARTICLE_POOL = Array.from({ length: PARTICLE_COUNT }, () => ({
     x: Math.random() * SCREEN_WIDTH,
-    size: 15 + Math.random() * 12,
-    duration: 3500 + Math.random() * 2500,
+    size: 15 + Math.random() * 10,
+    duration: 3500 + Math.random() * 2000,
     opacity: 0.4 + Math.random() * 0.4,
-    anim: new Animated.Value(-50)
+    anim: new Animated.Value(-100)
 }));
 
 const Particle = ({ data }) => {
@@ -32,9 +29,9 @@ const Particle = ({ data }) => {
         let isMounted = true;
         const run = () => {
             if (!isMounted || !storage.SnowEnabled) return;
-            data.anim.setValue(-50);
+            data.anim.setValue(-100);
             Animated.timing(data.anim, {
-                toValue: SCREEN_HEIGHT + 50,
+                toValue: SCREEN_HEIGHT + 100,
                 duration: data.duration,
                 useNativeDriver: true,
                 easing: Easing.linear
@@ -42,8 +39,13 @@ const Particle = ({ data }) => {
                 if (finished && isMounted && storage.SnowEnabled) run();
             });
         };
+
         if (storage.SnowEnabled) run();
-        return () => { isMounted = false; data.anim.stopAnimation(); };
+        return () => { 
+            isMounted = false; 
+            data.anim.stopAnimation(); 
+            data.anim.setValue(-100);
+        };
     }, [storage.SnowEnabled]);
 
     return (
@@ -61,21 +63,22 @@ const Particle = ({ data }) => {
     );
 };
 
+// This component acts as the actual "Snow Layer"
 const SnowOverlay = () => {
-    const [active, setActive] = React.useState(storage.SnowEnabled);
+    const [, forceUpdate] = React.useReducer(x => x + 1, 0);
 
     React.useEffect(() => {
-        const check = setInterval(() => {
-            if (storage.SnowEnabled !== active) setActive(storage.SnowEnabled);
-        }, 300);
-        return () => clearInterval(check);
-    }, [active]);
+        const interval = setInterval(() => {
+            // Force a re-render so we catch the storage change instantly
+            forceUpdate();
+        }, 250);
+        return () => clearInterval(interval);
+    }, []);
 
-    if (!active || !ActualPortal) return null;
+    if (!storage.SnowEnabled) return null;
 
-    // Use React.createElement to safely handle the Portal component
-    return React.createElement(ActualPortal, {}, 
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 9999 }]}>
+    return (
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 999 }]}>
             {PARTICLE_POOL.map((p, i) => <Particle key={i} data={p} />)}
         </View>
     );
@@ -89,8 +92,10 @@ export default {
                 if (emoji?.name === "❄️") {
                     const now = Date.now();
                     if (now - lastBurstTime < 5000) return;
+                    
                     lastBurstTime = now;
                     storage.SnowEnabled = true;
+                    // Stop after 12 seconds
                     setTimeout(() => { storage.SnowEnabled = false; }, 12000);
                 }
             }));
@@ -99,15 +104,17 @@ export default {
         if (GeneralModule?.View) {
             patches.push(after("render", GeneralModule.View, (args, res) => {
                 if (!res?.props) return res;
+                
                 const style = StyleSheet.flatten(res.props.style);
+                // Target the main chat area (usually flex: 1 with an onLayout)
                 if (style?.flex !== 1 || !res.props.onLayout) return res;
 
                 const children = React.Children.toArray(res.props.children);
-                if (children.some(c => c?.key === "snow-portal-host")) return res;
+                if (children.some(c => c?.key === "snow-direct-layer")) return res;
 
                 res.props.children = [
                     ...children,
-                    React.createElement(SnowOverlay, { key: "snow-portal-host" })
+                    React.createElement(SnowOverlay, { key: "snow-direct-layer" })
                 ];
                 return res;
             }));
@@ -116,7 +123,7 @@ export default {
     onUnload: () => {
         patches.forEach(p => p?.());
         storage.SnowEnabled = false;
-        PARTICLE_POOL.forEach(p => p.anim.setValue(-50));
+        PARTICLE_POOL.forEach(p => p.anim.setValue(-100));
     },
     settings: Settings
 };
