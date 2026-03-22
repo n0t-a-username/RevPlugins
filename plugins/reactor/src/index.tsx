@@ -1,6 +1,6 @@
 import { after, before } from "@vendetta/patcher";
 import { React, ReactNative } from "@vendetta/metro/common";
-import { findByProps } from "@vendetta/metro";
+import { findByProps, findByStoreName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
 import Settings from "./Settings"; 
 
@@ -9,13 +9,12 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const ReactionModule = findByProps("addReaction");
 const GeneralModule = findByProps("View");
-// Navigation module to get the current channel ID
-const NavigationNative = findByProps("useNavigationState");
+const SelectedChannelStore = findByStoreName("SelectedChannelStore");
 
 let patches = [];
 let lastBurstTime = 0;
 let snowTimer = null;
-let activeChannelId = null; // Track which channel the snow belongs to
+let activeChannelId = null; 
 
 storage.SnowEnabled ??= false;
 
@@ -53,12 +52,16 @@ const Particle = ({ data }) => {
             width: data.size, height: data.size, opacity: data.opacity,
             transform: [{ translateY: data.anim }]
         }}>
-            <Image source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+            <Image 
+                source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} 
+                style={{ width: '100%', height: '100%' }} 
+                resizeMode="contain" 
+            />
         </Animated.View>
     );
 };
 
-const SnowOverlay = ({ currentChannelId }) => {
+const SnowOverlay = () => {
     const [, forceUpdate] = React.useReducer(x => x + 1, 0);
 
     React.useEffect(() => {
@@ -66,8 +69,10 @@ const SnowOverlay = ({ currentChannelId }) => {
         return () => clearInterval(interval);
     }, []);
 
-    // Only render if snow is enabled AND we are in the correct channel
-    if (!storage.SnowEnabled || currentChannelId !== activeChannelId) return null;
+    // Get the ID of the channel the user is currently looking at
+    const currentViewedChannel = SelectedChannelStore.getChannelId();
+
+    if (!storage.SnowEnabled || currentViewedChannel !== activeChannelId) return null;
 
     return (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, { zIndex: 999 }]}>
@@ -88,16 +93,13 @@ export default {
                     if (now - lastBurstTime < 5000) return;
                     
                     lastBurstTime = now;
-                    activeChannelId = channelId; // Lock snow to this channel
+                    activeChannelId = channelId; 
                     storage.SnowEnabled = true;
 
-                    // Clear any existing timer to prevent indefinite snow
                     if (snowTimer) clearTimeout(snowTimer);
-                    
                     snowTimer = setTimeout(() => { 
                         storage.SnowEnabled = false; 
                         activeChannelId = null;
-                        snowTimer = null;
                     }, 12000);
                 }
             }));
@@ -107,21 +109,16 @@ export default {
             patches.push(after("render", GeneralModule.View, (args, res) => {
                 if (!res?.props) return res;
                 
-                // Get the channelId from the view's context if available
-                const channelId = res.props?.channelId || res.props?.channel?.id;
                 const style = StyleSheet.flatten(res.props.style);
-                
+                // We target the main background view (usually the one with flex: 1 and onLayout)
                 if (style?.flex !== 1 || !res.props.onLayout) return res;
 
                 const children = React.Children.toArray(res.props.children);
-                if (children.some(c => c?.key === "snow-locked-layer")) return res;
+                if (children.some(c => c?.key === "snow-final-layer")) return res;
 
                 res.props.children = [
                     ...children,
-                    React.createElement(SnowOverlay, { 
-                        key: "snow-locked-layer",
-                        currentChannelId: channelId 
-                    })
+                    React.createElement(SnowOverlay, { key: "snow-final-layer" })
                 ];
                 return res;
             }));
