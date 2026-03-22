@@ -7,25 +7,32 @@ import Settings from "./Settings";
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// Constants to prevent lag
-const MAX_PARTICLES = 25; 
-const BURST_DURATION = 12000;
+const ReactionModule = findByProps("addReaction");
+const GeneralModule = findByProps("View");
 
 let patches = [];
 let lastBurstTime = 0;
-let activeParticles = []; 
 
+// Initialize storage safely
 storage.SnowEnabled ??= false;
 
-const ParticleItem = React.memo(({ data }: { data: any }) => {
-    const animValue = React.useRef(new Animated.Value(-50)).current;
+// Pre-define particle data outside of render to prevent lag/re-generation
+const PARTICLE_COUNT = 25;
+const PARTICLE_POOL = Array.from({ length: PARTICLE_COUNT }, () => ({
+    x: Math.random() * SCREEN_WIDTH,
+    size: 15 + Math.random() * 15,
+    duration: 3500 + Math.random() * 2500,
+    opacity: 0.4 + Math.random() * 0.4,
+    anim: new Animated.Value(-50)
+}));
 
+const Particle = ({ data }) => {
     React.useEffect(() => {
         let isMounted = true;
         const run = () => {
             if (!isMounted || !storage.SnowEnabled) return;
-            animValue.setValue(-50);
-            Animated.timing(animValue, {
+            data.anim.setValue(-50);
+            Animated.timing(data.anim, {
                 toValue: SCREEN_HEIGHT + 50,
                 duration: data.duration,
                 useNativeDriver: true,
@@ -34,15 +41,16 @@ const ParticleItem = React.memo(({ data }: { data: any }) => {
                 if (finished && isMounted && storage.SnowEnabled) run();
             });
         };
-        run();
-        return () => { isMounted = false; animValue.stopAnimation(); };
-    }, []);
+
+        if (storage.SnowEnabled) run();
+        return () => { isMounted = false; data.anim.stopAnimation(); };
+    }, [storage.SnowEnabled]);
 
     return (
         <Animated.View style={{
             position: "absolute", left: data.x, top: 0,
             width: data.size, height: data.size, opacity: data.opacity,
-            transform: [{ translateY: animValue }]
+            transform: [{ translateY: data.anim }]
         }}>
             <Image 
                 source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} 
@@ -51,39 +59,30 @@ const ParticleItem = React.memo(({ data }: { data: any }) => {
             />
         </Animated.View>
     );
-});
+};
 
-const SnowOverlay = React.memo(() => {
-    const [renderTrigger, setRenderTrigger] = React.useState(0);
+const SnowOverlay = () => {
+    // We use local state to sync with storage for smooth mounting
+    const [active, setActive] = React.useState(storage.SnowEnabled);
 
-    // Use a listener-style effect to avoid the "Interval Lag"
     React.useEffect(() => {
-        const interval = setInterval(() => {
-            if (storage.SnowEnabled && activeParticles.length > 0) {
-                setRenderTrigger(prev => prev + 1);
-            } else if (!storage.SnowEnabled && renderTrigger !== 0) {
-                setRenderTrigger(0);
-            }
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [renderTrigger]);
+        const check = setInterval(() => {
+            if (storage.SnowEnabled !== active) setActive(storage.SnowEnabled);
+        }, 500);
+        return () => clearInterval(check);
+    }, [active]);
 
-    if (!storage.SnowEnabled || activeParticles.length === 0) return null;
+    if (!active) return null;
 
     return (
         <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-            {activeParticles.map((p, i) => (
-                <ParticleItem key={`snow-${i}`} data={p} />
-            ))}
+            {PARTICLE_POOL.map((p, i) => <Particle key={i} data={p} />)}
         </View>
     );
-});
+};
 
 export default {
     onLoad: () => {
-        const ReactionModule = findByProps("addReaction");
-        const GeneralModule = findByProps("View");
-
         if (ReactionModule) {
             patches.push(before("addReaction", ReactionModule, (args) => {
                 const emoji = args?.[2];
@@ -92,19 +91,12 @@ export default {
                     if (now - lastBurstTime < 10000) return;
                     
                     lastBurstTime = now;
-                    // Create once, use globally
-                    activeParticles = Array.from({ length: MAX_PARTICLES }, () => ({
-                        x: Math.random() * SCREEN_WIDTH,
-                        size: 15 + Math.random() * 10,
-                        duration: 4000 + Math.random() * 2000,
-                        opacity: 0.4 + Math.random() * 0.4
-                    }));
-
                     storage.SnowEnabled = true;
+
+                    // Stop snow after 12 seconds
                     setTimeout(() => { 
                         storage.SnowEnabled = false; 
-                        activeParticles = [];
-                    }, BURST_DURATION);
+                    }, 12000);
                 }
             }));
         }
@@ -114,13 +106,16 @@ export default {
                 if (!res?.props || !storage.SnowEnabled) return res;
                 
                 const style = StyleSheet.flatten(res.props.style);
-                if (style?.flex !== 1 || res.props.children?.some?.(c => c?.key === "snow-fixed-layer")) return res;
+                // Target the message list container specifically
+                if (style?.flex !== 1 || !res.props.onLayout) return res;
 
-                // Only inject into major layout containers to prevent the "Double Spawn" seen in your video
-                if (res.props.onLayout || res.props.navigation) {
-                    res.props.children = React.Children.toArray(res.props.children);
-                    res.props.children.push(React.createElement(SnowOverlay, { key: "snow-fixed-layer" }));
-                }
+                const children = React.Children.toArray(res.props.children);
+                if (children.some(c => c?.key === "snow-unified-layer")) return res;
+
+                res.props.children = [
+                    ...children,
+                    React.createElement(SnowOverlay, { key: "snow-unified-layer" })
+                ];
                 return res;
             }));
         }
@@ -128,7 +123,7 @@ export default {
     onUnload: () => {
         patches.forEach(p => p?.());
         storage.SnowEnabled = false;
-        activeParticles = [];
+        PARTICLE_POOL.forEach(p => p.anim.setValue(-50));
     },
     settings: Settings
 };
