@@ -1,4 +1,4 @@
-import { after, before } from "@vendetta/patcher";
+import { after } from "@vendetta/patcher";
 import { React, ReactNative } from "@vendetta/metro/common";
 import { findByProps, findByStoreName } from "@vendetta/metro";
 import { storage } from "@vendetta/plugin";
@@ -7,9 +7,10 @@ import Settings from "./Settings";
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-const ReactionModule = findByProps("addReaction");
-const GeneralModule = findByProps("View");
+// Stores and Modules
 const SelectedChannelStore = findByStoreName("SelectedChannelStore");
+const MessageStore = findByProps("addReaction", "removeReaction"); // This is the logic layer
+const GeneralModule = findByProps("View");
 
 let patches = [];
 let lastBurstTime = 0;
@@ -69,8 +70,7 @@ const SnowOverlay = () => {
         return () => clearInterval(interval);
     }, []);
 
-    // Get the ID of the channel the user is currently looking at
-    const currentViewedChannel = SelectedChannelStore.getChannelId();
+    const currentViewedChannel = SelectedChannelStore?.getChannelId();
 
     if (!storage.SnowEnabled || currentViewedChannel !== activeChannelId) return null;
 
@@ -83,12 +83,15 @@ const SnowOverlay = () => {
 
 export default {
     onLoad: () => {
-        if (ReactionModule) {
-            patches.push(before("addReaction", ReactionModule, (args) => {
-                const channelId = args?.[0];
-                const emoji = args?.[2];
+        // Patch the MessageStore instead of the UI action
+        if (MessageStore) {
+            patches.push(after("addReaction", MessageStore, (args) => {
+                const channelId = args[0];
+                const emoji = args[2];
                 
-                if (emoji?.name === "❄️") {
+                // Log to debug if needed: console.log("Reaction detected:", emoji?.name);
+                
+                if (emoji?.name === "❄️" || emoji?.id === "❄️") {
                     const now = Date.now();
                     if (now - lastBurstTime < 5000) return;
                     
@@ -100,6 +103,7 @@ export default {
                     snowTimer = setTimeout(() => { 
                         storage.SnowEnabled = false; 
                         activeChannelId = null;
+                        snowTimer = null;
                     }, 12000);
                 }
             }));
@@ -108,17 +112,15 @@ export default {
         if (GeneralModule?.View) {
             patches.push(after("render", GeneralModule.View, (args, res) => {
                 if (!res?.props) return res;
-                
                 const style = StyleSheet.flatten(res.props.style);
-                // We target the main background view (usually the one with flex: 1 and onLayout)
                 if (style?.flex !== 1 || !res.props.onLayout) return res;
 
                 const children = React.Children.toArray(res.props.children);
-                if (children.some(c => c?.key === "snow-final-layer")) return res;
+                if (children.some(c => c?.key === "snow-v5-layer")) return res;
 
                 res.props.children = [
                     ...children,
-                    React.createElement(SnowOverlay, { key: "snow-final-layer" })
+                    React.createElement(SnowOverlay, { key: "snow-v5-layer" })
                 ];
                 return res;
             }));
