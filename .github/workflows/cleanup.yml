@@ -1,0 +1,19 @@
+name: Delete Deployment Environment
+
+on:
+  delete:
+    branches-ignore:
+      - master  # 👈 Changed from main to master to match your repo
+
+jobs:
+  delete:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete Deployment
+        uses: strumwolf/delete-deployment-environment@v2
+        with:
+          # Standard GitHub token works for most cleanup tasks
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # 👈 For GitHub Pages, the default environment name is usually 'github-pages'
+          environment: github-pages
+          onlyRemoveDeployments: true
