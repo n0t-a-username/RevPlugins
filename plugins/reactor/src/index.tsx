@@ -124,7 +124,7 @@ export default {
                         storage.SnowEnabled = false; 
                         activeChannelId = null;
                         snowTimer = null;
-                    }, 15000); // Extended slightly for the longer staggered fall
+                    }, 3000); // Extended slightly for the longer staggered fall
                 }
             }));
         }
