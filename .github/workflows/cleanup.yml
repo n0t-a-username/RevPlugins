@@ -1,16 +1,23 @@
-name: Delete Environment (default settings)
+name: Cleanup Deployments
 
-on:
+on: 
   delete:
-    branches-ignore:
-      - master
+  workflow_dispatch:
 
 jobs:
-  delete:
+  delete-env:
+    if: github.event.ref != 'master'
     runs-on: ubuntu-latest
+    # 👇 THIS SECTION IS THE FIX
+    permissions:
+      deployments: write
+      contents: read
+      id-token: write
+
     steps:
-      - uses: strumwolf/delete-deployment-environment@v2
+      - name: Delete Deployment
+        uses: strumwolf/delete-deployment-environment@v2
         with:
-          # ⚠️ The provided token needs permission for admin write:org
           token: ${{ secrets.GITHUB_TOKEN }}
-          environment: gh-pages
+          environment: github-pages
+          onlyRemoveDeployments: true
