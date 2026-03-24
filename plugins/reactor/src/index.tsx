@@ -7,9 +7,8 @@ import Settings from "./Settings";
 const { View, Animated, Dimensions, Easing, Image, StyleSheet } = ReactNative;
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-// Stores and Modules
 const SelectedChannelStore = findByStoreName("SelectedChannelStore");
-const MessageStore = findByProps("addReaction", "removeReaction"); // This is the logic layer
+const MessageStore = findByProps("addReaction", "removeReaction");
 const GeneralModule = findByProps("View");
 
 let patches = [];
@@ -19,39 +18,63 @@ let activeChannelId = null;
 
 storage.SnowEnabled ??= false;
 
-const PARTICLE_COUNT = 20;
+const PARTICLE_COUNT = 25; // Bumped up slightly for a fuller feel
 const PARTICLE_POOL = Array.from({ length: PARTICLE_COUNT }, () => ({
     x: Math.random() * SCREEN_WIDTH,
-    size: 15 + Math.random() * 10,
-    duration: 3500 + Math.random() * 2000,
-    opacity: 0.4 + Math.random() * 0.4,
-    anim: new Animated.Value(-100)
+    size: 10 + Math.random() * 15,
+    duration: 4000 + Math.random() * 3000, // Varied speeds
+    opacity: 0.3 + Math.random() * 0.5,
+    // Start some particles off-screen at different heights
+    initialDelay: Math.random() * 5000 
 }));
 
 const Particle = ({ data }) => {
+    // Each particle gets its own unique animated value
+    const animatedValue = React.useRef(new Animated.Value(-100)).current;
+
     React.useEffect(() => {
         let isMounted = true;
-        const run = () => {
+
+        const runAnimation = (delay = 0) => {
             if (!isMounted || !storage.SnowEnabled) return;
-            data.anim.setValue(-100);
-            Animated.timing(data.anim, {
+
+            animatedValue.setValue(-100);
+            
+            Animated.timing(animatedValue, {
                 toValue: SCREEN_HEIGHT + 100,
                 duration: data.duration,
+                delay: delay, // Use the delay to stagger the "spurts"
                 useNativeDriver: true,
-                easing: Easing.linear
+                easing: Easing.out(Easing.quad) // Smooth deceleration-like feel
             }).start(({ finished }) => {
-                if (finished && isMounted && storage.SnowEnabled) run();
+                if (finished && isMounted && storage.SnowEnabled) {
+                    runAnimation(0); // Loop immediately without the initial delay
+                }
             });
         };
-        if (storage.SnowEnabled) run();
-        return () => { isMounted = false; data.anim.stopAnimation(); };
+
+        if (storage.SnowEnabled) {
+            runAnimation(data.initialDelay);
+        } else {
+            animatedValue.stopAnimation();
+            animatedValue.setValue(-100);
+        }
+
+        return () => {
+            isMounted = false;
+            animatedValue.stopAnimation();
+        };
     }, [storage.SnowEnabled]);
 
     return (
         <Animated.View style={{
-            position: "absolute", left: data.x, top: 0,
-            width: data.size, height: data.size, opacity: data.opacity,
-            transform: [{ translateY: data.anim }]
+            position: "absolute",
+            left: data.x,
+            top: 0,
+            width: data.size,
+            height: data.size,
+            opacity: data.opacity,
+            transform: [{ translateY: animatedValue }]
         }}>
             <Image 
                 source={{ uri: 'https://cdn.bwlok.dev/snowflake.png' }} 
@@ -63,15 +86,15 @@ const Particle = ({ data }) => {
 };
 
 const SnowOverlay = () => {
+    // We use a light interval just to sync the visibility with the storage
     const [, forceUpdate] = React.useReducer(x => x + 1, 0);
 
     React.useEffect(() => {
-        const interval = setInterval(() => forceUpdate(), 300);
+        const interval = setInterval(() => forceUpdate(), 500);
         return () => clearInterval(interval);
     }, []);
 
     const currentViewedChannel = SelectedChannelStore?.getChannelId();
-
     if (!storage.SnowEnabled || currentViewedChannel !== activeChannelId) return null;
 
     return (
@@ -83,13 +106,10 @@ const SnowOverlay = () => {
 
 export default {
     onLoad: () => {
-        // Patch the MessageStore instead of the UI action
         if (MessageStore) {
             patches.push(after("addReaction", MessageStore, (args) => {
                 const channelId = args[0];
                 const emoji = args[2];
-                
-                // Log to debug if needed: console.log("Reaction detected:", emoji?.name);
                 
                 if (emoji?.name === "❄️" || emoji?.id === "❄️") {
                     const now = Date.now();
@@ -104,7 +124,7 @@ export default {
                         storage.SnowEnabled = false; 
                         activeChannelId = null;
                         snowTimer = null;
-                    }, 12000);
+                    }, 15000); // Extended slightly for the longer staggered fall
                 }
             }));
         }
@@ -116,11 +136,11 @@ export default {
                 if (style?.flex !== 1 || !res.props.onLayout) return res;
 
                 const children = React.Children.toArray(res.props.children);
-                if (children.some(c => c?.key === "snow-v5-layer")) return res;
+                if (children.some(c => c?.key === "snow-smooth-layer")) return res;
 
                 res.props.children = [
                     ...children,
-                    React.createElement(SnowOverlay, { key: "snow-v5-layer" })
+                    React.createElement(SnowOverlay, { key: "snow-smooth-layer" })
                 ];
                 return res;
             }));
@@ -131,7 +151,6 @@ export default {
         if (snowTimer) clearTimeout(snowTimer);
         storage.SnowEnabled = false;
         activeChannelId = null;
-        PARTICLE_POOL.forEach(p => p.anim.setValue(-100));
     },
     settings: Settings
 };
