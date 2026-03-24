@@ -2,21 +2,27 @@ name: Cleanup Deployments
 
 on: 
   delete:
-  workflow_dispatch:
+  workflow_dispatch: # Allows you to click the "Run" button manually
 
 jobs:
   delete-env:
-    if: github.event.ref != 'master'
+    # This prevents the script from accidentally nuking your live master site
+    if: github.event.ref != 'refs/heads/master'
     runs-on: ubuntu-latest
-    # 👇 THIS SECTION IS THE FIX
+    
+    # 1. FIXES "Resource not accessible"
     permissions:
       deployments: write
       contents: read
-      id-token: write
+
+    env:
+      # 2. SILENCES the Deprecation Warning
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
       - name: Delete Deployment
-        uses: strumwolf/delete-deployment-environment@v2
+        # 3. UPDATED to v3 for Node 24 support
+        uses: strumwolf/delete-deployment-environment@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           environment: github-pages
