@@ -1,19 +1,16 @@
-name: Cleanup Deployments
+name: Delete Environment (default settings)
 
-on: 
+on:
   delete:
-  workflow_dispatch:
+    branches-ignore:
+      - master
 
 jobs:
-  delete-env:
-    # This 'if' check replaces 'branches-ignore' 
-    # It ensures the job only runs if the deleted branch WAS NOT master
-    if: github.event.ref != 'master'
+  delete:
     runs-on: ubuntu-latest
     steps:
-      - name: Delete Deployment
-        uses: strumwolf/delete-deployment-environment@v2
+      - uses: strumwolf/delete-deployment-environment@v2
         with:
+          # ⚠️ The provided token needs permission for admin write:org
           token: ${{ secrets.GITHUB_TOKEN }}
-          environment: github-pages
-          onlyRemoveDeployments: true
+          environment: gh-pages
