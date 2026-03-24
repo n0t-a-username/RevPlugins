@@ -9,6 +9,6 @@
     ],
     "main": "src/index.tsx",
     "vendetta": {
-        "icon": "PencilIcon"
+        "icon": "ic_add_super_reaction"
     }
 }
