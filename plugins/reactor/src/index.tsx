@@ -17,7 +17,6 @@ let snowTimer = null;
 let fadeTimer = null;
 let activeChannelId = null; 
 
-// This stays persistent so animations don't reset abruptly
 const globalOpacity = new Animated.Value(0);
 
 storage.SnowEnabled ??= false;
@@ -28,18 +27,22 @@ const PARTICLE_POOL = Array.from({ length: PARTICLE_COUNT }, () => ({
     size: 10 + Math.random() * 15,
     duration: 2500 + Math.random() * 2000, 
     baseOpacity: 0.3 + Math.random() * 0.5,
-    initialDelay: Math.random() * 3000 
+    initialDelay: Math.random() * 2000 
 }));
 
-const Particle = () => {
-    const data = React.useMemo(() => PARTICLE_POOL[Math.floor(Math.random() * PARTICLE_COUNT)], []);
+const Particle = ({ index }) => {
+    const data = PARTICLE_POOL[index];
     const animatedValue = React.useRef(new Animated.Value(-100)).current;
 
     React.useEffect(() => {
         let isMounted = true;
         
         const runAnimation = (delay = 0) => {
-            if (!isMounted) return;
+            // Check if snow is still globally enabled before starting a NEW fall
+            if (!isMounted || !storage.SnowEnabled) {
+                animatedValue.setValue(-100);
+                return;
+            }
             
             animatedValue.setValue(-100);
             Animated.timing(animatedValue, {
@@ -49,14 +52,22 @@ const Particle = () => {
                 useNativeDriver: true,
                 easing: Easing.linear
             }).start(({ finished }) => {
-                // We loop REGARDLESS of storage.SnowEnabled to keep the "flow" constant
-                if (finished && isMounted) runAnimation(0);
+                // IMPORTANT: Only loop if snow is still enabled
+                if (finished && isMounted && storage.SnowEnabled) {
+                    runAnimation(0);
+                }
             });
         };
 
-        runAnimation(data.initialDelay);
+        if (storage.SnowEnabled) {
+            runAnimation(data.initialDelay);
+        } else {
+            animatedValue.stopAnimation();
+            animatedValue.setValue(-100);
+        }
+
         return () => { isMounted = false; animatedValue.stopAnimation(); };
-    }, []);
+    }, [storage.SnowEnabled]); // Re-trigger only when snow turns ON
 
     return (
         <Animated.View style={{
@@ -79,16 +90,15 @@ const SnowOverlay = () => {
         return () => clearInterval(interval);
     }, []);
 
-    // We keep the component mounted but use opacity for the "off" state
-    // This prevents the particles from "snapping" back to the top when you react again
-    const isVisible = storage.SnowEnabled && currentViewedChannel === activeChannelId;
+    // We only render the particles if we are in the active channel AND the timer is running
+    if (!storage.SnowEnabled || currentViewedChannel !== activeChannelId) return null;
 
     return (
         <Animated.View 
             pointerEvents="none" 
             style={[StyleSheet.absoluteFill, { zIndex: 999, opacity: globalOpacity }]}
         >
-            {PARTICLE_POOL.map((_, i) => <Particle key={i} />)}
+            {PARTICLE_POOL.map((_, i) => <Particle key={i} index={i} />)}
         </Animated.View>
     );
 };
@@ -106,15 +116,14 @@ export default {
                     
                     lastBurstTime = now;
                     activeChannelId = channelId; 
-                    storage.SnowEnabled = true;
-
-                    // Immediately pop to visible
+                    
+                    // Reset opacity before enabling logic
                     globalOpacity.setValue(1);
+                    storage.SnowEnabled = true;
 
                     if (snowTimer) clearTimeout(snowTimer);
                     if (fadeTimer) clearTimeout(fadeTimer);
 
-                    // Fade starts at 4350ms
                     fadeTimer = setTimeout(() => {
                         Animated.timing(globalOpacity, {
                             toValue: 0,
@@ -124,11 +133,11 @@ export default {
                         }).start();
                     }, 4350);
 
-                    // Logic toggle at 5500ms
                     snowTimer = setTimeout(() => { 
                         storage.SnowEnabled = false; 
                         activeChannelId = null;
-                        snowTimer = null;
+                        // Opacity reset for next time
+                        globalOpacity.setValue(0);
                     }, 5500);
                 }
             }));
@@ -141,9 +150,9 @@ export default {
                 if (style?.flex !== 1 || !res.props.onLayout) return res;
 
                 const children = React.Children.toArray(res.props.children);
-                if (children.some(c => c?.key === "snow-v7-flow-layer")) return res;
+                if (children.some(c => c?.key === "snow-v8-optimized-layer")) return res;
 
-                res.props.children = [...children, React.createElement(SnowOverlay, { key: "snow-v7-flow-layer" })];
+                res.props.children = [...children, React.createElement(SnowOverlay, { key: "snow-v8-optimized-layer" })];
                 return res;
             }));
         }
