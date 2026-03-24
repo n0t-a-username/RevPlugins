@@ -45,5 +45,6 @@ jobs:
                   publish_dir: ./dist
                   # Makes it so the md files in the previous step get processed by GitHub Pages
                   enable_jekyll: true
+                  onlyDeactivateDeployments: true
                   # This creates the CNAME file required to host GitHub Pages on a custom domain
                   # cname: example.com
