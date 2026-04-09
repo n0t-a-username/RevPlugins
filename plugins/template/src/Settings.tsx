@@ -25,9 +25,7 @@ const { FormRow, FormSwitchRow } = Forms as any;
 /* =========================
    METRO MODULES
 ========================= */
-const SettingsActions = findByProps("PreloadedUserSettingsActionCreators")?.PreloadedUserSettingsActionCreators;
-const StatusStore = findByProps("setStatus");
-const RemoteActions = findByProps("updateRemoteSettings");
+const Dispatcher = findByProps("dispatch", "subscribe");
 
 /* =========================
    STORAGE INITIALIZATION
@@ -83,47 +81,29 @@ export default function Settings() {
     }).start();
   }, [selectedPage]);
 
+  // Updated toggle function using confirmed identifiers from dump.json
   const toggleAvoidantMode = (value: boolean) => {
     storage.avoidantMode = value;
     
-    if (value) {
-      try {
-        // 1. Set Status to Invisible
-        StatusStore?.setStatus("invisible");
-
-        // 2. Update Social and Content settings safely
-        if (SettingsActions?.updateAsync) {
-          // Disable DMs and Friend Requests
-          SettingsActions.updateAsync(
-            "social",
-            (social: any) => {
-              social.defaultGuildsRestricted = { value: true };
-              social.friendSourceFlags = { 
-                value: { all: false, mutualFriends: false, mutualGuilds: false } 
-              };
-            },
-            0
-          );
-
-          // Disable Voice Recording in Clips
-          SettingsActions.updateAsync(
-            "contentAndSocial",
-            (content: any) => {
-              content.allowActivityClips = { value: false };
-            },
-            0
-          );
-        } else {
-          // Fallback if updateAsync isn't available
-          RemoteActions?.updateRemoteSettings({
-            default_guilds_restricted: true,
-            friend_source_flags: { all: false, mutual_friends: false, mutual_guilds: false },
-            allow_activity_clips: false
-          });
+    if (value && Dispatcher) {
+      // Dispatching the proto update for user settings
+      Dispatcher.dispatch({
+        type: "USER_SETTINGS_PROTO_UPDATE", //
+        settings: {
+          status: { value: "invisible" }, //
+          social: {
+            default_guilds_restricted: { value: true }, //
+            friend_source_flags: { //
+              value: { all: false, mutual_friends: false, mutual_guilds: false } 
+            }
+          }
         }
-      } catch (e) {
-        console.error("[Avoidant Mode] Update failed:", e);
-      }
+      });
+
+      // Commit the changes to the server
+      Dispatcher.dispatch({
+        type: "USER_SETTINGS_SAVE" 
+      });
     }
   };
 
@@ -151,9 +131,6 @@ export default function Settings() {
       </BetterTableRowGroup>
 
       <BetterTableRowGroup title="Mass Ping List" icon={massPingHeaderIcon} padding>
-        <Text style={{ color: "#aaa", marginBottom: 8 }}>
-          Press the "Mass Selective Ping" button on user profiles.
-        </Text>
         <TextInput
           multiline
           value={storage.eventGiveawayPing}
@@ -167,7 +144,7 @@ export default function Settings() {
           <>
             <FormSwitchRow
               label="Avoidant"
-              subLabel="Disables DMs, Friend Requests, Clip audio, and sets status to Invisible"
+              subLabel="Disables DMs, Friend Requests, and sets Invisible"
               value={storage.avoidantMode}
               onValueChange={(v: boolean) => toggleAvoidantMode(v)}
             />
@@ -179,13 +156,11 @@ export default function Settings() {
             />
             <FormRow
               label="Edit Raid Messages"
-              subLabel="Customize 10 raid message slots"
               trailing={<FormRow.Arrow />}
               onPress={() => setSelectedPage("raidMessages")}
             />
             <FormRow
               label="Message Logs"
-              subLabel="View captured message logs"
               trailing={<FormRow.Arrow />}
               onPress={() => setSelectedPage("messageLogs")}
             />
@@ -207,7 +182,6 @@ export default function Settings() {
           </View>
         ))}
       </BetterTableRowGroup>
-      <View style={{ height: 20 }} />
       <FormRow
         label="Back"
         trailing={arrowBackIcon && <Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
@@ -231,7 +205,6 @@ export default function Settings() {
           </TouchableOpacity>
         </View>
       </BetterTableRowGroup>
-      <View style={{ height: 20 }} />
       <FormRow
         label="Back"
         trailing={arrowBackIcon && <Image source={arrowBackIcon} style={{ width: 24, height: 24 }} />}
