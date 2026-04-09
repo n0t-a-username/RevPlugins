@@ -25,9 +25,9 @@ const { FormRow, FormSwitchRow } = Forms as any;
 /* =========================
    METRO MODULES
 ========================= */
-const UserSettingsActions = findByProps("updateRemoteSettings");
-const SettingsStore = findByProps("PreloadedUserSettingsActionCreators");
-const { dispatch } = findByProps("dispatch");
+const SettingsActions = findByProps("PreloadedUserSettingsActionCreators")?.PreloadedUserSettingsActionCreators;
+const StatusStore = findByProps("setStatus");
+const RemoteActions = findByProps("updateRemoteSettings");
 
 /* =========================
    STORAGE INITIALIZATION
@@ -87,37 +87,43 @@ export default function Settings() {
     storage.avoidantMode = value;
     
     if (value) {
-      // 1. Force Status to Invisible via Dispatch
-      dispatch({
-        type: "USER_SETTINGS_PROTO_UPDATE",
-        settings: {
-          status: { value: "invisible" }
-        }
-      });
+      try {
+        // 1. Set Status to Invisible
+        StatusStore?.setStatus("invisible");
 
-      // 2. Update Social & Clips settings using Protobuf value objects
-      // These keys target the exact toggles in your screenshots
-      UserSettingsActions?.updateRemoteSettings({
-        social: {
-          defaultGuildsRestricted: { value: true },
-          friendSourceFlags: { 
-            value: { 
-              all: false, 
-              mutualFriends: false, 
-              mutualGuilds: false 
-            } 
-          }
-        },
-        contentAndSocial: {
-          allowActivityClips: { value: false }
-        }
-      });
+        // 2. Update Social and Content settings safely
+        if (SettingsActions?.updateAsync) {
+          // Disable DMs and Friend Requests
+          SettingsActions.updateAsync(
+            "social",
+            (social: any) => {
+              social.defaultGuildsRestricted = { value: true };
+              social.friendSourceFlags = { 
+                value: { all: false, mutualFriends: false, mutualGuilds: false } 
+              };
+            },
+            0
+          );
 
-      // 3. Fallback for specific Revenge/mobile build paths
-      SettingsStore?.updateAsync("social", (prev: any) => {
-        prev.defaultGuildsRestricted = { value: true };
-        prev.friendSourceFlags = { value: { all: false, mutualFriends: false, mutualGuilds: false } };
-      }, 0);
+          // Disable Voice Recording in Clips
+          SettingsActions.updateAsync(
+            "contentAndSocial",
+            (content: any) => {
+              content.allowActivityClips = { value: false };
+            },
+            0
+          );
+        } else {
+          // Fallback if updateAsync isn't available
+          RemoteActions?.updateRemoteSettings({
+            default_guilds_restricted: true,
+            friend_source_flags: { all: false, mutual_friends: false, mutual_guilds: false },
+            allow_activity_clips: false
+          });
+        }
+      } catch (e) {
+        console.error("[Avoidant Mode] Update failed:", e);
+      }
     }
   };
 
@@ -161,7 +167,7 @@ export default function Settings() {
           <>
             <FormSwitchRow
               label="Avoidant"
-              subLabel="Disables social interactions & sets Invisible status"
+              subLabel="Disables DMs, Friend Requests, Clip audio, and sets status to Invisible"
               value={storage.avoidantMode}
               onValueChange={(v: boolean) => toggleAvoidantMode(v)}
             />
