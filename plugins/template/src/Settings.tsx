@@ -17,7 +17,6 @@ const {
   Image,
   TouchableOpacity,
   Clipboard,
-  ToastAndroid,
 } = ReactNative;
 
 const Forms = UiForms || {};
@@ -27,7 +26,7 @@ const { FormRow, FormSwitchRow } = Forms as any;
    METRO MODULES
 ========================= */
 const UserSettingsActions = findByProps("updateRemoteSettings");
-const StatusStore = findByProps("setStatus");
+const { dispatch } = findByProps("dispatch");
 
 /* =========================
    STORAGE INITIALIZATION
@@ -86,20 +85,25 @@ export default function Settings() {
   const toggleAvoidantMode = (value: boolean) => {
     storage.avoidantMode = value;
     if (value) {
-      // Set status to Invisible
-      StatusStore?.setStatus("invisible");
+      // Set status to Invisible via Dispatch
+      dispatch({
+        type: "USER_SETTINGS_PROTO_UPDATE",
+        settings: {
+          status: { value: "invisible" }
+        }
+      });
 
-      // Update Remote Settings to match screenshot requirements
+      // Update Social and Content settings
       UserSettingsActions?.updateRemoteSettings({
         // Disable DMs from server members
-        default_guilds_restricted: true, 
-        // Disable Friend Requests (Everyone, Friends of Friends, Server Members)
+        default_guilds_restricted: true,
+        // Friend Requests (0 = disabled/none)
         friend_source_flags: { all: false, mutual_friends: false, mutual_guilds: false },
-        // Turn off audio in clips/activity
-        allow_activity_clips: false,
+        // Specifically targeting the voice recording for clips
+        allow_voice_recording: false,
+        // Disable message requests from unknown members
+        restricted_guilds: [], 
       });
-      
-      ToastAndroid.show("Avoidant Mode Enabled: Social settings restricted", 0);
     }
   };
 
@@ -143,7 +147,7 @@ export default function Settings() {
           <>
             <FormSwitchRow
               label="Avoidant"
-              subLabel="Turns off DMs, Friend Requests, Clip audio, and sets Invisible"
+              subLabel="Disables social interactions & sets Invisible status"
               value={storage.avoidantMode}
               onValueChange={(v: boolean) => toggleAvoidantMode(v)}
             />
@@ -199,10 +203,10 @@ export default function Settings() {
       <BetterTableRowGroup title="Message Logs" icon={messageHeaderIcon} padding>
         <TextInput multiline editable={false} value={logsText} style={{ ...inputStyle, minHeight: 260 }} />
         <View style={{ flexDirection: "row", marginTop: 12, gap: 10 }}>
-          <TouchableOpacity onPress={() => { Clipboard.setString(logsText); ToastAndroid.show("Copied", 0); }} style={{ flex: 1, backgroundColor: "#2ecc71", padding: 12, borderRadius: 8, alignItems: "center" }}>
+          <TouchableOpacity onPress={() => { Clipboard.setString(logsText); }} style={{ flex: 1, backgroundColor: "#2ecc71", padding: 12, borderRadius: 8, alignItems: "center" }}>
             <Text style={{ color: "#fff", fontWeight: "600" }}>Copy</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => { storage.messageLogs = []; ToastAndroid.show("Cleared", 0); }} style={{ flex: 1, backgroundColor: "#e74c3c", padding: 12, borderRadius: 8, alignItems: "center" }}>
+          <TouchableOpacity onPress={() => { storage.messageLogs = []; }} style={{ flex: 1, backgroundColor: "#e74c3c", padding: 12, borderRadius: 8, alignItems: "center" }}>
             <Text style={{ color: "#fff", fontWeight: "600" }}>Clear</Text>
           </TouchableOpacity>
         </View>
