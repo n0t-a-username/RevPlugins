@@ -26,6 +26,7 @@ const { FormRow, FormSwitchRow } = Forms as any;
    METRO MODULES
 ========================= */
 const UserSettingsActions = findByProps("updateRemoteSettings");
+const SettingsStore = findByProps("PreloadedUserSettingsActionCreators");
 const { dispatch } = findByProps("dispatch");
 
 /* =========================
@@ -84,8 +85,9 @@ export default function Settings() {
 
   const toggleAvoidantMode = (value: boolean) => {
     storage.avoidantMode = value;
+    
     if (value) {
-      // Set status to Invisible via Dispatch
+      // 1. Force Status to Invisible via Dispatch
       dispatch({
         type: "USER_SETTINGS_PROTO_UPDATE",
         settings: {
@@ -93,17 +95,29 @@ export default function Settings() {
         }
       });
 
-      // Update Social and Content settings
+      // 2. Update Social & Clips settings using Protobuf value objects
+      // These keys target the exact toggles in your screenshots
       UserSettingsActions?.updateRemoteSettings({
-        // Disable DMs from server members
-        default_guilds_restricted: true,
-        // Friend Requests (0 = disabled/none)
-        friend_source_flags: { all: false, mutual_friends: false, mutual_guilds: false },
-        // Specifically targeting the voice recording for clips
-        allow_voice_recording: false,
-        // Disable message requests from unknown members
-        restricted_guilds: [], 
+        social: {
+          defaultGuildsRestricted: { value: true },
+          friendSourceFlags: { 
+            value: { 
+              all: false, 
+              mutualFriends: false, 
+              mutualGuilds: false 
+            } 
+          }
+        },
+        contentAndSocial: {
+          allowActivityClips: { value: false }
+        }
       });
+
+      // 3. Fallback for specific Revenge/mobile build paths
+      SettingsStore?.updateAsync("social", (prev: any) => {
+        prev.defaultGuildsRestricted = { value: true };
+        prev.friendSourceFlags = { value: { all: false, mutualFriends: false, mutualGuilds: false } };
+      }, 0);
     }
   };
 
