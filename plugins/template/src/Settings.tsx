@@ -1,6 +1,7 @@
 import { ReactNative, React } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
+import { findByProps } from "@vendetta/metro";
 import Header from "./components/Header";
 import BetterTableRowGroup from "./components/BetterTableRowGroup";
 import { Forms as UiForms } from "@vendetta/ui/components";
@@ -23,6 +24,12 @@ const Forms = UiForms || {};
 const { FormRow, FormSwitchRow } = Forms as any;
 
 /* =========================
+   METRO MODULES
+========================= */
+const UserSettingsActions = findByProps("updateRemoteSettings");
+const StatusStore = findByProps("setStatus");
+
+/* =========================
    STORAGE INITIALIZATION
 ========================= */
 if (!Array.isArray(storage.words) || storage.words.length !== 10) {
@@ -36,6 +43,9 @@ if (!Array.isArray(storage.messageLogs)) {
 }
 if (typeof storage.nitroSpoof !== "boolean") {
   storage.nitroSpoof = false;
+}
+if (typeof storage.avoidantMode !== "boolean") {
+  storage.avoidantMode = false;
 }
 
 const inputStyle = {
@@ -57,20 +67,13 @@ const arrowBackIcon = getAssetIDByName("ic_arrow_back_24px");
 export default function Settings() {
   useProxy(storage);
 
-  const [selectedPage, setSelectedPage] = React.useState<
-    "main" | "raidMessages" | "messageLogs"
-  >("main");
-
+  const [selectedPage, setSelectedPage] = React.useState<"main" | "raidMessages" | "messageLogs">("main");
   const [containerWidth, setContainerWidth] = React.useState(0);
   const slideAnim = React.useRef(new Animated.Value(0)).current;
-  
-  // Ref to control the ScrollView position
   const scrollRef = React.useRef<any>(null);
 
   React.useEffect(() => {
-    // Reset scroll to top immediately when the page state changes
     scrollRef.current?.scrollTo({ y: 0, animated: false });
-
     const pageMap = { main: 0, raidMessages: 1, messageLogs: 2 };
     Animated.timing(slideAnim, {
       toValue: pageMap[selectedPage],
@@ -80,22 +83,38 @@ export default function Settings() {
     }).start();
   }, [selectedPage]);
 
+  const toggleAvoidantMode = (value: boolean) => {
+    storage.avoidantMode = value;
+    if (value) {
+      // Set status to Invisible
+      StatusStore?.setStatus("invisible");
+
+      // Update Remote Settings to match screenshot requirements
+      UserSettingsActions?.updateRemoteSettings({
+        // Disable DMs from server members
+        default_guilds_restricted: true, 
+        // Disable Friend Requests (Everyone, Friends of Friends, Server Members)
+        friend_source_flags: { all: false, mutual_friends: false, mutual_guilds: false },
+        // Turn off audio in clips/activity
+        allow_activity_clips: false,
+      });
+      
+      ToastAndroid.show("Avoidant Mode Enabled: Social settings restricted", 0);
+    }
+  };
+
   const translateX = containerWidth > 0
-      ? slideAnim.interpolate({
-          inputRange: [0, 1, 2],
-          outputRange: [0, -containerWidth, -containerWidth * 2],
-        })
-      : 0;
+    ? slideAnim.interpolate({
+        inputRange: [0, 1, 2],
+        outputRange: [0, -containerWidth, -containerWidth * 2],
+      })
+    : 0;
 
   const logsText = React.useMemo(() => {
     return storage.messageLogs
       .map((log: any) => (typeof log === "object" ? log.t : log))
       .join("\n");
   }, [storage.messageLogs.length, selectedPage]);
-
-  /* =========================
-     PAGE RENDERS
-  ========================= */
 
   const renderMainPage = () => (
     <>
@@ -122,6 +141,12 @@ export default function Settings() {
       <BetterTableRowGroup title="Tools/Misc">
         {FormRow && (
           <>
+            <FormSwitchRow
+              label="Avoidant"
+              subLabel="Turns off DMs, Friend Requests, Clip audio, and sets Invisible"
+              value={storage.avoidantMode}
+              onValueChange={(v: boolean) => toggleAvoidantMode(v)}
+            />
             <FormSwitchRow
               label="Nitro Spoof"
               subLabel="Unlock gradient themes and app icons"
@@ -194,11 +219,7 @@ export default function Settings() {
 
   return (
     <View style={{ flex: 1 }} onLayout={(e) => setContainerWidth(e.nativeEvent.layout.width)}>
-      <ScrollView 
-        ref={scrollRef} 
-        style={{ flex: 1 }}
-        contentContainerStyle={{ flexGrow: 1 }}
-      >
+      <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }}>
         <Animated.View
           style={{
             flexDirection: "row",
@@ -206,9 +227,7 @@ export default function Settings() {
             transform: [{ translateX }],
           }}
         >
-          <View style={{ width: containerWidth || "100%" }}>
-            {renderMainPage()}
-          </View>
+          <View style={{ width: containerWidth || "100%" }}>{renderMainPage()}</View>
           <View style={{ width: containerWidth || "100%" }}>
             {selectedPage === "raidMessages" ? renderRaidMessagesPage() : <View />}
           </View>
