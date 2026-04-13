@@ -11,7 +11,7 @@ const IMAGE_URL =
 const baseActivity = {
   name: "Streaming",
   application_id: APPLICATION_ID,
-  type: 1, // STREAMING
+  type: 1, 
   url: "https://twitch.tv/bemmo",
   details: "Bemmo",
   state: "A discord utility tool.",
@@ -24,27 +24,41 @@ const baseActivity = {
    SOCIAL SETTINGS LOGIC
 ========================= */
 function applyAvoidantSettings() {
-  // 1. Force Status & Social Restrictions
+  // We dispatch them individually to ensure the client processes each block
+  
+  // 1. Status
   FluxDispatcher.dispatch({
     type: "USER_SETTINGS_PROTO_UPDATE",
     settings: {
-      status: { value: "invisible" },
+      status: { value: "invisible" }
+    }
+  });
+
+  // 2. Social (DMs and Friends)
+  FluxDispatcher.dispatch({
+    type: "USER_SETTINGS_PROTO_UPDATE",
+    settings: {
       social: {
         default_guilds_restricted: { value: true },
         friend_source_flags: {
           value: { all: false, mutual_friends: false, mutual_guilds: false }
         }
-      },
+      }
+    }
+  });
+
+  // 3. Content (Clips)
+  FluxDispatcher.dispatch({
+    type: "USER_SETTINGS_PROTO_UPDATE",
+    settings: {
       content_and_social: {
         allow_activity_clips: { value: false }
       }
     }
   });
 
-  // 2. Commit changes
-  FluxDispatcher.dispatch({
-    type: "USER_SETTINGS_SAVE"
-  });
+  // 4. Force Save
+  FluxDispatcher.dispatch({ type: "USER_SETTINGS_SAVE" });
 }
 
 function setActivity(data: any | null) {
@@ -62,31 +76,22 @@ let lastAvoidantState = false;
 
 async function resolveAsset(activity: any) {
   if (!activity.assets || !activity.assets.large_image) return activity;
-
   try {
     const args = [activity.application_id, [activity.assets.large_image]];
     let assetIds = assetManager.getAssetIds(...args);
-
     if (!assetIds.length) {
       assetIds = await assetManager.fetchAssetIds(...args);
     }
-
-    activity.assets.large_image =
-      assetIds[0] ?? activity.assets.large_image;
+    activity.assets.large_image = assetIds[0] ?? activity.assets.large_image;
   } catch (e) {
     console.error("[RichPresence] Asset resolution failed:", e);
   }
-
   return activity;
 }
 
 async function checkState() {
-  // Rich Presence State Check
-  const shouldRunRP = Boolean(
-    storage.hiddenSettings?.enabled &&
-    storage.hiddenSettings?.visible
-  );
-
+  // RP Logic
+  const shouldRunRP = Boolean(storage.hiddenSettings?.enabled && storage.hiddenSettings?.visible);
   if (shouldRunRP !== lastState) {
     lastState = shouldRunRP;
     if (shouldRunRP) {
@@ -97,7 +102,7 @@ async function checkState() {
     }
   }
 
-  // Avoidant Mode State Check
+  // Avoidant Logic
   const shouldBeAvoidant = Boolean(storage.avoidantMode);
   if (shouldBeAvoidant !== lastAvoidantState) {
     lastAvoidantState = shouldBeAvoidant;
@@ -108,24 +113,11 @@ async function checkState() {
 }
 
 export function startRichPresence() {
-  const shouldRunRP = Boolean(
-    storage.hiddenSettings?.enabled &&
-    storage.hiddenSettings?.visible
-  );
-
-  lastState = shouldRunRP;
-  lastAvoidantState = Boolean(storage.avoidantMode);
-
-  if (shouldRunRP) {
-    resolveAsset({ ...baseActivity }).then((act) => setActivity(act));
-  }
-  
-  if (lastAvoidantState) {
-    applyAvoidantSettings();
-  }
+  // Ensure we check current state immediately on start
+  checkState();
 
   if (!interval) {
-    interval = setInterval(checkState, 1000);
+    interval = setInterval(checkState, 2000); // 2 seconds is safer for network rate limits
   }
 }
 
