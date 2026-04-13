@@ -1,4 +1,4 @@
-import { ReactNative, React } from "@vendetta/metro/common";
+import { ReactNative, React, FluxDispatcher } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
 import { findByProps } from "@vendetta/metro";
@@ -25,7 +25,7 @@ const { FormRow, FormSwitchRow } = Forms as any;
 /* =========================
    METRO MODULES
 ========================= */
-const Dispatcher = findByProps("dispatch", "subscribe");
+const UserSettingsStore = findByProps("status", "settings");
 
 /* =========================
    STORAGE INITIALIZATION
@@ -81,29 +81,51 @@ export default function Settings() {
     }).start();
   }, [selectedPage]);
 
-  // Updated toggle function using confirmed identifiers from dump.json
-  const toggleAvoidantMode = (value: boolean) => {
-    storage.avoidantMode = value;
-    
-    if (value && Dispatcher) {
-      // Dispatching the proto update for user settings
-      Dispatcher.dispatch({
-        type: "USER_SETTINGS_PROTO_UPDATE", //
-        settings: {
-          status: { value: "invisible" }, //
-          social: {
-            default_guilds_restricted: { value: true }, //
-            friend_source_flags: { //
-              value: { all: false, mutual_friends: false, mutual_guilds: false } 
-            }
+  // Logic modeled after your working RichPresence/FluxDispatcher script
+  const updateSocialSettings = (enabled: boolean) => {
+    if (!enabled) return;
+
+    // 1. Dispatch Invisible Status
+    FluxDispatcher.dispatch({
+      type: "USER_SETTINGS_PROTO_UPDATE",
+      settings: {
+        status: { value: "invisible" }
+      }
+    });
+
+    // 2. Dispatch Social Restrictions (DMs & Friend Requests)
+    // Using the specific structure often required for successful sync
+    FluxDispatcher.dispatch({
+      type: "USER_SETTINGS_PROTO_UPDATE",
+      settings: {
+        social: {
+          defaultGuildsRestricted: { value: true },
+          friendSourceFlags: { 
+            value: { 
+              all: false, 
+              mutualFriends: false, 
+              mutualGuilds: false 
+            } 
           }
         }
-      });
+      }
+    });
 
-      // Commit the changes to the server
-      Dispatcher.dispatch({
-        type: "USER_SETTINGS_SAVE" 
-      });
+    // 3. Dispatch Content & Safety (Clips)
+    FluxDispatcher.dispatch({
+      type: "USER_SETTINGS_PROTO_UPDATE",
+      settings: {
+        contentAndSocial: {
+          allowActivityClips: { value: false }
+        }
+      }
+    });
+  };
+
+  const toggleAvoidantMode = (value: boolean) => {
+    storage.avoidantMode = value;
+    if (value) {
+      updateSocialSettings(true);
     }
   };
 
@@ -144,7 +166,7 @@ export default function Settings() {
           <>
             <FormSwitchRow
               label="Avoidant"
-              subLabel="Disables DMs, Friend Requests, and sets Invisible"
+              subLabel="Disables social interactions & sets Invisible status"
               value={storage.avoidantMode}
               onValueChange={(v: boolean) => toggleAvoidantMode(v)}
             />
@@ -171,6 +193,7 @@ export default function Settings() {
     </>
   );
 
+  /* Page renders for raidMessages and messageLogs remain unchanged from your original structure... */
   const renderRaidMessagesPage = () => (
     <>
       <Header />
