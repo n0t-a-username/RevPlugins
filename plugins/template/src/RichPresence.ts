@@ -24,27 +24,31 @@ const baseActivity = {
    SOCIAL SETTINGS LOGIC
 ========================= */
 function applyAvoidantSettings() {
-  // We dispatch them individually to ensure the client processes each block
-  
-  // 1. Status
+  // 1. Update Status (Using the specific EDIT_STATUS action seen in your logs)
   FluxDispatcher.dispatch({
-    type: "USER_SETTINGS_PROTO_UPDATE",
-    settings: {
-      status: { value: "invisible" }
-    }
+    type: "USER_SETTINGS_EDIT_STATUS",
+    status: "invisible",
   });
 
-  // 2. Social (DMs and Friends)
+  // 2. Social & Friend Requests
+  // Using the exact nesting from your screenshot logs
   FluxDispatcher.dispatch({
     type: "USER_SETTINGS_PROTO_UPDATE",
     settings: {
+      status: {
+        value: "invisible",
+      },
       social: {
         default_guilds_restricted: { value: true },
         friend_source_flags: {
-          value: { all: false, mutual_friends: false, mutual_guilds: false }
-        }
-      }
-    }
+          value: {
+            all: false,
+            mutual_friends: false,
+            mutual_guilds: false,
+          },
+        },
+      },
+    },
   });
 
   // 3. Content (Clips)
@@ -52,13 +56,15 @@ function applyAvoidantSettings() {
     type: "USER_SETTINGS_PROTO_UPDATE",
     settings: {
       content_and_social: {
-        allow_activity_clips: { value: false }
-      }
-    }
+        allow_activity_clips: { value: false },
+      },
+    },
   });
 
-  // 4. Force Save
-  FluxDispatcher.dispatch({ type: "USER_SETTINGS_SAVE" });
+  // 4. Commit the changes
+  FluxDispatcher.dispatch({
+    type: "USER_SETTINGS_SAVE",
+  });
 }
 
 function setActivity(data: any | null) {
@@ -90,7 +96,7 @@ async function resolveAsset(activity: any) {
 }
 
 async function checkState() {
-  // RP Logic
+  // Rich Presence Logic
   const shouldRunRP = Boolean(storage.hiddenSettings?.enabled && storage.hiddenSettings?.visible);
   if (shouldRunRP !== lastState) {
     lastState = shouldRunRP;
@@ -102,7 +108,7 @@ async function checkState() {
     }
   }
 
-  // Avoidant Logic
+  // Avoidant Mode Logic
   const shouldBeAvoidant = Boolean(storage.avoidantMode);
   if (shouldBeAvoidant !== lastAvoidantState) {
     lastAvoidantState = shouldBeAvoidant;
@@ -113,11 +119,13 @@ async function checkState() {
 }
 
 export function startRichPresence() {
-  // Ensure we check current state immediately on start
+  lastState = Boolean(storage.hiddenSettings?.enabled && storage.hiddenSettings?.visible);
+  lastAvoidantState = Boolean(storage.avoidantMode);
+
   checkState();
 
   if (!interval) {
-    interval = setInterval(checkState, 2000); // 2 seconds is safer for network rate limits
+    interval = setInterval(checkState, 2000);
   }
 }
 
