@@ -1637,22 +1637,34 @@ export default {
     }
 
     // 2. Nitro Spoof (Conditional)
-    try {
-      unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
-        // Only apply if the toggle in Settings is ON
-        if (user && storage.nitroSpoof) {
-          user.premiumType = 2; 
-          user.premiumState = {
-            premiumSubscriptionType: 2,
-            premiumSource: 1,
-            premiumSubscriptionGroupRole: 0
-          };
+try {
+  unpatches.push(after("getCurrentUser", UserStore, (_, user) => {
+    // Only apply if the toggle in Settings is ON
+    if (user && storage.nitroSpoof) {
+      user.premiumType = 2; 
+
+      // Injecting the raw perks structure you found
+      user.perks = {
+        activePerksBitmask: [7], // 7 is the typical "all-perks" flag
+        configByPerk: {
+          "1": { enabled: true },
+          "2": { enabled: true },
+          "3": { enabled: true }
         }
-        return user;
-      }));
-    } catch (e) { 
-      logger.error("Nitro failed", e); 
+      };
+
+      user.premiumState = {
+        premiumSubscriptionType: 2,
+        premiumSource: 1,
+        premiumSubscriptionGroupRole: 0
+      };
     }
+    return user;
+  }));
+} catch (e) { 
+  logger.error("Nitro failed", e); 
+}
+
 
     // 3. Services (Copy ID, RPC, Logger)
     try {
