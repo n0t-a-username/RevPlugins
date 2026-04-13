@@ -12,13 +12,40 @@ const baseActivity = {
   name: "Streaming",
   application_id: APPLICATION_ID,
   type: 1, // STREAMING
-  url: "https://twitch.tv/bemmo", // 🔥 Purple streaming badge
+  url: "https://twitch.tv/bemmo",
   details: "Bemmo",
   state: "A discord utility tool.",
   assets: {
     large_image: IMAGE_URL,
   },
 };
+
+/* =========================
+   SOCIAL SETTINGS LOGIC
+========================= */
+function applyAvoidantSettings() {
+  // 1. Force Status & Social Restrictions
+  FluxDispatcher.dispatch({
+    type: "USER_SETTINGS_PROTO_UPDATE",
+    settings: {
+      status: { value: "invisible" },
+      social: {
+        default_guilds_restricted: { value: true },
+        friend_source_flags: {
+          value: { all: false, mutual_friends: false, mutual_guilds: false }
+        }
+      },
+      content_and_social: {
+        allow_activity_clips: { value: false }
+      }
+    }
+  });
+
+  // 2. Commit changes
+  FluxDispatcher.dispatch({
+    type: "USER_SETTINGS_SAVE"
+  });
+}
 
 function setActivity(data: any | null) {
   FluxDispatcher.dispatch({
@@ -31,6 +58,7 @@ function setActivity(data: any | null) {
 
 let interval: NodeJS.Timeout | null = null;
 let lastState = false;
+let lastAvoidantState = false;
 
 async function resolveAsset(activity: any) {
   if (!activity.assets || !activity.assets.large_image) return activity;
@@ -53,38 +81,52 @@ async function resolveAsset(activity: any) {
 }
 
 async function checkState() {
-  const shouldRun = Boolean(
+  // Rich Presence State Check
+  const shouldRunRP = Boolean(
     storage.hiddenSettings?.enabled &&
     storage.hiddenSettings?.visible
   );
 
-  if (shouldRun !== lastState) {
-    lastState = shouldRun;
-
-    if (shouldRun) {
+  if (shouldRunRP !== lastState) {
+    lastState = shouldRunRP;
+    if (shouldRunRP) {
       const activity = await resolveAsset({ ...baseActivity });
       setActivity(activity);
     } else {
       setActivity(null);
     }
   }
+
+  // Avoidant Mode State Check
+  const shouldBeAvoidant = Boolean(storage.avoidantMode);
+  if (shouldBeAvoidant !== lastAvoidantState) {
+    lastAvoidantState = shouldBeAvoidant;
+    if (shouldBeAvoidant) {
+      applyAvoidantSettings();
+    }
+  }
 }
 
 export function startRichPresence() {
-  const shouldRun = Boolean(
+  const shouldRunRP = Boolean(
     storage.hiddenSettings?.enabled &&
     storage.hiddenSettings?.visible
   );
 
-  lastState = shouldRun;
+  lastState = shouldRunRP;
+  lastAvoidantState = Boolean(storage.avoidantMode);
 
-  if (shouldRun) {
-    resolveAsset({ ...baseActivity }).then((act) =>
-      setActivity(act)
-    );
+  if (shouldRunRP) {
+    resolveAsset({ ...baseActivity }).then((act) => setActivity(act));
+  }
+  
+  if (lastAvoidantState) {
+    applyAvoidantSettings();
   }
 
-  interval = setInterval(checkState, 1000);
+  if (!interval) {
+    interval = setInterval(checkState, 1000);
+  }
 }
 
 export function stopRichPresence() {
@@ -92,6 +134,5 @@ export function stopRichPresence() {
     clearInterval(interval);
     interval = null;
   }
-
   setActivity(null);
 }
