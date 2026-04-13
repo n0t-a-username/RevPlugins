@@ -1,7 +1,6 @@
-import { ReactNative, React, FluxDispatcher } from "@vendetta/metro/common";
+import { ReactNative, React } from "@vendetta/metro/common";
 import { storage } from "@vendetta/plugin";
 import { useProxy } from "@vendetta/storage";
-import { findByProps } from "@vendetta/metro";
 import Header from "./components/Header";
 import BetterTableRowGroup from "./components/BetterTableRowGroup";
 import { Forms as UiForms } from "@vendetta/ui/components";
@@ -21,11 +20,6 @@ const {
 
 const Forms = UiForms || {};
 const { FormRow, FormSwitchRow } = Forms as any;
-
-/* =========================
-   METRO MODULES
-========================= */
-const UserSettingsStore = findByProps("status", "settings");
 
 /* =========================
    STORAGE INITIALIZATION
@@ -81,54 +75,6 @@ export default function Settings() {
     }).start();
   }, [selectedPage]);
 
-  // Logic modeled after your working RichPresence/FluxDispatcher script
-  const updateSocialSettings = (enabled: boolean) => {
-    if (!enabled) return;
-
-    // 1. Dispatch Invisible Status
-    FluxDispatcher.dispatch({
-      type: "USER_SETTINGS_PROTO_UPDATE",
-      settings: {
-        status: { value: "invisible" }
-      }
-    });
-
-    // 2. Dispatch Social Restrictions (DMs & Friend Requests)
-    // Using the specific structure often required for successful sync
-    FluxDispatcher.dispatch({
-      type: "USER_SETTINGS_PROTO_UPDATE",
-      settings: {
-        social: {
-          defaultGuildsRestricted: { value: true },
-          friendSourceFlags: { 
-            value: { 
-              all: false, 
-              mutualFriends: false, 
-              mutualGuilds: false 
-            } 
-          }
-        }
-      }
-    });
-
-    // 3. Dispatch Content & Safety (Clips)
-    FluxDispatcher.dispatch({
-      type: "USER_SETTINGS_PROTO_UPDATE",
-      settings: {
-        contentAndSocial: {
-          allowActivityClips: { value: false }
-        }
-      }
-    });
-  };
-
-  const toggleAvoidantMode = (value: boolean) => {
-    storage.avoidantMode = value;
-    if (value) {
-      updateSocialSettings(true);
-    }
-  };
-
   const translateX = containerWidth > 0
     ? slideAnim.interpolate({
         inputRange: [0, 1, 2],
@@ -168,7 +114,7 @@ export default function Settings() {
               label="Avoidant"
               subLabel="Disables social interactions & sets Invisible status"
               value={storage.avoidantMode}
-              onValueChange={(v: boolean) => toggleAvoidantMode(v)}
+              onValueChange={(v: boolean) => (storage.avoidantMode = v)}
             />
             <FormSwitchRow
               label="Nitro Spoof"
@@ -193,7 +139,6 @@ export default function Settings() {
     </>
   );
 
-  /* Page renders for raidMessages and messageLogs remain unchanged from your original structure... */
   const renderRaidMessagesPage = () => (
     <>
       <Header />
